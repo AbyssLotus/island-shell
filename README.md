@@ -104,6 +104,10 @@ The docked websites in the Command Center (Discord, DIM, your Canvas) are those 
 
 See **[docs/BUILDING.md](docs/BUILDING.md)**: Rust, the Tauri CLI, and `cargo tauri build` for the installer.
 
+## License
+
+Island Shell is free software under the [GNU General Public License v3.0](LICENSE): you can use, study, change and share it, and anything you share that's built on it has to stay under the GPL too. The Voicemeeter engine in `crates/vd-vm-core` is MIT-licensed ([its license](crates/vd-vm-core/LICENSE)).
+
 ## Notes
 
 - Island Shell isn't affiliated with Apple, Discord, Valve, Bungie, Instructure or Microsoft. Game artwork comes from your own Steam library.
