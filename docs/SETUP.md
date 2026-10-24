@@ -2,6 +2,9 @@
 
 From download to a working island in about two minutes. Everything after step 3 is optional.
 
+> [!NOTE]
+> Island Shell is in active development, so you may run into bugs. [Troubleshooting](#troubleshooting) covers the common ones, and [issues](https://github.com/AbyssLotus/island-shell/issues) are welcome.
+
 - [1. Download it](#1-download-it)
 - [2. Install it](#2-install-it)
 - [3. The setup guide](#3-the-setup-guide)

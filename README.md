@@ -13,11 +13,34 @@ Music with lyrics, Discord calls, sound, your day, your games and your whole PC,
 
 <p align="center">Windows 10 / 11 (64-bit) · one-click install · no admin rights</p>
 
----
+> [!WARNING]
+> **Island Shell is in active development.** Expect bugs, rough edges and things that change between versions. If something breaks, please [open an issue](https://github.com/AbyssLotus/island-shell/issues) with what happened and the end of `%APPDATA%\league.seaweed.islandshell\island.log`. If your taskbar ever stays hidden, run **Restore the taskbar (Island Shell)** from the Start menu.
+
+## Features
+
+| | Feature | What you get |
+| :---: | --- | --- |
+| 🏝️ | **The island** | A pill at the top of the screen in place of the taskbar. Tap the Windows key to open it, hover to peek. Or use it as a full-width top bar. |
+| 🌑 | **Command Center** | **Win + Space**: one search for apps, windows, files, games, settings, commands and math, with every section as a full-size sheet. |
+| 🎵 | **Music** | Apple Music, Spotify and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
+| 📊 | **Integrated Task Manager** | Summary, Performance (every logical processor), Processes, System Info, App history, Startup apps, Users, Services, Power & Freq (sensors and SSD health), Connections, Installed Apps, Disk Space and Benchmarks. |
+| 🎓 | **Canvas** | Due dates, grades, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. |
+| 🛡️ | **DIM** | Destiny Item Manager docked in the Command Center, dressed in the island's look. |
+| ⭐ | **Destiny 2** | Your Guardians, loadouts, current activity, Xûr and the weekly reset, through the Bungie API. |
+| 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), notifications on the island, and the Discord web app docked in the Command Center with an island skin. |
+| 👁️ | **Tobii eye tracker** | The island notices when you look at it, and your music pauses when you step away. |
+| 🎮 | **Steam & games** | Your library with your custom artwork, playtime, Play / Update, and your other launchers. |
+| 🗂️ | **Apps** | Every Start menu app: pinned, opened lately, folders, A to Z, run as administrator, open file location, uninstall. Plus open windows and the tray. |
+| 📅 | **Calendar & weather** | A full calendar with your iCal feeds (Google, Outlook, iCloud), Canvas due dates and Destiny's reset; weather and to-dos in Today. |
+| 🔊 | **Audio** | Output and input devices, per-app volume and levels, and the Voicemeeter mixer (with VoiceDeck). |
+| 🌐 | **Network** | Wi-Fi, Bluetooth, Tailscale and Radmin VPN. |
+| 📋 | **Clipboard** | Everything you copy, images included, kept across restarts, with pins. |
+| 🖼️ | **Wallpaper** | Procedural wallpapers that set the accent color, and your Wallpaper Engine library. |
+| ⌨️ | **Windows key** | Win opens the island; Win + A / G / V / N open Audio, Games, Clipboard and Today; every other Win shortcut still works. |
 
 ## What it is
 
-Island Shell replaces the Windows taskbar with a pill at the top of your screen that grows into whatever you need: what's playing, who's talking in your Discord call, volume and devices, your calendar and due dates, your Steam library, open windows, the clipboard, and live stats. **Win + Space** opens the **Command Center**, a full-screen eclipse with one search for everything and every section as a cube. Its look is "Taken": cold light leaking out of black.
+Island Shell replaces the Windows taskbar with a pill at the top of your screen that grows into whatever you need: what's playing, who's talking in your Discord call, volume and devices, your calendar and due dates, your Steam library, open windows, the clipboard, and live stats. **Win + Space** opens the **Command Center**, a full-screen eclipse with one search for everything and every section as a cube. Its look is "Taken": cold light leaking out of black. It's light on your PC too: about 100 MB of memory at rest, and heavy views and docked sites are let go of when you leave them.
 
 <table>
 <tr>
@@ -27,15 +50,7 @@ Island Shell replaces the Windows taskbar with a pill at the top of your screen 
 <tr><td align="center"><sub>Controls, with what's playing</sub></td><td align="center"><sub>Stats and temperatures, no extra tools needed</sub></td></tr>
 </table>
 
-## Highlights
-
-- **The island.** Tap the Windows key to open it, hover to peek. Controls, Music (with time-synced lyrics), Audio (devices, per-app volume, Voicemeeter), Today (calendar, weather, to-dos), Canvas, Network, Discord, Games, Destiny, Stats, Clipboard, Apps, Wallpaper and Power. Prefer a classic bar? Switch to a full-width top bar.
-- **The Command Center.** One search for apps, windows, files, folders, games, settings and commands (`>` for commands, `=` for math). Each cube opens its section full size.
-- **Your Steam library, full size.** Hero art and logos (your custom ones first), playtime, Play / Update, and your other launchers.
-- **Every app.** Pinned, opened lately, folders and A to Z, with run as administrator, file location and uninstall.
-- **A real Task Manager.** Summary, Performance (every logical processor), Processes, System Info, App history, Startup apps, Users, Services, Power & Freq (sensors and your SSDs' health), Connections, Installed Apps, Disk Space and Benchmarks.
-- **Works with your stuff.** Apple Music and Spotify, Discord, Steam, Canvas, Destiny 2, Google / Outlook / iCloud calendars, Voicemeeter, Wallpaper Engine, Tailscale, Tobii eye tracking.
-- **Light on your PC.** About 100 MB of memory at rest; heavy views and docked sites are let go of when you leave them.
+## Screenshots
 
 <table>
 <tr><td colspan="2"><img src="docs/screenshots/games.jpg" alt="The Games sheet: a big hero banner for the chosen game with Play, playtime and size, and the library of covers below"></td></tr>
