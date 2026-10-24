@@ -1,0 +1,36 @@
+/* Island skin for docked Canvas (embed.rs). Canvas has no dark theme, so this is a filter skin, the
+   way dark-mode extensions make one: the whole page is inverted with its hues kept (invert, then a
+   half turn of hue), which turns its white into the void and its dark text into light, and photos,
+   video and embedded documents are turned back so they look as they should.
+
+   Because of that, every colour here is written as it is BEFORE the inversion. Canvas's own brand
+   variables are set to the values that come out as the Command Center's colours afterwards
+   (#fcfeff → the void, #001830 → Taken light #cfe5fb, #003561 → link blue #a3d3fc). */
+html:not(#_){filter:invert(.96) hue-rotate(180deg);background:#fff}
+html:not(#_) :is(img,video,picture,canvas,iframe,embed,object,svg image,[style*="background-image"]){filter:invert(1) hue-rotate(180deg)}
+html:not(#_) :is(picture,[style*="background-image"]) :is(img,video,picture){filter:none}
+/* the sign-in page's footer text is white for Canvas's dark sign-in page: written dark so it comes out light */
+html:not(#_) .ic-Login-footer{color:#2b3442}
+:root:not(#_){
+  --ic-brand-primary:#001830;--ic-brand-font-color-dark:#00010b;
+  --ic-brand-primary-darkened-5:#00142a;--ic-brand-primary-darkened-10:#001024;--ic-brand-primary-darkened-15:#000c1e;
+  --ic-brand-primary-lightened-5:#001d38;--ic-brand-primary-lightened-10:#002240;--ic-brand-primary-lightened-15:#002748;
+  --ic-link-color:#003561;--ic-link-color-darkened-10:#002d54;--ic-link-color-lightened-10:#003d6e;
+  --ic-brand-button--primary-bgd:#001830;--ic-brand-button--primary-text:#ffffff;
+  --ic-brand-button--primary-bgd-darkened-5:#00142a;--ic-brand-button--primary-bgd-darkened-15:#000c1e;
+  --ic-brand-button--secondary-bgd:#e9effa;--ic-brand-button--secondary-text:#00010b;
+  --ic-brand-global-nav-bgd:#fcfeff;--ic-brand-global-nav-logo-bgd:#fcfeff;
+  --ic-brand-global-nav-ic-icon-svg-fill:#4b586c;--ic-brand-global-nav-ic-icon-svg-fill--active:#001830;
+  --ic-brand-global-nav-menu-item__text-color:#4b586c;--ic-brand-global-nav-menu-item__text-color--active:#001830;
+  --ic-brand-global-nav-avatar-border:#001f3a;
+  --ic-brand-global-nav-menu-item__badge-bgd:#001830;--ic-brand-global-nav-menu-item__badge-text:#ffffff;
+  /* the sign-in page, which Canvas paints dark itself */
+  --ic-brand-Login-body-bgd-color:#fcfeff;--ic-brand-Login-body-bgd-shadow-color:#e9effa;
+  --ic-brand-Login-Content-label-text-color:#00010b;--ic-brand-Login-Content-password-text-color:#00010b;
+  --ic-brand-Login-footer-link-color:#003561;--ic-brand-Login-footer-link-color-hover:#001830;
+  --ic-brand-Login-instructure-logo:#00010b;
+}
+::selection{background:rgb(0 31 58/.3)}
+/* a faint cold tint over the page (it comes out as Taken blue) and the CC's glass edge (Taken light) */
+html:not(#_)::after{content:"";position:fixed;inset:0;z-index:2147483647;border-radius:8px;pointer-events:none;
+  background:rgb(104 159 235/.05);box-shadow:inset 0 0 0 1px rgb(0 31 58/.4),inset 0 1px 0 rgb(0 31 58/.7)}

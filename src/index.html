@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Island Shell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700&family=JetBrains+Mono:wght@200;300;400;500;600&family=Rubik:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="cc.css">
+<link rel="stylesheet" href="tm.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar" id="bar" data-skin="dark" hidden>
+  <div class="bar-l">
+    <button class="bchip strong" type="button" id="barApps" data-open="apps">Apps</button>
+    <button class="bchip icon" type="button" id="barGear" data-open="controls" title="Controls" aria-label="Controls"><i data-ic="gear"></i></button>
+    <button class="bchip icon" type="button" id="barGames" data-open="games" title="Games" aria-label="Games"><i data-ic="gamepad"></i></button>
+    <div class="dock" id="barDock" aria-label="Pinned and running apps"></div>
+    <button class="bchip icon" type="button" id="barFiles" title="File Explorer" aria-label="File Explorer"><i data-ic="folder"></i></button>
+  </div>
+  <div class="bar-c"><div class="ws" id="barWs" aria-label="Desktops"></div></div>
+  <div class="bar-r">
+    <button class="bchip media-chip" type="button" id="barMedia" data-open="music" hidden></button>
+    <button class="bchip dc-chip" type="button" id="barDc" data-open="discord" hidden></button>
+    <button class="bchip icon" type="button" id="barMic" hidden title="Mic (Voicemeeter strip 1): click to mute"></button>
+    <button class="bchip" type="button" id="barVol" data-open="audio" title="Volume (scroll to change)"></button>
+    <button class="bchip" type="button" id="barBt" title="Bluetooth"></button>
+    <button class="bchip" type="button" id="barNet" data-open="network" title="Network"></button>
+    <button class="bchip" type="button" id="barBat" hidden></button>
+    <button class="bchip" type="button" id="barCpu" data-open="stats" title="System stats"></button>
+    <div class="bar-tray tray-set" id="barTray"></div>
+    <button class="bchip icon" type="button" id="barBell" title="Notifications" aria-label="Notifications"><i data-ic="bellon"></i></button>
+    <button class="bchip icon" type="button" id="barPower" data-open="power" title="Power" aria-label="Power"><i data-ic="power"></i></button>
+    <button class="bchip" type="button" id="barClock" data-open="today"></button>
+  </div>
+</header>
+<div id="island" data-mode="boot" data-skin="dark" class="no-media">
+  <div class="layer" id="L-pill" role="button" tabindex="0" aria-label="Open the island" aria-expanded="false">
+    <div class="pill">
+      <span class="pill-left">
+        <span class="art mini" data-m="art"></span>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="pill-dot" aria-hidden="true"></span>
+        <span class="pill-timer" id="pillTimer" hidden>
+          <svg class="mini-ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="trk" cx="10" cy="10" r="8"/><circle class="val" id="pillRing" cx="10" cy="10" r="8"/></svg>
+          <b id="pillTimerTxt">25:00</b>
+        </span>
+        <span class="pill-call" id="pillCall" hidden></span>
+      </span>
+      <span class="pill-time" id="pillTime"></span>
+    </div>
+  </div>
+
+  <div class="layer" id="L-peek">
+    <div class="peek">
+      <span class="art" data-m="art"></span>
+      <div class="peek-meta"><b data-m="title"></b><span data-m="artist"></span><span class="peek-ly" data-m="lyric"></span><div class="bar"><i data-m="bar"></i></div></div>
+      <div class="ctl">
+        <button class="ib" type="button" data-act="prev" aria-label="Previous track"><i data-ic="prev"></i></button>
+        <button class="ib play" type="button" data-act="toggle" aria-label="Play"></button>
+        <button class="ib" type="button" data-act="next" aria-label="Next track"><i data-ic="next"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="layer" id="L-toast" aria-live="polite">
+    <div class="toast" id="toast"><span class="t-ico" id="tIco"></span><span class="t-txt"><b id="tTitle"></b><span id="tBody"></span></span></div>
+  </div>
+
+  <div class="layer" id="L-panel">
+    <nav class="tabs" role="tablist" aria-label="Island sections">
+      <span class="tab-ink" aria-hidden="true"></span>
+      <button class="tab" type="button" role="tab" id="tab-controls" data-tab="controls" aria-controls="v-controls"><i data-ic="gear"></i><span>Controls</span></button>
+      <button class="tab" type="button" role="tab" id="tab-music" data-tab="music" aria-controls="v-music"><i data-ic="note"></i><span>Music</span></button>
+      <button class="tab" type="button" role="tab" id="tab-audio" data-tab="audio" aria-controls="v-audio"><i data-ic="speaker"></i><span>Audio</span></button>
+      <button class="tab" type="button" role="tab" id="tab-today" data-tab="today" aria-controls="v-today"><i data-ic="calendar"></i><span>Today</span></button>
+      <button class="tab" type="button" role="tab" id="tab-canvas" data-tab="canvas" aria-controls="v-canvas"><i data-ic="cap"></i><span>Canvas</span></button>
+      <button class="tab" type="button" role="tab" id="tab-network" data-tab="network" aria-controls="v-network"><i data-ic="wifi"></i><span>Network</span></button>
+      <button class="tab" type="button" role="tab" id="tab-discord" data-tab="discord" aria-controls="v-discord"><i data-ic="chat"></i><span>Discord</span></button>
+      <button class="tab" type="button" role="tab" id="tab-games" data-tab="games" aria-controls="v-games"><i data-ic="gamepad"></i><span>Games</span></button>
+      <button class="tab" type="button" role="tab" id="tab-destiny" data-tab="destiny" aria-controls="v-destiny"><i data-ic="orbit"></i><span>Destiny</span></button>
+      <button class="tab" type="button" role="tab" id="tab-stats" data-tab="stats" aria-controls="v-stats"><i data-ic="pulse"></i><span>Stats</span></button>
+      <button class="tab" type="button" role="tab" id="tab-clipboard" data-tab="clipboard" aria-controls="v-clipboard"><i data-ic="clip"></i><span>Clipboard</span></button>
+      <button class="tab" type="button" role="tab" id="tab-apps" data-tab="apps" aria-controls="v-apps"><i data-ic="grid"></i><span>Apps</span></button>
+      <button class="tab" type="button" role="tab" id="tab-wallpaper" data-tab="wallpaper" aria-controls="v-wallpaper"><i data-ic="image"></i><span>Wallpaper</span></button>
+      <button class="tab" type="button" role="tab" id="tab-power" data-tab="power" aria-controls="v-power"><i data-ic="power"></i><span>Power</span></button>
+    </nav>
+    <div class="views">
+
+      <section class="view" id="v-controls" data-tab="controls" role="tabpanel" aria-labelledby="tab-controls">
+        <div class="tiles">
+          <button class="tile" type="button" data-tile="wifi"><span class="ti" id="netIco"></span><span class="tt"><b id="netTitle">Wi-Fi</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="bluetooth"><span class="ti"><i data-ic="bt"></i></span><span class="tt"><b>Bluetooth</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="sound"><span class="ti" id="soundIco"></span><span class="tt"><b>Sound output</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="sounds" title="Notification sounds (Audio → Sounds to choose them)"><span class="ti"><i data-ic="bellon"></i></span><span class="tt"><b>Sounds</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="night"><span class="ti"><i data-ic="moon"></i></span><span class="tt"><b>Night light</b><small>Opens Settings</small></span></button>
+          <button class="tile" type="button" data-tile="dark"><span class="ti"><i data-ic="contrast"></i></span><span class="tt"><b>Dark mode</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="tailscale" hidden><span class="ti"><i data-ic="dots9"></i></span><span class="tt"><b>Tailscale</b><small>Checking…</small></span></button>
+          <button class="tile" type="button" data-tile="radmin" hidden><span class="ti"><i data-ic="nodes"></i></span><span class="tt"><b>Radmin VPN</b><small>Checking…</small></span></button>
+          <button class="tile" type="button" data-tile="taskbar"><span class="ti"><i data-ic="taskbar"></i></span><span class="tt"><b>Taskbar</b><small></small></span></button>
+          <button class="tile" type="button" data-tile="eye" hidden><span class="ti"><i data-ic="eye"></i></span><span class="tt"><b>Eye tracking</b><small>Checking…</small></span></button>
+        </div>
+        <div class="vol-row">
+          <button class="ib mute" type="button" id="muteBtn" aria-label="Mute"></button>
+          <label class="slider" for="vol"><input id="vol" type="range" min="0" max="100" value="50" aria-label="Volume"><output id="volOut" for="vol">50%</output></label>
+        </div>
+        <div class="seg-row">
+          <span>Layout</span>
+          <div class="seg" id="layoutSeg" role="group" aria-label="Layout">
+            <button type="button" data-style="island">Island</button>
+            <button type="button" data-style="bar">Top bar</button>
+            <button type="button" data-style="tall">Tall bar</button>
+          </div>
+        </div>
+        <div class="seg-row" id="gazeRow" hidden>
+          <span>Eye tracker</span>
+          <button class="chip" type="button" id="gazePause" aria-pressed="false" title="After 10 seconds away from the screen, pause what's playing; play it again when you're back">Pause music when I step away</button>
+        </div>
+        <p class="note" id="ctlNote" hidden></p>
+        <div class="card media">
+          <span class="art" data-m="art"></span>
+          <div class="m-meta">
+            <small><i data-ic="speaker"></i><span data-m="source"></span></small>
+            <b data-m="title"></b><span data-m="artist"></span>
+            <div class="m-prog"><span data-m="pos">0:00</span><div class="bar"><i data-m="bar"></i></div><span data-m="dur">0:00</span></div>
+          </div>
+          <div class="ctl">
+            <button class="ib" type="button" data-act="prev" aria-label="Previous track"><i data-ic="prev"></i></button>
+            <button class="ib play" type="button" data-act="toggle" aria-label="Play"></button>
+            <button class="ib" type="button" data-act="next" aria-label="Next track"><i data-ic="next"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-music" data-tab="music" role="tabpanel" aria-labelledby="tab-music">
+        <div class="mu-hero">
+          <div class="mu-backdrop" data-m="art" aria-hidden="true"></div>
+          <div class="mu-art art" data-m="art"></div>
+          <div class="mu-side">
+            <div class="mu-src">
+              <span class="mu-app" id="muApp"></span>
+              <span class="mu-badge" id="muBadge" hidden></span>
+              <span class="grow"></span>
+              <div class="mu-sources" id="muSources" role="group" aria-label="Player"></div>
+            </div>
+            <b class="mu-title" data-m="title"></b>
+            <span class="mu-sub"><span data-m="artist"></span><span class="mu-album" id="muAlbum"></span></span>
+            <div class="mu-prog">
+              <span data-m="pos">0:00</span>
+              <input class="scrub" id="muSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Song position">
+              <span id="muLeft">-0:00</span>
+            </div>
+            <div class="mu-ctl">
+              <button class="ib tg" type="button" data-act="shuffle" aria-label="Shuffle" aria-pressed="false"><i data-ic="shuffle"></i></button>
+              <button class="ib" type="button" data-act="prev" aria-label="Previous track"><i data-ic="prev"></i></button>
+              <button class="ib play" type="button" data-act="toggle" aria-label="Play"></button>
+              <button class="ib" type="button" data-act="next" aria-label="Next track"><i data-ic="next"></i></button>
+              <button class="ib tg" type="button" data-act="repeat" aria-label="Repeat" aria-pressed="false"><i data-ic="repeat"></i></button>
+            </div>
+            <div class="mu-row">
+              <button class="ib tg fav" type="button" data-act="favorite" aria-label="Favorite" aria-pressed="false"><i data-ic="star"></i></button>
+              <label class="mu-vol" id="muVolWrap"><i data-ic="speaker"></i><input id="muVol" type="range" min="0" max="100" value="100" aria-label="Player volume"></label>
+              <span class="grow"></span>
+              <button class="chip" type="button" id="muLyricsBtn" aria-pressed="true">Lyrics</button>
+              <button class="chip" type="button" data-act="open" id="muOpen">Open</button>
+            </div>
+          </div>
+        </div>
+        <div class="lyrics" id="lyrics">
+          <div class="ly-lines" id="lyLines"></div>
+          <p class="ly-note" id="lyNote"></p>
+        </div>
+        <p class="note" id="muNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-audio" data-tab="audio" role="tabpanel" aria-labelledby="tab-audio">
+        <div class="au-head" id="auHead" hidden>
+          <div class="seg" id="auMode" role="group" aria-label="Mixer">
+            <button type="button" data-mode="win">Windows</button>
+            <button type="button" data-mode="vm">Voicemeeter</button>
+            <button type="button" data-mode="sounds">Sounds</button>
+          </div>
+          <span class="grow"></span>
+          <button class="chip" type="button" id="vmRestart" hidden title="Restart Voicemeeter's audio engine (fixes crackling)">Restart engine</button>
+          <button class="chip" type="button" id="vdOpen" hidden>Open VoiceDeck</button>
+        </div>
+        <div id="auVm" hidden>
+          <div class="seg vm-side" id="vmSide" role="group" aria-label="Show">
+            <button type="button" data-side="in">Inputs</button>
+            <button type="button" data-side="out">Outputs</button>
+          </div>
+          <div class="vm-list" id="vmStrips"></div>
+          <div class="vm-list" id="vmBuses" hidden></div>
+          <p class="empty" id="vmOff" hidden>Voicemeeter isn't running. Start it (or VoiceDeck) and its mixer shows up here.</p>
+        </div>
+        <div id="auSnd" hidden>
+          <div class="snd-head">
+            <button class="chip" type="button" id="sndOn" aria-pressed="true">Notification sounds</button>
+            <label class="slider snd-vol"><input id="sndVol" type="range" min="0" max="100" value="70" aria-label="Notification sound volume"><output id="sndVolOut">70%</output></label>
+            <button class="chip" type="button" id="sndFs" aria-pressed="false" title="No sounds while a game or video fills the screen">Quiet over fullscreen</button>
+          </div>
+          <div class="card snd-list" id="sndList"></div>
+          <p class="note" id="sndNote" hidden></p>
+          <input type="file" id="sndFile" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.opus" hidden>
+        </div>
+        <div id="auWin">
+        <div class="au-master">
+          <button class="ib mute" type="button" id="auMute" aria-label="Mute"></button>
+          <label class="slider"><input id="auVol" type="range" min="0" max="100" value="50" aria-label="Volume"><output id="auVolOut">50%</output></label>
+        </div>
+        <div class="au-cols">
+          <div class="card au-dev">
+            <header><b>Output</b><small id="auOutCount"></small></header>
+            <div class="au-list" id="auOut" role="radiogroup" aria-label="Output device"></div>
+          </div>
+          <div class="card au-dev">
+            <header><b>Input</b><small id="auInCount"></small></header>
+            <div class="au-mic" id="auMicRow">
+              <button class="ib" type="button" id="auMicMute" aria-label="Mute microphone"></button>
+              <input class="au-range" id="auMic" type="range" min="0" max="100" value="100" aria-label="Microphone level">
+              <span id="auMicOut">100%</span>
+            </div>
+            <div class="au-list" id="auIn" role="radiogroup" aria-label="Input device"></div>
+          </div>
+        </div>
+        <div class="card au-mix">
+          <header><b>Apps</b><small>Each app's own volume, like the Volume mixer</small></header>
+          <div class="au-apps" id="auApps"></div>
+        </div>
+        </div>
+        <p class="note" id="auNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-today" data-tab="today" role="tabpanel" aria-labelledby="tab-today">
+        <div class="today">
+          <div class="t-col">
+            <div class="card clock"><b class="big" id="tHour">--</b><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><b class="big" id="tMin">--</b><small id="tSub"></small></div>
+            <div class="card weather" id="weather">
+              <span id="wIco"></span>
+              <button class="w-temp" type="button" id="wTemp" title="Switch °F / °C">--°</button>
+              <small id="wDesc">Loading weather</small>
+              <small id="wRange"></small>
+              <button class="w-city" type="button" id="wCity" title="Change city"></button>
+              <input class="field w-input" id="wInput" hidden autocomplete="off" aria-label="City for weather">
+            </div>
+          </div>
+          <div class="t-col">
+            <div class="card week"><header><b>This week</b><small id="weekRange"></small></header><div class="days" id="days"></div><p class="week-foot" id="weekFoot"></p></div>
+            <div class="card focus">
+              <div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="34"/><circle class="val" id="focusRing" cx="40" cy="40" r="34"/></svg><span id="focusTxt">25:00</span></div>
+              <div class="f-ctl">
+                <div class="f-head"><b>Focus</b><small id="focusState">Ready</small></div>
+                <div class="presets" id="presets">
+                  <button class="chip" type="button" data-min="5">5m</button><button class="chip" type="button" data-min="15">15m</button><button class="chip" type="button" data-min="25">25m</button><button class="chip" type="button" data-min="50">50m</button>
+                </div>
+                <div class="btns"><button class="btn primary" type="button" id="focusGo">Start</button><button class="btn" type="button" id="focusReset">Reset</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="card todo">
+            <header><b>To-do</b><small id="todoCount"></small></header>
+            <ul id="todoList"></ul>
+            <form id="todoForm"><input class="field" id="todoInput" placeholder="Add a to-do" autocomplete="off" aria-label="New to-do"><button class="ib add" type="submit" aria-label="Add to-do"><i data-ic="plus"></i></button></form>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-canvas" data-tab="canvas" role="tabpanel" aria-labelledby="tab-canvas">
+        <div id="cvSetup" hidden>
+          <div class="card dc-setup">
+            <div class="vpn-head">
+              <span class="vpn-logo"><i data-ic="cap"></i></span>
+              <div class="vpn-title"><b>Connect Canvas</b><small>Due dates, grades and announcements from your school's Canvas</small></div>
+              <button class="btn" type="button" id="cvBack" hidden>Cancel</button>
+            </div>
+            <div class="seg" id="cvMode" role="group" aria-label="How to connect">
+              <button type="button" data-mode="feed">Calendar feed</button>
+              <button type="button" data-mode="token">Access token</button>
+            </div>
+            <ol class="dc-steps" data-cv="feed">
+              <li>In Canvas, open <b>Calendar</b> and click <b>Calendar Feed</b> (bottom right of the page).</li>
+              <li>Copy the link it shows (it ends in <code>.ics</code>) and paste it here. No access token or admin approval needed.</li>
+            </ol>
+            <form class="dc-form" id="cvFeedForm" data-cv="feed" autocomplete="off">
+              <input class="field" id="cvFeed" type="password" placeholder="https://school.instructure.com/feeds/calendars/user_….ics" spellcheck="false" aria-label="Canvas calendar feed link">
+              <button class="btn primary" type="submit" id="cvFeedSave">Connect</button>
+            </form>
+            <ol class="dc-steps" data-cv="token">
+              <li>Your school's <b>Canvas address</b>: what's in the browser's address bar on Canvas, like <code>school.instructure.com</code>.</li>
+              <li>In Canvas, open <b>Account → Settings</b>, click <b>+ New Access Token</b>, name it "Island Shell" and copy the token (Canvas shows it only once).</li>
+            </ol>
+            <form class="dc-form" id="cvForm" data-cv="token" autocomplete="off">
+              <input class="field" id="cvDomain" placeholder="school.instructure.com" spellcheck="false" aria-label="Canvas address">
+              <input class="field" id="cvToken" type="password" placeholder="Access token" spellcheck="false" aria-label="Canvas access token">
+              <button class="btn primary" type="submit" id="cvSave">Connect</button>
+            </form>
+            <div class="dc-fine"><span data-cv="feed">The feed has due dates and course events only: no grades, submission status or announcements, and Done ticks are kept on this PC. The link is stored encrypted for your Windows account only.</span><span data-cv="token">The token is stored encrypted for your Windows account only. No token button in Settings means your school has turned them off; use the calendar feed.</span><span class="grow"></span><button class="dc-link" type="button" id="cvForget" hidden>Forget</button></div>
+          </div>
+        </div>
+        <div id="cvMain" hidden>
+          <div class="v-head">
+            <b>Canvas</b><small id="cvWho"></small><span class="grow"></span>
+            <button class="ib" type="button" id="cvEdit" title="Canvas settings" aria-label="Canvas settings"><i data-ic="gear"></i></button>
+          </div>
+          <div class="cv-grid">
+            <div class="cv-col">
+              <div class="card cv-list cv-missing" id="cvMissing" hidden></div>
+              <div class="card cv-list" id="cvUp"></div>
+            </div>
+            <div class="cv-col">
+              <div class="card cv-grades" id="cvCourses" hidden></div>
+              <div class="card cv-grades" id="cvGrades"></div>
+              <div class="card cv-ann" id="cvAnn"></div>
+            </div>
+          </div>
+        </div>
+        <p class="empty" id="cvWait" hidden>Loading Canvas…</p>
+        <p class="note" id="cvNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-network" data-tab="network" role="tabpanel" aria-labelledby="tab-network">
+        <div class="net-now" id="netNow"></div>
+        <div class="vpn-grid">
+          <div class="card vpn" id="tsCard">
+            <div class="vpn-head">
+              <span class="vpn-logo"><i data-ic="dots9"></i></span>
+              <div class="vpn-title"><b>Tailscale</b><small id="tsState">Checking…</small></div>
+              <button class="btn" type="button" id="tsToggle" hidden>Connect</button>
+            </div>
+            <button class="vpn-me" type="button" id="tsMe" hidden></button>
+            <label class="vpn-exit" id="tsExitRow" hidden><span>Exit node</span><select class="field" id="tsExit" aria-label="Exit node"></select></label>
+            <div class="vpn-list" id="tsPeers"></div>
+          </div>
+          <div class="card vpn" id="rvCard">
+            <div class="vpn-head">
+              <span class="vpn-logo"><i data-ic="nodes"></i></span>
+              <div class="vpn-title"><b>Radmin VPN</b><small id="rvState">Checking…</small></div>
+              <button class="btn" type="button" id="rvOpen" hidden>Open</button>
+            </div>
+            <button class="vpn-me" type="button" id="rvMe" hidden></button>
+            <div class="vpn-list" id="rvPeers"></div>
+          </div>
+        </div>
+        <p class="note" id="vpnNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-discord" data-tab="discord" role="tabpanel" aria-labelledby="tab-discord">
+        <div id="dcSetup" hidden>
+          <div class="card dc-setup">
+            <div class="vpn-head">
+              <span class="vpn-logo"><i data-ic="chat"></i></span>
+              <div class="vpn-title"><b>Connect Discord</b><small>Calls, notifications and “Listening to Apple Music”</small></div>
+              <button class="btn" type="button" id="dcBack" hidden>Cancel</button>
+            </div>
+            <ol class="dc-steps">
+              <li>Open the <button class="dc-link" type="button" id="dcPortal">Discord Developer Portal</button> and click <b>New Application</b>. Name it <b>Apple Music</b>: your status will read “Listening to Apple Music”.</li>
+              <li>In the app’s <b>OAuth2</b> page, add the redirect <code>http://localhost</code> and save.</li>
+              <li>Copy the <b>Client ID</b> and <b>Client Secret</b> from that page into here.</li>
+            </ol>
+            <form class="dc-form" id="dcForm" autocomplete="off">
+              <input class="field" id="dcId" placeholder="Client ID" inputmode="numeric" spellcheck="false" aria-label="Client ID">
+              <input class="field" id="dcSecret" type="password" placeholder="Client Secret" spellcheck="false" aria-label="Client Secret">
+              <button class="btn primary" type="submit" id="dcSave">Connect</button>
+            </form>
+            <div class="dc-fine"><span>The secret and Discord’s sign-in are stored encrypted for your Windows account only.</span><span class="grow"></span><button class="dc-link" type="button" id="dcForget" hidden>Forget this app</button></div>
+          </div>
+        </div>
+        <div class="dc-grid" id="dcMain" hidden>
+          <div class="card dc-voice" id="dcVoice"></div>
+          <div class="card dc-side">
+            <div class="vpn-head" id="dcMe"></div>
+            <div class="dc-ctl" id="dcCtl">
+              <button class="dc-b" type="button" id="dcMute"><i data-ic="mic"></i><span>Mute</span></button>
+              <button class="dc-b" type="button" id="dcDeaf"><i data-ic="headphones"></i><span>Deafen</span></button>
+              <button class="dc-b bad" type="button" id="dcLeave"><i data-ic="phoneoff"></i><span>Leave</span></button>
+            </div>
+            <label class="switch" for="dcPresence"><input type="checkbox" id="dcPresence"><span>Show what I’m listening to</span></label>
+            <small class="dc-now" id="dcNow"></small>
+            <label class="switch" for="dcNotify"><input type="checkbox" id="dcNotify"><span>Show when someone @mentions me</span></label>
+            <div class="dc-foot"><button class="dc-link" type="button" id="dcOpen">Open Discord</button><span class="grow"></span><button class="dc-link" type="button" id="dcEdit">App settings</button></div>
+          </div>
+        </div>
+        <p class="note" id="dcNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-games" data-tab="games" role="tabpanel" aria-labelledby="tab-games">
+        <div class="shelf" id="gShelf" role="list" aria-label="Steam games, most recently played first"></div>
+        <div class="g-rule" aria-hidden="true"></div>
+        <div class="apps launchers" id="gLaunchers" aria-label="Launchers"></div>
+        <p class="note" id="gNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-destiny" data-tab="destiny" role="tabpanel" aria-labelledby="tab-destiny">
+        <div id="d2Setup" hidden>
+          <div class="card dc-setup">
+            <div class="vpn-head">
+              <span class="vpn-logo"><i data-ic="orbit"></i></span>
+              <div class="vpn-title"><b>Connect Destiny 2</b><small>Your Guardians, their loadouts, Xûr and the resets</small></div>
+              <button class="btn" type="button" id="d2Back" hidden>Cancel</button>
+            </div>
+            <ol class="dc-steps">
+              <li>Your API key is on <button class="dc-link" type="button" id="d2Portal">bungie.net/en/Application</button>: open the app you made and copy its <b>API Key</b>.</li>
+              <li>Your <b>Bungie Name</b> is the name with a number, like <code>Guardian#1234</code> (shown in Destiny's roster and on bungie.net).</li>
+            </ol>
+            <form class="dc-form" id="d2Form" autocomplete="off">
+              <input class="field" id="d2Key" type="password" placeholder="API key" spellcheck="false" aria-label="Bungie API key">
+              <input class="field" id="d2Who" placeholder="Bungie Name (Guardian#1234)" spellcheck="false" aria-label="Bungie Name">
+              <button class="btn primary" type="submit" id="d2Save">Connect</button>
+            </form>
+            <div class="dc-fine"><span>The key is stored encrypted for your Windows account only. Everything shown is public, so there's no Bungie sign-in.</span><span class="grow"></span><button class="dc-link" type="button" id="d2Forget" hidden>Forget</button></div>
+          </div>
+        </div>
+        <div id="d2Main" hidden>
+          <div class="v-head">
+            <b id="d2Title"></b><small id="d2Rank"></small><span class="grow"></span>
+            <span class="d2-reset" id="d2Daily"></span><span class="d2-reset" id="d2Weekly"></span>
+            <button class="ib" type="button" id="d2Edit" title="Destiny settings" aria-label="Destiny settings"><i data-ic="gear"></i></button>
+          </div>
+          <div class="d2-grid">
+            <div class="d2-side">
+              <div class="d2-chars" id="d2Chars" role="group" aria-label="Characters"></div>
+              <div class="card d2-xur" id="d2Xur"></div>
+            </div>
+            <div class="card d2-load" id="d2Load"></div>
+          </div>
+        </div>
+        <p class="empty" id="d2Wait" hidden>Loading your Guardians…</p>
+        <p class="note" id="d2Note" hidden></p>
+      </section>
+
+      <section class="view" id="v-stats" data-tab="stats" role="tabpanel" aria-labelledby="tab-stats">
+        <div class="v-head"><b>System</b><small id="sysLine"></small><span class="grow"></span><button class="link-btn" type="button" id="openTm" title="Processes, performance and startup apps, full size">Task Manager</button><span class="live"><i></i>Live</span></div>
+        <div class="stats">
+          <div class="gauges">
+            <div class="card gauge" data-g="cpu"><i class="g-temp" hidden></i><div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="32"/><circle class="val" cx="40" cy="40" r="32"/></svg><span>–</span></div><b>CPU</b><small></small></div>
+            <div class="card gauge" data-g="gpu"><i class="g-temp" hidden></i><div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="32"/><circle class="val" cx="40" cy="40" r="32"/></svg><span>–</span></div><b>GPU</b><small></small></div>
+            <div class="card gauge" data-g="ram"><div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="32"/><circle class="val" cx="40" cy="40" r="32"/></svg><span>–</span></div><b>Memory</b><small></small></div>
+          </div>
+          <div class="card spark"><header><b>CPU · last 75 seconds</b><small id="sparkNow"></small></header><svg id="spark" aria-hidden="true"></svg></div>
+          <div class="card top"><header><b>Top apps</b><small>CPU</small></header><ul id="procs"></ul></div>
+          <div class="card therm" id="thermCard" hidden><header><b>Temperatures</b><small>Read from Windows</small></header><ul id="therms"></ul></div>
+          <div class="card gpu-card" id="gpuCard" hidden><header><b id="gpuCardName">Graphics card</b><small id="gpuCardTemp"></small></header><dl id="gpuStats"></dl></div>
+          <div class="minis" id="minis"></div>
+        </div>
+      </section>
+
+      <section class="view" id="v-clipboard" data-tab="clipboard" role="tabpanel" aria-labelledby="tab-clipboard">
+        <div class="cb-top">
+          <label class="search" for="cbSearch"><i data-ic="search"></i><input id="cbSearch" placeholder="Search" autocomplete="off"></label>
+          <div class="chips" id="cbChips">
+            <button class="chip" type="button" data-f="all">All</button><button class="chip" type="button" data-f="text">Text</button><button class="chip" type="button" data-f="link">Links</button><button class="chip" type="button" data-f="image">Images</button><button class="chip" type="button" data-f="color">Colors</button>
+          </div>
+        </div>
+        <div class="cb-body">
+          <ul class="cb-list" id="cbList" role="listbox" aria-label="Clipboard history"></ul>
+          <div class="card cb-prev" id="cbPrev"></div>
+        </div>
+        <div class="cb-foot"><span class="kb"><kbd>↑</kbd><kbd>↓</kbd> Move</span><span class="kb"><kbd>Enter</kbd> Copy</span><span class="kb"><kbd>P</kbd> Pin</span><span class="kb"><kbd>Del</kbd> Remove</span><span class="grow"></span><button class="link-btn" type="button" id="cbClear">Clear unpinned</button></div>
+      </section>
+
+      <section class="view" id="v-apps" data-tab="apps" role="tabpanel" aria-labelledby="tab-apps">
+        <label class="search" for="appSearch"><i data-ic="search"></i><input id="appSearch" placeholder="Search apps and open windows" autocomplete="off"><kbd>Enter</kbd></label>
+        <div class="app-scroll" id="appScroll">
+          <div class="sec" id="secRunning" hidden>
+            <div class="sec-head"><b>Running</b><small id="runCount"></small></div>
+            <div class="wins" id="wins"></div>
+          </div>
+          <div class="sec" id="secTray" hidden>
+            <div class="sec-head"><b>Tray</b><small>Click, double-click or right-click like the taskbar</small></div>
+            <div class="tray tray-set" id="tray"></div>
+          </div>
+          <div class="sec" id="secPins">
+            <div class="sec-head"><b>Pinned</b><small>Drag to reorder · drag out to unpin</small></div>
+            <div class="pins" id="pins"></div>
+          </div>
+          <div class="sec" id="secAll">
+            <div class="sec-head"><b id="allTitle">All apps</b><span class="grow"></span><button class="link-btn" type="button" id="newFolderBtn"><i data-ic="folder"></i>New folder</button></div>
+            <div class="apps" id="apps"></div>
+            <p class="empty" id="appsEmpty" hidden>Nothing matches that search.</p>
+          </div>
+        </div>
+        <div class="folder-view" id="folderView" hidden>
+          <div class="fv-head">
+            <button class="ib" type="button" id="fvBack" aria-label="Back to all apps"><i data-ic="back"></i></button>
+            <input class="field fv-name" id="fvName" maxlength="40" autocomplete="off" aria-label="Folder name">
+            <button class="link-btn danger" type="button" id="fvDelete" title="The apps go back to All apps">Delete folder</button>
+          </div>
+          <div class="apps" id="fvApps"></div>
+          <p class="empty" id="fvEmpty" hidden>This folder is empty. Drag apps onto it, or right-click an app and pick this folder.</p>
+        </div>
+      </section>
+
+      <section class="view" id="v-wallpaper" data-tab="wallpaper" role="tabpanel" aria-labelledby="tab-wallpaper">
+        <div class="v-head">
+          <div class="seg" id="wpMode" role="group" aria-label="Wallpapers" hidden>
+            <button type="button" data-mode="we">Wallpaper Engine</button>
+            <button type="button" data-mode="island">Island scenes</button>
+          </div>
+          <b id="wpTitle">Wallpapers</b><small id="wpSub">7 generated scenes</small>
+          <span class="grow"></span><label class="switch" for="follow"><input type="checkbox" id="follow" checked><span>Accent follows wallpaper</span></label>
+        </div>
+        <div id="weView" hidden>
+          <div class="we-bar">
+            <label class="search we-search"><i data-ic="search"></i><input id="weQ" type="search" placeholder="Search wallpapers" autocomplete="off" aria-label="Search wallpapers"></label>
+            <div class="we-kinds" id="weKinds" role="group" aria-label="Type">
+              <button type="button" class="chip" data-kind="" aria-pressed="true">All</button>
+              <button type="button" class="chip" data-kind="scene" aria-pressed="false">Scenes</button>
+              <button type="button" class="chip" data-kind="video" aria-pressed="false">Videos</button>
+              <button type="button" class="chip" data-kind="web" aria-pressed="false">Web</button>
+            </div>
+            <span class="grow"></span>
+            <button class="ib" type="button" id="wePlay" aria-label="Pause the wallpaper" title="Pause the wallpaper"></button>
+            <button class="ib" type="button" id="weMute" aria-label="Mute the wallpaper" title="Mute the wallpaper"></button>
+          </div>
+          <div class="we-grid" id="weGrid" role="list"></div>
+          <p class="empty" id="weEmpty" hidden></p>
+        </div>
+        <div id="islandWalls">
+        <div class="carousel" id="carousel" aria-label="Wallpapers"></div>
+        <div class="wp-foot"><div class="wp-meta"><b id="wpName"></b><small><span class="sw" id="wpSw"></span><span id="wpHex"></span></small></div><span class="grow"></span><button class="btn" type="button" id="wpShuffle"><i data-ic="shuffle"></i>Shuffle</button><button class="btn primary" type="button" id="wpApply">Apply</button></div>
+        </div>
+        <p class="note" id="wpNote" hidden></p>
+      </section>
+
+      <section class="view" id="v-power" data-tab="power" role="tabpanel" aria-labelledby="tab-power">
+        <div class="power">
+          <button class="pw" type="button" data-pw="lock"><span class="fill"></span><span class="pi"><i data-ic="lock"></i></span><b>Lock</b></button>
+          <button class="pw" type="button" data-pw="sleep"><span class="fill"></span><span class="pi"><i data-ic="sleep"></i></span><b>Sleep</b></button>
+          <button class="pw" type="button" data-pw="restart"><span class="fill"></span><span class="pi"><i data-ic="restart"></i></span><b>Restart</b></button>
+          <button class="pw danger" type="button" data-pw="shutdown"><span class="fill"></span><span class="pi"><i data-ic="power"></i></span><b>Shut down</b></button>
+        </div>
+        <p class="pw-note">Hold Sleep, Restart or Shut down to confirm · Up <span data-uptime>–</span></p>
+        <div class="pw-foot">
+          <label class="switch" for="autostart"><input type="checkbox" id="autostart"><span>Start with Windows</span></label>
+          <span class="grow"></span>
+          <button class="btn" type="button" id="quitBtn"><i data-ic="x"></i>Quit Island Shell</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<div class="ctx" id="ctx" role="menu" hidden></div>
+</body>
+</html>

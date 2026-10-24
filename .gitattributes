@@ -1,0 +1,7 @@
+* text=auto
+*.nsi text eol=crlf
+*.bmp binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary

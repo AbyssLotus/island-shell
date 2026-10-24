@@ -1,0 +1,16 @@
+[package]
+name = "vd-vm-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.82"
+description = "VoiceDeck's Voicemeeter Remote API engine (from the VoiceDeck project), used by Island Shell's Audio tab."
+
+[dependencies]
+thiserror = "2"
+tracing = "0.1"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+libloading = "0.8.9"
+winreg = "0.56.0"
+serde = { version = "1", features = ["derive"] }

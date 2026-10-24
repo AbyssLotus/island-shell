@@ -1,0 +1,60 @@
+/* ---- hand-written: tokens that need an exact Command Center value (DARK = the dark themes) ---- */
+DARK{
+  --font-primary:"Rubik","Noto Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-display:"Gabarito","Rubik",sans-serif;
+  --font-headline:"Gabarito","Rubik",sans-serif;
+  --font-code:"JetBrains Mono",Consolas,monospace;
+  /* primary buttons: the pale Taken-light pill with dark text, like the CC's own */
+  --control-primary-background-default:#c9e9ff;
+  --control-primary-background-hover:#def2ff;
+  --control-primary-background-active:#acd8f6;
+  --control-primary-border-default:transparent;
+  --control-primary-border-hover:transparent;
+  --control-primary-border-active:transparent;
+  --control-primary-text-default:#04070b;
+  --control-primary-text-hover:#04070b;
+  --control-primary-text-active:#04070b;
+  --control-primary-icon-default:#04070b;
+  --control-primary-icon-hover:#04070b;
+  --control-primary-icon-active:#04070b;
+  --control-brand-foreground:#c9e9ff;
+  --control-brand-foreground-new:#c9e9ff;
+  --text-brand:#c9e9ff;
+  --icon-brand:#c9e9ff;
+  --mention-foreground:#d9f1ff;
+  --text-link:#9fd6ff;
+  --icon-link:#9fd6ff;
+  --border-focus:#c9e9ff;
+  --input-border-active:rgb(190 230 255/.7);
+  --app-frame-border:rgb(190 230 255/.1);
+  --scrollbar-thin-thumb:rgb(190 230 255/.14);
+  --scrollbar-auto-thumb:rgb(190 230 255/.14);
+  --scrollbar-auto-scrollbar-color-thumb:rgb(190 230 255/.18);
+  --scrollbar-auto-scrollbar-color-track:transparent;
+  /* Taken: mentions, highlights and selections in cold light instead of Discord's yellow and grey */
+  --message-mentioned-background-default:rgb(190 230 255/.065);
+  --message-mentioned-background-hover:rgb(190 230 255/.095);
+  --message-highlight-background-default:rgb(190 230 255/.055);
+  --message-highlight-background-hover:rgb(190 230 255/.085);
+  --message-background-hover:rgb(190 230 255/.035);
+  --mention-background:rgb(190 230 255/.16);
+  --interactive-background-hover:rgb(190 230 255/.055);
+  --interactive-background-selected:rgb(190 230 255/.1);
+  --interactive-background-active:rgb(190 230 255/.13);
+  --interactive-text-active:#f4fbff;
+  --interactive-icon-active:#f4fbff;
+  --border-subtle:rgb(190 230 255/.08);
+  --border-normal:rgb(190 230 255/.13);
+  /* a Nitro app theme would tint over the skin; switch it off while the skin is on */
+  --custom-theme-base-color-amount:0% !important;
+  --custom-theme-text-color-amount:0% !important;
+  --custom-theme-border-color-amount:0% !important;
+  --custom-theme-background:none !important;
+}
+::selection{background:rgb(160 215 255/.3)}
+/* Taken light leaking in from above, the depths falling away below (over everything, never in the way) */
+html::before{content:"";position:fixed;inset:0;z-index:2147483646;pointer-events:none;
+  background:radial-gradient(110% 70% at 50% -12%,rgb(190 230 255/.06),transparent 58%),radial-gradient(130% 90% at 50% 125%,rgb(0 0 0/.32),transparent 62%)}
+/* the CC's glass edge: the same inset glow the slot under this window has */
+html::after{content:"";position:fixed;inset:0;z-index:2147483647;border-radius:8px;pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgb(190 230 255/.14),inset 0 1px 0 rgb(190 230 255/.3)}

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Island Shell",
+  "version": "0.1.0",
+  "identifier": "league.seaweed.islandshell",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "island",
+        "title": "Island Shell",
+        "url": "index.html",
+        "width": 820,
+        "height": 660,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "shadow": false,
+        "visible": false,
+        "focus": false,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: asset: http://asset.localhost https://cdn.discordapp.com https://media.discordapp.net https://www.bungie.net https://*.mzstatic.com; connect-src ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "AbyssLotus",
+    "homepage": "https://github.com/AbyssLotus/island-shell",
+    "copyright": "© 2026 AbyssLotus",
+    "category": "Utility",
+    "shortDescription": "A morphing island and Command Center that replace the Windows taskbar",
+    "longDescription": "Island Shell puts a Dynamic Island-style pill at the top of the screen in place of the Windows taskbar: music with lyrics, Discord calls, sound, your day, games and your PC, plus a full-screen Command Center with search and a Task Manager.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "template": "installer/installer.nsi",
+        "installerHooks": "installer/hooks.nsh",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

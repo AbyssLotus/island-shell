@@ -1,0 +1,7 @@
+src-tauri/target/
+src-tauri/gen/schemas/
+target/
+__pycache__/
+*.log
+Thumbs.db
+.DS_Store
