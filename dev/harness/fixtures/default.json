@@ -1,0 +1,345 @@
+{
+ "get_style": "island",
+ "autostart_get": true,
+ "update_status": {
+  "current": "0.1.0",
+  "state": "idle",
+  "latest": "0.1.0",
+  "notes": "",
+  "size": 0,
+  "progress": 0,
+  "checked": 1792886747887,
+  "error": "",
+  "auto": true
+ },
+ "get_status": {
+  "media": {
+   "title": "Glass Harbor",
+   "artist": "The Lantern Choir",
+   "album": "Low Tide Radio",
+   "app": "Music",
+   "id": "music.app",
+   "source": "music.app",
+   "playing": true,
+   "position": 74.0,
+   "duration": 212.0,
+   "sampled_at": 1792897547887,
+   "can_next": true,
+   "can_prev": true,
+   "can_seek": true,
+   "shuffle": false,
+   "repeat": "none",
+   "favorite": false,
+   "badge": "",
+   "app_volume": 0.8,
+   "pinned": false,
+   "sessions": [
+    {
+     "id": "music.app",
+     "app": "Music",
+     "title": "Glass Harbor",
+     "playing": true
+    }
+   ],
+   "key": "glass-harbor"
+  },
+  "audio": {
+   "level": 0.42,
+   "muted": false,
+   "device": "Speakers",
+   "detail": "Realtek Audio"
+  },
+  "wifi": {
+   "present": true,
+   "on": true
+  },
+  "bluetooth": {
+   "present": true,
+   "on": true
+  },
+  "net": {
+   "kind": "wifi",
+   "name": "Harbor-5G",
+   "bars": 4
+  },
+  "taskbar_hidden": true,
+  "battery": {
+   "present": false,
+   "percent": 0,
+   "charging": false
+  },
+  "desktops": {
+   "count": 2,
+   "current": 0,
+   "names": [
+    "Desktop 1",
+    "Desktop 2"
+   ]
+  },
+  "cpu": 12.5,
+  "cpu_temp": 48.0
+ },
+ "get_stats": {
+  "cpu": 12.5,
+  "cpu_name": "Example 8-Core Processor",
+  "cores": 16,
+  "cpu_hist": [
+   8,
+   9,
+   12,
+   15,
+   11,
+   10,
+   12,
+   14,
+   13,
+   12
+  ],
+  "gpu": 7.0,
+  "gpu_name": "Example Graphics 8 GB",
+  "vram_used": 1.6,
+  "vram_total": 8.0,
+  "ram_used": 11.2,
+  "ram_total": 32.0,
+  "net_down": 120000.0,
+  "net_up": 24000.0,
+  "uptime": 187000,
+  "disks": [
+   {
+    "letter": "C:",
+    "label": "System",
+    "used": 412.0,
+    "total": 953.0
+   },
+   {
+    "letter": "D:",
+    "label": "Games",
+    "used": 1210.0,
+    "total": 1863.0
+   }
+  ],
+  "top": [
+   {
+    "name": "Music",
+    "cpu": 3.1
+   },
+   {
+    "name": "Browser",
+    "cpu": 2.4
+   },
+   {
+    "name": "Island Shell",
+    "cpu": 0.6
+   }
+  ],
+  "sensors": {
+   "cpu_temp": 48.0,
+   "cpu_temp_from": "package",
+   "cpu_mhz": 4200.0,
+   "gpus": [],
+   "drives": []
+  }
+ },
+ "gaze_status": {
+  "available": false,
+  "connected": false,
+  "present": false,
+  "enabled": false,
+  "pause_when_away": false
+ },
+ "vpn_status": {
+  "tailscale": null,
+  "radmin": null
+ },
+ "discord_status": {
+  "configured": false,
+  "client_id": "",
+  "has_secret": false,
+  "connected": false,
+  "authorized": false,
+  "user": null,
+  "voice": null,
+  "mute": false,
+  "deaf": false,
+  "presence": false,
+  "notify": false,
+  "presence_now": "",
+  "error": ""
+ },
+ "vm_state": null,
+ "mixer_apps": {
+  "voicedeck": false,
+  "voicemeeter": false
+ },
+ "clip_list": [
+  {
+   "id": 3,
+   "kind": "text",
+   "text": "Meet at the north entrance at 6",
+   "ts": 1792896947887,
+   "pinned": true,
+   "w": 0,
+   "h": 0,
+   "hash": 3
+  },
+  {
+   "id": 2,
+   "kind": "text",
+   "text": "https://example.com/notes/harbor",
+   "ts": 1792893947887,
+   "pinned": false,
+   "w": 0,
+   "h": 0,
+   "hash": 2
+  },
+  {
+   "id": 1,
+   "kind": "text",
+   "text": "let total = items.iter().sum::<u32>();",
+   "ts": 1792890347887,
+   "pinned": false,
+   "w": 0,
+   "h": 0,
+   "hash": 1
+  }
+ ],
+ "apps_list": [
+  {
+   "name": "Browser",
+   "id": "example.browser",
+   "icon": null,
+   "exe": "browser.exe"
+  },
+  {
+   "name": "Calculator",
+   "id": "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+   "icon": null,
+   "exe": null
+  },
+  {
+   "name": "Notepad",
+   "id": "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App",
+   "icon": null,
+   "exe": null
+  },
+  {
+   "name": "Terminal",
+   "id": "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App",
+   "icon": null,
+   "exe": null
+  },
+  {
+   "name": "Code Editor",
+   "id": "example.editor",
+   "icon": null,
+   "exe": "editor.exe"
+  },
+  {
+   "name": "Music",
+   "id": "music.app",
+   "icon": null,
+   "exe": "music.exe"
+  }
+ ],
+ "windows_list": [],
+ "tray_list": [],
+ "audio_devices": {
+  "outputs": [
+   {
+    "id": "spk",
+    "name": "Speakers",
+    "detail": "Realtek Audio",
+    "default": true
+   },
+   {
+    "id": "hp",
+    "name": "Headphones",
+    "detail": "USB Audio",
+    "default": false
+   }
+  ],
+  "inputs": [
+   {
+    "id": "mic",
+    "name": "Microphone",
+    "detail": "USB Audio",
+    "default": true
+   }
+  ],
+  "mic": {
+   "level": 0.7,
+   "muted": false
+  }
+ },
+ "audio_apps": [],
+ "calendar_sources": [
+  {
+   "id": "local",
+   "name": "Calendar",
+   "color": "#8ab4ff",
+   "on": true,
+   "kind": "local"
+  },
+  {
+   "id": "canvas",
+   "name": "Canvas",
+   "color": "#f5c26b",
+   "on": true,
+   "kind": "canvas"
+  }
+ ],
+ "canvas_status": {
+  "configured": false
+ },
+ "destiny_status": {
+  "configured": false
+ },
+ "games_list": {
+  "games": [],
+  "running": 0
+ },
+ "we_library": {
+  "wallpapers": [],
+  "current": null,
+  "recent": []
+ },
+ "cc_places": [
+  {
+   "kind": "drive",
+   "name": "System (C:)",
+   "path": "C:\\",
+   "sub": "System",
+   "free_gb": 541.0,
+   "total_gb": 953.0,
+   "when": 0
+  },
+  {
+   "kind": "folder",
+   "name": "Documents",
+   "path": "C:\\Users\\you\\Documents",
+   "sub": "documents",
+   "free_gb": null,
+   "total_gb": null,
+   "when": 0
+  },
+  {
+   "kind": "folder",
+   "name": "Downloads",
+   "path": "C:\\Users\\you\\Downloads",
+   "sub": "downloads",
+   "free_gb": null,
+   "total_gb": null,
+   "when": 0
+  },
+  {
+   "kind": "file",
+   "name": "notes.txt",
+   "path": "C:\\Users\\you\\Documents\\notes.txt",
+   "sub": "",
+   "free_gb": null,
+   "total_gb": null,
+   "when": 1761300000000
+  }
+ ],
+ "media_lyrics": null
+}
