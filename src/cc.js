@@ -20,6 +20,7 @@ import { createMusic } from './cc-music.js';
 import { createGames } from './cc-games.js';
 import { createApps } from './cc-apps.js';
 import { createSetup } from './setup.js';
+import { placeCubes } from './registry.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -51,17 +52,10 @@ const SETTINGS = [
   ['Startup apps', 'rocket', 'ms-settings:startupapps', 'run at login boot'], ['About this PC', 'cpu', 'ms-settings:about', 'specs system info rename']
 ];
 
-/* The cubes: [island tab, label, icon, x and y from the eclipse's center in radii, size]. */
-const CUBES = [
-  ['apps', 'Apps', 'grid', -1.8, -1.12, 'L'], ['discord', 'Discord', 'chat', -2.52, -.02, 'M'], ['audio', 'Audio', 'speaker', -2, 1.1, 'L'],
-  ['today', 'Today', 'calendar', -3.4, .82, 'S'], ['canvas', 'Canvas', 'cap', -3.3, -.84, 'S'],
-  ['games', 'Games', 'gamepad', 1.72, -1.1, 'M'], ['network', 'Network', 'wifi', 2.48, .04, 'W'], ['clipboard', 'Clipboard', 'clip', 1.92, 1.14, 'M'],
-  ['destiny', 'Destiny', 'orbit', 3.3, -.84, 'S'], ['stats', 'Stats', 'pulse', 3.42, 1.02, 'S'],
-  ['music', 'Music', 'note', 0, 1.62, 'W']
-];
+/* Cubes come from the registry (src/registry.js) and sit in its named slots: [x, y] from the
+   eclipse's center in radii, and a size. A cube opens its island tab in a sheet, its own app there
+   (registry sheets), or a real website docked in (registry sites). */
 const CSIZE = { L: [.9, .9], M: [.74, .74], S: [.52, .52], W: [1.14, .72] };
-/* Sections that can show the real website, docked into the sheet: [site, label, opens on it by default]. */
-const SITES = { discord: ['discord', 'Discord app', true], canvas: ['canvas', 'Canvas website', false], destiny: ['dim', 'DIM', false] };
 
 const KIND = { app: 'App', window: 'Window', game: 'Game', folder: 'Folder', drive: 'Drive', file: 'File', setting: 'Settings', command: 'Command', calc: 'Calculator' };
 const GROUP = [['app', 'Apps'], ['window', 'Open windows'], ['game', 'Games'], ['folder', 'Folders & drives'], ['file', 'Files'], ['setting', 'Windows settings'], ['command', 'Commands']];
@@ -102,6 +96,7 @@ const until = d => { const m = Math.max(0, Math.round((d - Date.now()) / 60000))
 
 export function createCommandCenter(ctx) {
   const { S, invoke, assetUrl, esc, store, gradFor, glyphOf } = ctx;
+  const REG = ctx.R;
   const ic = (n, cls = 'i') => OWN[n] ? `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${OWN[n]}</svg>` : ctx.icon(n);
   const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
 
@@ -134,7 +129,19 @@ export function createCommandCenter(ctx) {
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
   const gms = createGames({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), games: ctx.games });
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
-  const NATIVE = { apps: aps, today: cal, music: mus, games: gms };
+  // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
+  [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'], ['canvas', 'Canvas', 'cap'],
+    ['games', 'Games', 'gamepad'], ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['destiny', 'Destiny', 'orbit'], ['stats', 'Stats', 'pulse'],
+    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: { discord: 'discord', canvas: 'canvas', destiny: 'destiny' }[id] || null }));
+  REG.sites.add({ id: 'discord', site: 'discord', label: 'Discord app', default: true });
+  REG.sites.add({ id: 'canvas', site: 'canvas', label: 'Canvas website', default: false, ready: () => !!(S.cv && S.cv.configured), why: 'Connect Canvas in its island view first' });
+  REG.sites.add({ id: 'destiny', site: 'dim', label: 'DIM', default: false });
+  for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus, games: gms })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
+  /** The cubes as placed in slots right now, in slot (keyboard) order. */
+  const cubes = () => placeCubes(REG.cubes.all());
+  const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
+  const NATIVE = new Proxy({}, { get: (_, k) => REG.sheets.get(k), has: (_, k) => REG.sheets.has(k) });
+  REG.cubes.on(() => { if (isOpen) renderCubes(); });
   const tm = createTaskManager({ invoke, esc, ic, store, flash, assetUrl, root });
   const setup = createSetup({ root, invoke, store, ic, S, setDark: ctx.setDark, openTab: ctx.openTab, getGames: () => games });
   const EC = { x: 0, y: 0, r: 120 }, ET = { x: 0, y: 0, r: 120 };
@@ -236,6 +243,8 @@ export function createCommandCenter(ctx) {
     add('Take a screenshot', 'image', 'Snipping Tool · region', 'snip capture screen', () => invoke('cc_tool', { name: 'snip' }));
     add('Open Control Panel', 'gear', 'Windows', 'control panel classic', () => invoke('cc_tool', { name: 'control' }));
     add('Lock this PC', 'lock', 'Power · Win + L', 'lock screen away', () => invoke('power', { action: 'lock' }));
+    // Modules' own commands (src/modhost.js), and their search sources' items.
+    for (const c of REG.commands.all()) list.push({ kind: 'command', name: c.title, icon: c.icon || 'bolt', sub: c.sub || '', keys: c.keys || '', run: c.run, stay: c.stay });
     return list;
   }
   function buildIndex() {
@@ -250,6 +259,9 @@ export function createCommandCenter(ctx) {
     }
     for (const [name, icn, uri, keys] of SETTINGS) items.push({ kind: 'setting', id: 'set:' + uri, name, sub: uri, keys, icon: icn, uri });
     for (const c of commands()) items.push({ ...c, id: 'cmd:' + c.name });
+    for (const src of REG.search.all()) {
+      try { for (const it of src.items() || []) items.push({ kind: src.kind || 'command', icon: src.icon, ...it, id: `${src.id}:${it.id || it.name}`, module: src.module }); } catch (e) {}
+    }
     // Files and folders opened from here before, even when Windows no longer lists them.
     for (const h of hist) if (h.path && !items.some(i => i.id === h.id)) items.push({ kind: h.kind, id: h.id, name: h.name, sub: h.sub, keys: h.path, icon: h.kind === 'file' ? 'file' : 'folder', place: { path: h.path, kind: h.kind } });
     index = items;
@@ -303,6 +315,7 @@ export function createCommandCenter(ctx) {
     renderDetail();
   }
   function actionsFor(it) {
+    if (it.actions) return it.actions.map(a => [a.label, a.icon || 'bolt', a.run, a.stay]);
     switch (it.kind) {
       case 'app': return [['Open', 'ext', () => invoke('app_launch', { id: it.app.id })], ...(it.app.exe ? [['Show in folder', 'folder', () => invoke('cc_open', { path: it.app.exe, reveal: true })]] : [])];
       case 'window': return [['Switch to', 'window', () => invoke('window_activate', { hwnd: it.win.hwnd })], ['Close the window', 'x', () => invoke('window_close', { hwnd: it.win.hwnd }), true]];
@@ -362,11 +375,13 @@ export function createCommandCenter(ctx) {
       default: return '';
     }
   }
+  const cubeIcon = n => (/\.svg$/.test(n || '') ? `<img class="i" src="${esc(n)}" alt="">` : ic(n));
+  const statOf = id => { const c = REG.cubes.get(id); try { return c && c.stat ? String(c.stat() || '') : ''; } catch (e) { return ''; } };
   function renderCubes() {
-    $('.cc-cubes').innerHTML = CUBES.map(([k, n, icn, dx, , sz], i) => `<div class="cc-cw ${dx < 0 ? 'l' : dx > 0 ? 'r' : 'c'} sz-${sz}" data-cube="${k}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(n)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${ic(icn)}<b>${esc(n)}</b><small data-stat="${k}">${esc(cubeStat(k))}</small></span></button></div></div>`).join('');
+    $('.cc-cubes').innerHTML = cubes().map(({ cube: c, slot }, i) => `<div class="cc-cw ${slot.x < 0 ? 'l' : slot.x > 0 ? 'r' : 'c'} sz-${slot.size}" data-cube="${esc(c.id)}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(c.title)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small data-stat="${esc(c.id)}">${esc(statOf(c.id))}</small></span></button></div></div>`).join('');
     layout();
   }
-  function renderCubeStats() { $$('[data-stat]').forEach(el => { const v = cubeStat(el.dataset.stat); if (el.textContent !== v) el.textContent = v; }); }
+  function renderCubeStats() { $$('[data-stat]').forEach(el => { const v = statOf(el.dataset.stat); if (el.textContent !== v) el.textContent = v; }); }
 
   /* ---------- layout ---------- */
   // The eclipse is all soft light, so its canvas is drawn at 3/4 of the screen's resolution and
@@ -383,11 +398,12 @@ export function createCommandCenter(ctx) {
   function layout() {
     const W = innerWidth, H = innerHeight;
     R = clamp(Math.min(W / 9.8, H / 4.4), 84, 210); CX = W / 2; CY = H / 2 + 4;
+    const at = new Map(cubes().map(p => [p.cube.id, p.slot]));
     $$('.cc-cw').forEach(el => {
-      const c = CUBES.find(x => x[0] === el.dataset.cube); if (!c) return;
-      const [sw, sh] = CSIZE[c[5]], pw = sw * R, ph = sh * R;
+      const s = at.get(el.dataset.cube); if (!s) return;
+      const [sw, sh] = CSIZE[s.size], pw = sw * R, ph = sh * R;
       el.style.setProperty('--w', pw + 'px'); el.style.setProperty('--h', ph + 'px'); el.style.setProperty('--d', (Math.min(pw, ph) * .62) + 'px');
-      el.style.left = (CX + c[3] * R - pw / 2) + 'px'; el.style.top = (CY + c[4] * R - ph / 2) + 'px';
+      el.style.left = (CX + s.x * R - pw / 2) + 'px'; el.style.top = (CY + s.y * R - ph / 2) + 'px';
     });
     layoutTargets();
   }
@@ -524,8 +540,8 @@ export function createCommandCenter(ctx) {
     if (e.target.closest('[data-cc="back"]')) { closeSheet(); return; }
     const st = e.target.closest('[data-sheet]'); if (st) { openSheet(st.dataset.sheet); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); return; }
-    if (e.target.closest('[data-cc="skin"]') && sheetTab && SITES[sheetTab]) {
-      const k = skinKey(sheetTab), on = !store.get(k, true), name = SITES[sheetTab][1].replace(/ (app|website)$/, '');
+    if (e.target.closest('[data-cc="skin"]') && sheetTab && siteOf(sheetTab)) {
+      const k = skinKey(sheetTab), on = !store.get(k, true), name = siteOf(sheetTab).label.replace(/ (app|website)$/, '');
       store.set(k, on);
       $('.cc-skin').setAttribute('aria-pressed', on); flash(on ? `${name} wears the island skin` : `${name} in its own colours`);
       placeEmbed(); return;
@@ -549,7 +565,7 @@ export function createCommandCenter(ctx) {
     if (sheetTab) {
       if (nativeOn && NATIVE[nativeOn].key(e)) { e.preventDefault(); e.stopPropagation(); return; }
       const typing = e.target.matches && e.target.matches('input, textarea, select') && e.target !== input;
-      const order = CUBES.map(c => c[0]), i = order.indexOf(sheetTab);
+      const order = cubes().map(p => p.cube.id), i = order.indexOf(sheetTab);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (typing) e.target.blur(); else closeSheet(); return; }
       if (!typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); e.stopPropagation(); openSheet(order[(i + (e.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length]); return; }
       if (!typing && /^[1-9]$/.test(e.key)) { e.stopPropagation(); if (order[+e.key - 1]) openSheet(order[+e.key - 1]); return; }
@@ -566,29 +582,33 @@ export function createCommandCenter(ctx) {
 
   /* ---------- sheets: each section full size ---------- */
   function openSheet(tab, fromEl) {
-    if (!isOpen || busy || !CUBES.some(c => c[0] === tab)) return false;
+    if (!isOpen || busy || !cubes().some(p => p.cube.id === tab)) return false;
     if (tab === 'stats') { openTM(); return true; }
     tm.close();
     const sheet = $('.cc-sheet'), first = !sheetTab;
     invoke('cc_embed_hide').catch(() => {}); clearTimeout(embedT);
     sheetTab = tab;
-    $('.cc-tabs').innerHTML = CUBES.map(([k, n, icn]) => `<button class="cc-chip" type="button" data-sheet="${k}" aria-pressed="${k === tab}">${ic(icn)}${esc(n)}</button>`).join('');
+    $('.cc-tabs').innerHTML = cubes().map(({ cube: c }) => `<button class="cc-chip" type="button" data-sheet="${esc(c.id)}" aria-pressed="${c.id === tab}">${cubeIcon(c.icon)}${esc(c.title)}</button>`).join('');
     if (first) {
       const src = fromEl || $(`.cc-cw[data-cube="${tab}"]`);
       if (src) { const r = src.getBoundingClientRect(); sheet.style.setProperty('--ox', (r.left + r.width / 2 - 32) + 'px'); sheet.style.setProperty('--oy', (r.top + r.height / 2 - 72) + 'px'); }
       sheet.hidden = false; sheet.style.animation = 'none'; void sheet.offsetWidth; sheet.style.animation = '';
       root.classList.add('sheet-open'); input.blur();
     }
-    const site = SITES[tab];
-    const want = site ? store.get('ccMode:' + tab, site[2] ? 'web' : 'island') : 'island';
-    $('.cc-modes').innerHTML = site ? `<button type="button" data-mode="island" aria-pressed="${want === 'island'}">Island view</button><button type="button" data-mode="web" aria-pressed="${want === 'web'}">${esc(site[1])}</button>` : '';
-    setMode(want, first ? 560 : 60);
+    const site = siteOf(tab);
+    const want = site ? store.get('ccMode:' + tab, site.default ? 'web' : 'island') : 'island';
+    $('.cc-modes').innerHTML = site ? `<button type="button" data-mode="island" aria-pressed="${want === 'island'}">Island view</button><button type="button" data-mode="web" aria-pressed="${want === 'web'}">${esc(site.label)}</button>` : '';
+    // A module's cube may bring its own sheet: load the module first, then show it.
+    const c = REG.cubes.get(tab);
+    if (c && c.module && ctx.activateModule) ctx.activateModule(c.module).then(() => { if (sheetTab === tab) setMode(want, first ? 560 : 60); }, () => { if (sheetTab === tab) setMode(want, first ? 560 : 60); });
+    else setMode(want, first ? 560 : 60);
     return true;
   }
   function setMode(mode, delay = 60) {
-    const tab = sheetTab, site = SITES[tab]; if (!tab) return;
+    const tab = sheetTab, site = siteOf(tab); if (!tab) return;
     if (!site) mode = 'island';
-    if (site && mode === 'web' && tab === 'canvas' && !(S.cv && S.cv.configured)) { mode = 'island'; flash('Connect Canvas in its island view first'); }
+    // A site may need setting up in its island view first (Canvas: which school).
+    if (site && mode === 'web' && site.ready && !site.ready()) { mode = 'island'; flash(site.why || `Set up ${site.label.replace(/ (app|website)$/, '')} in its island view first`); }
     sheetMode = mode;
     if (site) store.set('ccMode:' + tab, mode);
     $$('.cc-modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
@@ -597,7 +617,7 @@ export function createCommandCenter(ctx) {
     body.classList.toggle('web', web); body.classList.toggle('split', web && tab === 'discord');
     $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site[1]}…` : '';
     $('.cc-skin').hidden = !web; $('.cc-skin').setAttribute('aria-pressed', !!(site && store.get(skinKey(tab), true)));
-    if (site) { const n = site[1].replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
+    if (site) { const n = site.label.replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
     const app = NATIVE[tab];
     body.classList.toggle('native', !!app);
     if (nativeOn && nativeOn !== tab) unmountNative();
@@ -612,7 +632,7 @@ export function createCommandCenter(ctx) {
     if (!isOpen || busy || !sheetTab || sheetMode !== 'web') return;
     const r = $('.cc-slot').getBoundingClientRect();
     if (r.width < 120 || r.height < 120) { embedT = setTimeout(placeEmbed, 150); return; }
-    invoke('cc_embed', { site: SITES[sheetTab][0], x: r.left, y: r.top, w: r.width, h: r.height, skin: store.get(skinKey(sheetTab), true) }).catch(e => { $('.cc-slot span').textContent = String(e); });
+    invoke('cc_embed', { site: siteOf(sheetTab).site, x: r.left, y: r.top, w: r.width, h: r.height, skin: store.get(skinKey(sheetTab), true) }).catch(e => { $('.cc-slot span').textContent = String(e); });
   }
   function unmountNative() {
     NATIVE[nativeOn].unmount();

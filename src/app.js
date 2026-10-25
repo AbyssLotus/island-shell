@@ -2918,7 +2918,7 @@ function unhostTab(keepMode) {
   if (!keepMode) setMode('pill');
 }
 const cmdCenter = createCommandCenter({
-  S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel,
+  S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },

@@ -156,6 +156,9 @@ export function createModuleHost(env) {
           if (!R.cubes.get(def.id) || R.cubes.get(def.id).module !== id) throw new Error(`Cube ${def.id} isn't in ${id}'s manifest`);
           m.cubes.set(def.id, def);
           if (def.sheet) R.sheets.set({ id: def.id, module: id, ...def.sheet });
+          // A docked site that needs setting up first says so (and why) through siteReady().
+          const site = R.cubes.get(def.id).site && R.sites.get(R.cubes.get(def.id).site);
+          if (site && def.siteReady) { site.ready = def.siteReady; site.why = def.siteWhy || ''; }
         }
       },
       tiles: {

@@ -22,6 +22,7 @@ export const SHOTS = {
   'power-update': 'tab=power&scenario=update',
   bar: 'style=bar',
   cc: 'cc=1',
+  'cc-today': 'sheet=today', 'cc-discord': 'sheet=discord', 'cc-network': 'sheet=network',
 };
 const BIG = new Set(['cc']);
 
