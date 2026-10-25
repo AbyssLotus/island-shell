@@ -740,45 +740,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .dc-chip .dc-stack img { box-shadow: 0 0 0 2px var(--chip-bg); }
 .dc-chip .dc-stack img.talk { box-shadow: 0 0 0 2px var(--chip-bg), 0 0 0 3.5px var(--good); }
 
-/* ---------- Destiny 2 ---------- */
-.d2-reset { font: 500 11px/1 var(--f-body); color: var(--muted); padding: 6px 9px; border-radius: 999px; background: var(--ink-2); white-space: nowrap; }
-.d2-reset b { color: var(--fg); font-weight: 600; }
-.d2-grid { display: grid; grid-template-columns: 286px minmax(0, 1fr); gap: 8px; align-items: start; }
-@container (max-width: 620px) { .d2-grid { grid-template-columns: 1fr; } }
-.d2-side { display: grid; gap: 8px; min-width: 0; }
-.d2-chars { display: grid; gap: 6px; }
-/* Emblem banners: Bungie's 474x96 emblem art, the emblem itself on its left square. */
-.d2-char { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; width: 100%; aspect-ratio: 474 / 96; padding: 0 12px 0 22%; border: 0; border-radius: 12px; background: var(--ink-3) center / cover no-repeat; color: #fff; text-align: left; cursor: pointer; text-shadow: 0 1px 3px rgba(0, 0, 0, .7); box-shadow: inset 0 0 0 2px transparent; transition: box-shadow .2s, transform .15s, filter .2s; filter: saturate(.85) brightness(.82); }
-.d2-char:hover { filter: none; }
-.d2-char[aria-pressed="true"] { filter: none; box-shadow: inset 0 0 0 2px var(--accent); }
-.d2-char:active { transform: scale(.985); }
-.d2-char b { font: 700 15px/1.1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; }
-.d2-char small { display: block; font-size: 11px; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.d2-char .d2-light { font: 600 18px/1 var(--f-display); color: #f1d97a; }
-.d2-char .d2-now { color: #9ff0b1; }
-.d2-xur { display: grid; gap: 8px; padding: 12px; }
-.d2-xur header { margin: 0; }
-.d2-xur .d2-items { display: grid; gap: 6px; }
-.d2-load { display: grid; gap: 10px; padding: 12px; min-width: 0; }
-.d2-load header { margin: 0; }
-.d2-sub { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: var(--ink-3); }
-.d2-sub img { width: 40px; height: 40px; flex: none; }
-.d2-sub b { display: block; font: 600 13px/1.2 var(--f-body); }
-.d2-sub small { font-size: 11px; color: var(--muted); }
-.d2-items { display: grid; gap: 4px; }
-.d2-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 4px; border-radius: 10px; }
-.d2-item:hover { background: var(--ink-3); }
-.d2-item b { display: block; font: 500 12.5px/1.25 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.d2-item small { font-size: 11px; color: var(--muted); }
-.d2-item em { font: 600 12px/1 var(--f-mono); font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
-.d2-ic { width: 38px; height: 38px; border-radius: 6px; background: var(--ink-3); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .12); object-fit: cover; }
-.d2-ic.exotic { box-shadow: 0 0 0 1.5px #ceae33; }
-.d2-armor { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.d2-armor div { display: grid; justify-items: center; gap: 4px; min-width: 0; }
-.d2-armor .d2-ic { width: 100%; height: auto; aspect-ratio: 1; max-width: 52px; }
-.d2-armor em { font: 600 11px/1 var(--f-mono); font-style: normal; color: var(--muted); }
-.d2-label { font: 600 10.5px/1 var(--f-body); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 2px 2px 0; }
-
 /* ---------- Canvas ---------- */
 #cvMode { justify-self: start; }
 [data-cv][hidden] { display: none; }
@@ -891,7 +852,7 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 /* Section titles get Destiny's small diamond marker; the resting pill's dot is a diamond too. */
 .pill-dot { border-radius: 1.5px; transform: rotate(45deg); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px var(--accent); }
 /* Lists: the row under the pointer catches a thin edge of light; the chosen one glows. */
-:is(.cb-item, .au-dv, .au-app, .peer, .cv-row, .cv-course, .cv-an, .d2-item, .todo li, .snd-row, .vpn-me, .dc-m):hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
+:is(.cb-item, .au-dv, .au-app, .peer, .cv-row, .cv-course, .cv-an, .todo li, .snd-row, .vpn-me, .dc-m):hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
 .cb-item[aria-selected="true"] { box-shadow: inset 2px 0 0 var(--accent), 0 0 18px -8px color-mix(in oklab, var(--accent) 70%, transparent); }
 /* Today: the clock in a thin luminous mono, like the Command Center's; light on today and the ring. */
 .clock .big { font: 200 48px/1 var(--f-mono); letter-spacing: -.04em; text-shadow: 0 0 22px rgba(var(--glow), .45); }
@@ -911,12 +872,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .cover:hover { box-shadow: 0 20px 32px -16px rgba(0, 0, 0, .85), 0 0 0 1.5px var(--accent), 0 0 26px -6px color-mix(in oklab, var(--accent) 70%, transparent); }
 .cover::before { content: ""; position: absolute; inset: 7px; z-index: 2; color: #f4fbff; background: var(--brackets); opacity: 0; transform: scale(1.06); transition: opacity .2s, transform .35s var(--spring); pointer-events: none; filter: drop-shadow(0 0 4px rgba(var(--glow), .9)); }
 .cover:hover::before, .cover:focus-visible::before { opacity: 1; transform: none; }
-/* Destiny: a cold edge round each emblem; the chosen Guardian framed by a reticle. */
-.d2-char { box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); }
-.d2-char[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 22px -6px color-mix(in oklab, var(--accent) 70%, transparent); }
-.d2-char::before { content: ""; position: absolute; inset: 5px; color: #f4fbff; background: var(--brackets); opacity: 0; pointer-events: none; transition: opacity .2s; }
-.d2-char[aria-pressed="true"]::before { opacity: .9; }
-.d2-sub, .d2-ic:not(.exotic) { box-shadow: inset 0 0 0 1px rgba(var(--glow), .1); }
 /* Apps, wallpapers, power: lit rims. */
 .app:hover, .app.first { box-shadow: inset 0 0 0 1px rgba(var(--glow), .12), 0 0 18px -10px rgba(var(--glow), .5); }
 .app .dot { box-shadow: 0 0 0 2px var(--ink-solid), 0 0 8px var(--accent); }
@@ -931,5 +886,5 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 :is(.tile, .pw, .app):focus-visible::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; color: var(--accent); background: var(--brackets); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   #island[data-mode="pill"], #island[data-mode="toast"], #L-toast.on .t-ico, #L-toast.on .t-txt, #L-panel::before { animation: none; }
-  .cover::before, .d2-char::before { transition: none; }
+  .cover::before { transition: none; }
 }

@@ -291,7 +291,7 @@
  "canvas_status": {
   "configured": false
  },
- "destiny_status": {
+ "mod:destiny.status": {
   "configured": false
  },
  "games_list": {

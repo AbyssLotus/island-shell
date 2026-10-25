@@ -3,20 +3,27 @@
 //
 // Query options: ?scenario=<name> layers fixtures/<name>.json over default.json; ?tab=<id> opens the
 // panel on that tab; ?cc=1 opens the Command Center; ?sheet=<id> opens a Command Center sheet;
-// ?style=bar shows the top bar; ?fresh=1 starts with an empty profile (the setup guide). window.harness.emit(name, payload) sends any backend event.
+// ?style=bar shows the top bar; ?fresh=1 starts with an empty profile (the setup guide); ?mods=0
+// leaves out the repo's modules (modules/*, otherwise all on). window.harness.emit(name, payload) sends any backend event.
+//
+// A module's backend answers mod_call from the fixture "mod:<id>.<method>"; without one the call fails
+// the way a missing method does.
 (() => {
   const params = new URLSearchParams(location.search);
+  // Module UI comes straight from the repo's module folders.
+  window.__ISLAND_MOD_BASE__ = '/__repo/modules/';
   // A fresh profile gets the setup guide; ?fresh=1 shows it, otherwise the page starts as set up.
   try {
     localStorage.clear();
     if (!params.get('fresh')) localStorage.setItem('island.setupDone', 'true');
   } catch (e) {}
-  const load = name => {
+  const get = p => {
     const x = new XMLHttpRequest();
-    x.open('GET', `/__harness/fixtures/${name}.json`, false);
+    x.open('GET', p, false);
     x.send();
-    return x.status === 200 ? JSON.parse(x.responseText) : {};
+    return x.status === 200 ? JSON.parse(x.responseText) : null;
   };
+  const load = name => get(`/__harness/fixtures/${name}.json`) || {};
   const fixtures = load('default');
   for (const s of (params.get('scenario') || '').split(',').filter(Boolean)) Object.assign(fixtures, load(s));
   if (params.get('style')) fixtures.get_style = params.get('style');
@@ -41,12 +48,18 @@
       return out.filter(e => e.start >= from && e.start <= to);
     },
     tm_snapshot: () => fixtures.tm_snapshot ?? null,
+    mod_list: () => fixtures.mod_list ?? (params.get('mods') === '0' ? { modules: [], broken: [] } : get('/__harness/modules.json')),
+    mod_call: ({ id, method }) => {
+      const k = `mod:${id}.${method}`;
+      if (k in fixtures) return structuredClone(fixtures[k]);
+      throw { code: -32601, message: `${id} has no ${method} in the harness fixtures` };
+    },
     log: ({ msg }) => { console.debug('[page log]', msg); return null; },
   };
 
   async function invoke(cmd, args = {}) {
     calls.push([cmd, args]);
-    if (cmd in dynamic) return dynamic[cmd](args);
+    if (cmd in dynamic) return dynamic[cmd](args); // a throw rejects, like a command's Err
     if (cmd in fixtures) return structuredClone(fixtures[cmd]);
     if (!missing.has(cmd)) { missing.add(cmd); console.debug('[harness] no fixture for', cmd); }
     return null;

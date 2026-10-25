@@ -1,7 +1,7 @@
 // The Command Center (Win + Space): Island Shell's full-screen mode for going anywhere on the PC.
 // A black eclipse leaking plasma and Taken light, with the clock and search inside it; the island's
 // sections float around it as cubes, and each opens as a full-size glass sheet: the island's own view
-// of it, or the real website docked in (Discord's web app, your Canvas, DIM). It grows out of the pill:
+// of it, or the real website docked in (Discord's web app, your Canvas, a module's site like DIM). It grows out of the pill:
 // while it's open the island's window covers the whole monitor (cc_mode) and stays on top
 // (island_rect with urgent).
 //
@@ -85,15 +85,6 @@ function score(q, name, keys) {
   return j === q.length && gaps < q.length * 3 ? 30 - gaps : -1;
 }
 
-/** Next 17:00 UTC (Destiny's reset), on a given weekday if asked. */
-function nextReset(day) {
-  const now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17));
-  if (d <= now) d.setUTCDate(d.getUTCDate() + 1);
-  if (day != null) while (d.getUTCDay() !== day) d.setUTCDate(d.getUTCDate() + 1);
-  return d;
-}
-const until = d => { const m = Math.max(0, Math.round((d - Date.now()) / 60000)); const dd = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return dd ? `${dd}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m}m`; };
-
 export function createCommandCenter(ctx) {
   const { S, invoke, assetUrl, esc, store, gradFor, glyphOf } = ctx;
   const REG = ctx.R;
@@ -131,11 +122,10 @@ export function createCommandCenter(ctx) {
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
   [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'], ['canvas', 'Canvas', 'cap'],
-    ['games', 'Games', 'gamepad'], ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['destiny', 'Destiny', 'orbit'], ['stats', 'Stats', 'pulse'],
-    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: { discord: 'discord', canvas: 'canvas', destiny: 'destiny' }[id] || null }));
+    ['games', 'Games', 'gamepad'], ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
+    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: { discord: 'discord', canvas: 'canvas' }[id] || null }));
   REG.sites.add({ id: 'discord', site: 'discord', label: 'Discord app', default: true });
   REG.sites.add({ id: 'canvas', site: 'canvas', label: 'Canvas website', default: false, ready: () => !!(S.cv && S.cv.configured), why: 'Connect Canvas in its island view first' });
-  REG.sites.add({ id: 'destiny', site: 'dim', label: 'DIM', default: false });
   for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus, games: gms })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
@@ -143,7 +133,7 @@ export function createCommandCenter(ctx) {
   const NATIVE = new Proxy({}, { get: (_, k) => REG.sheets.get(k), has: (_, k) => REG.sheets.has(k) });
   REG.cubes.on(() => { if (isOpen) renderCubes(); });
   const tm = createTaskManager({ invoke, esc, ic, store, flash, assetUrl, root });
-  const setup = createSetup({ root, invoke, store, ic, S, setDark: ctx.setDark, openTab: ctx.openTab, getGames: () => games });
+  const setup = createSetup({ root, invoke, store, ic, esc, S, setDark: ctx.setDark, openTab: ctx.openTab, getGames: () => games, moduleCards: ctx.moduleCards || (() => []) });
   const EC = { x: 0, y: 0, r: 120 }, ET = { x: 0, y: 0, r: 120 };
   let R = 120, CX = 0, CY = 0, DPR = 1, running = false, lastT = 0, hoverA = null, hoverK = 0, reachA = 0;
 
@@ -369,7 +359,6 @@ export function createCommandCenter(ctx) {
       case 'games': return `${games.length} games`;
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
       case 'clipboard': return `${(S.clips || []).length} items`;
-      case 'destiny': return `Reset in ${until(nextReset(2))}`;
       case 'music': { const m = S.media; return m ? `${m.playing ? '' : 'Paused · '}${m.title || 'Unknown title'}` : 'Nothing playing'; }
       case 'stats': return `CPU ${Math.round(st.cpu || 0)}%${st.cpu_temp != null ? ` · ${Math.round(st.cpu_temp)}°` : ''}`;
       default: return '';
@@ -380,6 +369,8 @@ export function createCommandCenter(ctx) {
   function renderCubes() {
     $('.cc-cubes').innerHTML = cubes().map(({ cube: c, slot }, i) => `<div class="cc-cw ${slot.x < 0 ? 'l' : slot.x > 0 ? 'r' : 'c'} sz-${slot.size}" data-cube="${esc(c.id)}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(c.title)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small data-stat="${esc(c.id)}">${esc(statOf(c.id))}</small></span></button></div></div>`).join('');
     layout();
+    // A module's cube stat comes from its UI, so the cubes on screen load theirs.
+    for (const m of new Set(REG.cubes.all().map(c => c.module).filter(Boolean))) ctx.activateModule(m).then(renderCubeStats, () => {});
   }
   function renderCubeStats() { $$('[data-stat]').forEach(el => { const v = statOf(el.dataset.stat); if (el.textContent !== v) el.textContent = v; }); }
 
@@ -615,7 +606,7 @@ export function createCommandCenter(ctx) {
     const body = $('.cc-sbody'), web = mode === 'web';
     // Discord keeps the island's call controls beside its app; the other sites take the whole sheet.
     body.classList.toggle('web', web); body.classList.toggle('split', web && tab === 'discord');
-    $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site[1]}…` : '';
+    $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site.label}…` : '';
     $('.cc-skin').hidden = !web; $('.cc-skin').setAttribute('aria-pressed', !!(site && store.get(skinKey(tab), true)));
     if (site) { const n = site.label.replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
     const app = NATIVE[tab];

@@ -36,7 +36,20 @@ export function start(port = 5174) {
       res.end(html);
       return;
     }
-    // /__harness/* is this folder, /__repo/* the repo (module folders, for M1.3's loader), the rest src/.
+    if (pathname === '/__harness/modules.json') {
+      // The repo's modules as mod_list answers them: every modules/<id>/module.json, on, in developer mode.
+      const dir = path.join(repo, 'modules'), modules = [];
+      for (const id of fs.existsSync(dir) ? fs.readdirSync(dir).sort() : []) {
+        const mf = path.join(dir, id, 'module.json');
+        if (!fs.existsSync(mf)) continue;
+        const manifest = JSON.parse(fs.readFileSync(mf, 'utf8'));
+        modules.push({ id: manifest.id, manifest, dir: `modules/${id}`, dev: true, enabled: true, state: 'stopped', pid: null, error: null, crashes: 0 });
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ modules, broken: [] }));
+      return;
+    }
+    // /__harness/* is this folder, /__repo/* the repo (module folders: their UI loads from there), the rest src/.
     const [root, rel] = pathname.startsWith('/__harness/') ? [here, pathname.slice(10)] : pathname.startsWith('/__repo/') ? [repo, pathname.slice(7)] : [src, pathname];
     const p = inside(root, rel);
     if (!p) { res.writeHead(403); res.end(); return; }

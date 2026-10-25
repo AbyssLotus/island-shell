@@ -110,13 +110,13 @@ $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 
 /* ---------- tabs (src/registry.js) ---------- */
 const R = createRegistry();
-// The base's own tabs, [id, title, icon, panel width], in strip order (order 10, 20, …). Modules add
-// theirs from their manifests (src/modhost.js).
-[['controls', 'Controls', 'gear', 600], ['music', 'Music', 'note', 700], ['audio', 'Audio', 'speaker', 680], ['today', 'Today', 'calendar', 760],
-  ['canvas', 'Canvas', 'cap', 760], ['network', 'Network', 'wifi', 680], ['discord', 'Discord', 'chat', 700], ['games', 'Games', 'gamepad', 760],
-  ['destiny', 'Destiny', 'orbit', 760], ['stats', 'Stats', 'pulse', 720], ['clipboard', 'Clipboard', 'clip', 760], ['apps', 'Apps', 'grid', 640],
-  ['wallpaper', 'Wallpaper', 'image', 660], ['power', 'Power', 'power', 600]]
-  .forEach(([id, title, ic, width], i) => R.tabs.add({ id, title, icon: ic, width, order: (i + 1) * 10 }));
+// The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
+// (src/modhost.js), slotting in by order: Destiny's 90 keeps it between Games and Stats.
+[['controls', 'Controls', 'gear', 600, 10], ['music', 'Music', 'note', 700, 20], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
+  ['canvas', 'Canvas', 'cap', 760, 50], ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70], ['games', 'Games', 'gamepad', 760, 80],
+  ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
+  ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
+  .forEach(([id, title, ic, width, order]) => R.tabs.add({ id, title, icon: ic, width, order }));
 /** Tab ids in strip order, kept current as modules come and go. */
 let TABS = R.tabs.ids();
 const tabW = t => (R.tabs.get(t) || {}).width || 700;
@@ -287,7 +287,6 @@ function onTabShown(t) {
   if (t === 'stats') statsLoop();
   if (t === 'network') { renderVpn(); vpnLoop(); }
   if (t === 'discord') loadDc();
-  if (t === 'destiny') d2Loop();
   if (t === 'canvas') cvLoop();
   if (t === 'games') gamesLoop();
   if (t === 'wallpaper') showWallpapers();
@@ -1387,95 +1386,6 @@ $('#dcDeaf').addEventListener('click', () => { if (S.dc) { S.dc.deaf = !S.dc.dea
 $('#dcLeave').addEventListener('click', () => dcAction('leave'));
 $('#dcPresence').addEventListener('change', e => invoke('discord_options', { presence: e.target.checked }).catch(err => note('#dcNote', String(err))));
 $('#dcNotify').addEventListener('change', e => invoke('discord_options', { notify: e.target.checked }).catch(err => note('#dcNote', String(err))));
-
-/* ---------- Destiny 2 (Bungie API with the user's own key; see destiny.rs) ---------- */
-S.d2 = null; S.d2Profile = null; S.d2Xur = null; S.d2Sel = store.get('d2Sel', ''); S.d2Edit = false; S.d2T = 0;
-/** Daily reset is 17:00 UTC; the weekly one is Tuesday's; Xûr arrives at Friday's. */
-function nextReset(day) {
-  const now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17));
-  if (d <= now) d.setUTCDate(d.getUTCDate() + 1);
-  if (day != null) while (d.getUTCDay() !== day) d.setUTCDate(d.getUTCDate() + 1);
-  return d;
-}
-const until = d => { const m = Math.max(0, Math.round((d - Date.now()) / 60000)); const days = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return days ? `${days}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m}m`; };
-/** Playing right now: an activity, started in the last 12 hours. */
-const d2Live = c => !!c.activity && Date.now() - Date.parse(c.activity_since) < 12 * 3600e3;
-async function d2Loop() {
-  clearTimeout(S.d2T);
-  if (S.mode !== 'panel' || S.tab !== 'destiny') return;
-  try { S.d2 = await invoke('destiny_status'); } catch (e) { return; }
-  if (S.d2.configured && !S.d2Edit) {
-    if (!S.d2Profile) { renderD2(); $('#d2Wait').hidden = false; layout(); }
-    const [p, x] = await Promise.allSettled([invoke('destiny_profile'), invoke('destiny_xur')]);
-    $('#d2Wait').hidden = true;
-    if (p.status === 'fulfilled') S.d2Profile = p.value;
-    if (x.status === 'fulfilled') S.d2Xur = x.value;
-    const err = p.status === 'rejected' ? p.reason : x.status === 'rejected' ? x.reason : '';
-    note('#d2Note', err ? String(err) : '');
-  }
-  renderD2();
-  S.d2T = setTimeout(d2Loop, 60000);
-}
-function renderD2() {
-  const st = S.d2 || {}, setup = !st.configured || S.d2Edit;
-  $('#d2Setup').hidden = !setup; $('#d2Main').hidden = setup || !S.d2Profile;
-  if (setup) {
-    const who = $('#d2Who'); if (!who.value && st.name) who.value = st.name;
-    $('#d2Key').placeholder = st.configured ? 'API key (saved; blank keeps it)' : 'API key';
-    $('#d2Back').hidden = !st.configured; $('#d2Forget').hidden = !st.configured;
-    if (S.mode === 'panel' && S.tab === 'destiny') layout();
-    return;
-  }
-  const p = S.d2Profile; if (!p) return;
-  txt($('#d2Title'), p.name.replace(/#\d+$/, ''));
-  txt($('#d2Rank'), p.guardian_rank ? `Guardian Rank ${p.guardian_rank}` : '');
-  setHtml($('#d2Daily'), `Daily reset <b>${until(nextReset())}</b>`);
-  setHtml($('#d2Weekly'), `Weekly <b>${until(nextReset(2))}</b>`);
-  if (!p.characters.some(c => c.id === S.d2Sel)) S.d2Sel = (p.characters.find(d2Live) || p.characters[0] || {}).id || '';
-  setHtml($('#d2Chars'), p.characters.map(c => `<button class="d2-char" type="button" data-id="${esc(c.id)}" aria-pressed="${c.id === S.d2Sel}" style="background-image:url(${esc(JSON.stringify(c.emblem_bg))})"><span><b>${esc(c.class)}</b><small class="${d2Live(c) ? 'd2-now' : ''}">${esc(d2Live(c) ? '● ' + c.activity : [c.race, ago(c.last_played)].filter(Boolean).join(' · '))}</small></span><span class="d2-light">✦${c.light}</span></button>`).join(''));
-  const c = p.characters.find(x => x.id === S.d2Sel);
-  if (c) {
-    const sub = c.items.find(i => i.slot === 'Subclass'), weapons = c.items.filter(i => ['Kinetic', 'Energy', 'Power'].includes(i.slot)), armor = c.items.filter(i => ['Helmet', 'Arms', 'Chest', 'Legs', 'Class item'].includes(i.slot));
-    const ic = i => `<img class="d2-ic${i.exotic ? ' exotic' : ''}" src="${esc(i.icon)}" alt="" loading="lazy">`;
-    setHtml($('#d2Load'), `<header><b>${esc(c.class)} loadout</b><small>${Math.round(c.minutes_played / 60).toLocaleString()} hours played</small></header>`
-      + (sub ? `<div class="d2-sub"><img src="${esc(sub.icon)}" alt=""><div><b>${esc(sub.name)}</b><small>Subclass</small></div></div>` : '')
-      + `<div class="d2-label">Weapons</div><div class="d2-items">${weapons.map(i => `<div class="d2-item" title="${esc(i.name)}">${ic(i)}<div><b>${esc(i.name)}</b><small>${esc(i.slot)} · ${esc(i.kind)}</small></div><em>${i.power || ''}</em></div>`).join('')}</div>`
-      + `<div class="d2-label">Armor</div><div class="d2-armor">${armor.map(i => `<div title="${esc(i.name)} (${esc(i.slot)})">${ic(i)}<em>${i.power || ''}</em></div>`).join('')}</div>`);
-  }
-  const x = S.d2Xur;
-  if (!x) setHtml($('#d2Xur'), '');
-  else if (x.here) {
-    // Bungie's own refresh date when it gives one (Xûr now sells all week); otherwise the weekly reset.
-    const refresh = Date.parse(x.leaves) > Date.now() ? new Date(x.leaves) : nextReset(2);
-    setHtml($('#d2Xur'), `<header><b>Xûr${x.location ? ' · ' + esc(x.location) : ''}</b><small>new stock in ${until(refresh)}</small></header>`
-      + (x.items.length ? `<div class="d2-armor">${x.items.map(i => `<div title="${esc(i.name)} (${esc(i.kind)})">${ic2(i)}</div>`).join('')}</div>` : '<small class="d2-label">Exotics not listed</small>'));
-  }
-  else setHtml($('#d2Xur'), `<header><b>Xûr</b><small>arrives in ${until(nextReset(5))}</small></header>`);
-  if (S.mode === 'panel' && S.tab === 'destiny') layout();
-}
-const ic2 = i => `<img class="d2-ic exotic" src="${esc(i.icon)}" alt="" loading="lazy">`;
-$('#d2Chars').addEventListener('click', e => {
-  const b = e.target.closest('.d2-char'); if (!b) return;
-  S.d2Sel = b.dataset.id; store.set('d2Sel', S.d2Sel); renderD2();
-});
-$('#d2Portal').addEventListener('click', () => invoke('destiny_open').catch(err => note('#d2Note', String(err))));
-$('#d2Form').addEventListener('submit', e => {
-  e.preventDefault();
-  const key = $('#d2Key').value.trim(), name = $('#d2Who').value.trim();
-  if (!name) { note('#d2Note', 'Add your Bungie Name, like Guardian#1234.'); return; }
-  note('#d2Note', ''); $('#d2Save').disabled = true;
-  invoke('destiny_configure', { key, name }).then(st => {
-    $('#d2Key').value = ''; S.d2 = st; S.d2Edit = false; S.d2Profile = null; d2Loop();
-  }).catch(err => note('#d2Note', String(err))).finally(() => { $('#d2Save').disabled = false; });
-});
-$('#d2Edit').addEventListener('click', () => { S.d2Edit = true; renderD2(); });
-$('#d2Back').addEventListener('click', () => { S.d2Edit = false; $('#d2Key').value = ''; renderD2(); });
-$('#d2Forget').addEventListener('click', () => {
-  const b = $('#d2Forget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget';
-  invoke('destiny_forget').then(() => { S.d2Edit = false; S.d2Profile = null; S.d2Xur = null; $('#d2Who').value = ''; d2Loop(); });
-});
 
 /* ---------- Canvas (school LMS, with the user's own token; see canvas.rs) ---------- */
 S.cv = null; S.cvData = null; S.cvEdit = false; S.cvT = 0; S.cvSetup = store.get('cvSetup', 'feed');
@@ -2919,6 +2829,11 @@ function unhostTab(keepMode) {
 }
 const cmdCenter = createCommandCenter({
   S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
+  // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
+  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
+    const t = m.man.contributes.tabs[0];
+    return { icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id };
+  }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },

@@ -383,44 +383,6 @@
         <p class="note" id="gNote" hidden></p>
       </section>
 
-      <section class="view" id="v-destiny" data-tab="destiny" role="tabpanel" aria-labelledby="tab-destiny">
-        <div id="d2Setup" hidden>
-          <div class="card dc-setup">
-            <div class="vpn-head">
-              <span class="vpn-logo"><i data-ic="orbit"></i></span>
-              <div class="vpn-title"><b>Connect Destiny 2</b><small>Your Guardians, their loadouts, Xûr and the resets</small></div>
-              <button class="btn" type="button" id="d2Back" hidden>Cancel</button>
-            </div>
-            <ol class="dc-steps">
-              <li>Your API key is on <button class="dc-link" type="button" id="d2Portal">bungie.net/en/Application</button>: open the app you made and copy its <b>API Key</b>.</li>
-              <li>Your <b>Bungie Name</b> is the name with a number, like <code>Guardian#1234</code> (shown in Destiny's roster and on bungie.net).</li>
-            </ol>
-            <form class="dc-form" id="d2Form" autocomplete="off">
-              <input class="field" id="d2Key" type="password" placeholder="API key" spellcheck="false" aria-label="Bungie API key">
-              <input class="field" id="d2Who" placeholder="Bungie Name (Guardian#1234)" spellcheck="false" aria-label="Bungie Name">
-              <button class="btn primary" type="submit" id="d2Save">Connect</button>
-            </form>
-            <div class="dc-fine"><span>The key is stored encrypted for your Windows account only. Everything shown is public, so there's no Bungie sign-in.</span><span class="grow"></span><button class="dc-link" type="button" id="d2Forget" hidden>Forget</button></div>
-          </div>
-        </div>
-        <div id="d2Main" hidden>
-          <div class="v-head">
-            <b id="d2Title"></b><small id="d2Rank"></small><span class="grow"></span>
-            <span class="d2-reset" id="d2Daily"></span><span class="d2-reset" id="d2Weekly"></span>
-            <button class="ib" type="button" id="d2Edit" title="Destiny settings" aria-label="Destiny settings"><i data-ic="gear"></i></button>
-          </div>
-          <div class="d2-grid">
-            <div class="d2-side">
-              <div class="d2-chars" id="d2Chars" role="group" aria-label="Characters"></div>
-              <div class="card d2-xur" id="d2Xur"></div>
-            </div>
-            <div class="card d2-load" id="d2Load"></div>
-          </div>
-        </div>
-        <p class="empty" id="d2Wait" hidden>Loading your Guardians…</p>
-        <p class="note" id="d2Note" hidden></p>
-      </section>
-
       <section class="view" id="v-stats" data-tab="stats" role="tabpanel" aria-labelledby="tab-stats">
         <div class="v-head"><b>System</b><small id="sysLine"></small><span class="grow"></span><button class="link-btn" type="button" id="openTm" title="Processes, performance and startup apps, full size">Task Manager</button><span class="live"><i></i>Live</span></div>
         <div class="stats">

@@ -198,6 +198,9 @@ struct Slot {
     crashes: VecDeque<Instant>,
     retry_at: Option<Instant>,
     last_used: Instant,
+    /// Its last use was a UI call rather than a tick, so a `scheduled` module waits out its manifest's
+    /// idle time before stopping, not just the short one after a tick.
+    called: bool,
     /// Last time one of its `while-process` processes was seen.
     process_seen: Option<Instant>,
     next_tick: Option<Instant>,
@@ -304,6 +307,7 @@ impl Supervisor {
             crashes: VecDeque::new(),
             retry_at: None,
             last_used: now,
+            called: false,
             process_seen: None,
             next_tick,
             ticking: false,
@@ -456,6 +460,7 @@ fn changed(inner: &Inner, id: &str) {
 fn touch(inner: &Inner, id: &str) {
     if let Some(s) = inner.slots.lock().unwrap().get_mut(id) {
         s.last_used = Instant::now();
+        s.called = true;
     }
 }
 
@@ -535,6 +540,7 @@ fn spawn(inner: &Arc<Inner>, slot: &mut Slot) -> Result<Arc<Proc>, String> {
     slot.state = State::Starting;
     slot.stopping = false;
     slot.last_used = Instant::now();
+    slot.called = false;
     slot.push_log(format!("{} info started (pid {})", now_ms(), proc.pid));
 
     // stdout: the protocol. At its end the process is gone.
@@ -870,7 +876,7 @@ fn step(inner: &Arc<Inner>) {
                         slot.ticking = true;
                         slot.next_tick = slot.manifest.every().map(|e| now + e);
                         actions.push(Action::Tick(id));
-                    } else if running && !slot.ticking && busy == 0 && !slot.stopping && now.duration_since(slot.last_used) > inner.timing.scheduled_idle {
+                    } else if running && !slot.ticking && busy == 0 && !slot.stopping && now.duration_since(slot.last_used) > if slot.called { slot.manifest.idle() } else { inner.timing.scheduled_idle } {
                         actions.push(Action::Stop(id));
                     }
                 }
@@ -912,6 +918,7 @@ fn step(inner: &Arc<Inner>) {
                     if let Some(s) = slots.get_mut(&id) {
                         s.ticking = false;
                         s.last_used = Instant::now();
+                        s.called = false;
                     }
                 });
             }

@@ -21,5 +21,6 @@ features = [
   "Web_Http_Headers",
   "Win32_Foundation",
   "Win32_Security_Cryptography",
+  "Win32_System_Com",
   "Win32_System_Console",
 ]

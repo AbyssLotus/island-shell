@@ -5,7 +5,7 @@
 
 const STEPS = ['welcome', 'island', 'cc', 'look', 'start', 'connect', 'done'];
 
-export function createSetup({ root, invoke, store, ic, S, setDark, openTab, getGames }) {
+export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab, getGames, moduleCards }) {
   const el = document.createElement('div');
   el.className = 'su-wrap'; el.hidden = true;
   el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Island Shell setup');
@@ -33,7 +33,7 @@ export function createSetup({ root, invoke, store, ic, S, setDark, openTab, getG
       + card('gamepad', 'Steam', games.length ? `${games.length} games found: covers, playtime and Play from the Games cube.` : 'Install Steam and your games show up by themselves.', games.length ? 'Ready' : '')
       + card('chat', 'Discord', 'Your call (mute, deafen, who’s talking) and notifications on the island. Needs the Discord app and a free Discord application, about two minutes.', dc.authorized ? 'Connected' : '', 'discord')
       + card('cap', 'Canvas', 'Due dates, grades and announcements from your school’s Canvas. Needs a token from your Canvas settings.', cv.configured ? 'Connected' : '', 'canvas')
-      + card('star', 'Destiny 2', 'Your Guardians, loadouts and the weekly reset. Needs a free Bungie API key.', '', 'destiny')
+      + moduleCards().map(m => card(m.icon, esc(m.title), esc(m.sub), '', m.tab)).join('')
       + card('calendar', 'Calendars', 'Add any calendar’s iCal link (Google, Outlook, school) in the Today cube.', '', 'today');
   }
 

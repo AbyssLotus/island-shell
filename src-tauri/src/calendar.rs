@@ -3,7 +3,7 @@
 //! - any calendar feeds you add: Google Calendar, iCloud and Outlook each give a private iCal link,
 //!   no account access needed (the links are stored DPAPI-encrypted, since anyone with one can read
 //!   the calendar),
-//! - Canvas due dates (when Canvas is connected) and Destiny's weekly reset (when Destiny is),
+//! - Canvas due dates (when Canvas is connected),
 //! - and the sources modules declare (`contributes.calendar`): a module replaces its events with
 //!   `host.calendar`, and the last set is kept here so the calendar works while the module isn't running.
 
@@ -109,7 +109,7 @@ fn save(dir: &Path, s: &Saved) {
 pub struct Source {
     pub id: String,
     pub name: String,
-    /// "local", "feed", "canvas" or "destiny".
+    /// "local", "feed", "canvas" or "module".
     pub kind: String,
     pub color: String,
     pub on: bool,
@@ -152,9 +152,6 @@ fn builtin(dir: &Path) -> Vec<(&'static str, &'static str, &'static str)> {
     let mut v = vec![("local", "My events", "#c9e9ff")];
     if crate::canvas::status(dir).configured {
         v.push(("canvas", "Canvas", "#f5c26b"));
-    }
-    if crate::destiny::status(dir).configured {
-        v.push(("destiny", "Destiny 2", "#c79bff"));
     }
     v
 }
@@ -350,18 +347,6 @@ pub fn events(dir: &Path, from: i64, to: i64) -> Vec<CalEvent> {
                     editable: false,
                 });
             }
-        }
-    }
-    if on("destiny") && crate::destiny::status(dir).configured {
-        // Weekly reset: Tuesdays 17:00 UTC.
-        let c = color("destiny", "#c79bff");
-        let mut day = from.div_euclid(DAY);
-        while day * DAY < to {
-            let t = day * DAY + 17 * 3_600_000;
-            if ics::weekday(day) == 1 && t >= from && t < to {
-                out.push(CalEvent { id: format!("destiny:{day}"), source: "destiny".into(), title: "Weekly reset".into(), start: t, end: t, all_day: false, color: c.clone(), location: "Destiny 2".into(), notes: String::new(), url: String::new(), editable: false });
-            }
-            day += 1;
         }
     }
     let active = ACTIVE.lock().unwrap().clone().unwrap_or_default();

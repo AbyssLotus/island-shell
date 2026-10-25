@@ -84,6 +84,10 @@ fn send(r: &Request) -> Result<Response, String> {
     use windows::Web::Http::Filters::{HttpBaseProtocolFilter, HttpCacheReadBehavior};
     use windows::Web::Http::{HttpClient, HttpMethod, HttpRequestMessage, HttpStringContent};
 
+    // WinRT needs COM on whichever thread calls (a no-op when it's already set up).
+    unsafe {
+        let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+    }
     let e = |e: windows::core::Error| e.message().to_string();
     let filter = HttpBaseProtocolFilter::new().map_err(e)?;
     let _ = filter.CacheControl().and_then(|c| c.SetReadBehavior(HttpCacheReadBehavior::NoCache));

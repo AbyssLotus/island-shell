@@ -77,6 +77,10 @@ pub struct Ui {
     pub entry: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub css: Vec<String>,
+    /// Import the entry at startup rather than when something of the module first shows: for
+    /// modules whose chips, tiles or activities have to be up before anyone opens them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub eager: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -105,6 +109,9 @@ pub struct Tab {
     /// An icon name from the island's set, or an `.svg` in the module.
     pub icon: String,
     pub order: f64,
+    /// The panel's width while this tab shows, in CSS pixels (default 760).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
 }
 
 /// A Command Center cube (§4.12).

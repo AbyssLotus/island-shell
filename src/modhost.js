@@ -17,7 +17,8 @@
 //   ui                              the island's helpers: icon(), esc(), setHtml(), txt(), clip(), grad(), glyph(), ago(), note()
 //   tabs.register({ id, mount(root), show(), hide() })        an island tab from its manifest
 //   sections.register({ id, mount(root), show(), hide() })    a section of a base tab
-//   cubes.register({ id, stat(), sheet?: { mount(el), unmount(), key(e) } })
+//   cubes.register({ id, stat(), sheet?: { mount(root), unmount(), key(e) } })
+//     (each root is an element in a shadow root of the module's own, with the kit and its CSS)
 //   tiles.set({ id, icon, title, sub, pressed, hidden, run }), tiles.remove(id)    Controls tiles
 //   chips.set({ id, icon, text, title, hidden, tone, avatars, run }), chips.remove(id)  top-bar chips
 //   search.register({ id, kind, label, icon, items() })        Command Center results
@@ -25,6 +26,7 @@
 //   activity.set({ id, kind, … }), activity.clear(id)         live things on the pill
 //   notify({ title, body, icon, img, round, urgent, action, sound, ms })
 //   open('tab:<id>' | 'cube:<id>')
+//   openWeb(url)                    a link in the default browser (never Edge)
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn)
 //   settings.mount(fn(root))        its page in the Modules sheet
 
@@ -43,15 +45,20 @@ function kit() {
   return kitSheet;
 }
 
-/** A shadow root on `host` with the kit and the module's CSS. */
+/**
+ * A shadow root on `host` with the kit and the module's CSS, and the element in it the module
+ * mounts into (so a module setting its root's innerHTML keeps its stylesheets).
+ */
 export function shadowFor(host, id, css) {
-  const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
-  root.adoptedStyleSheets = [kit()];
-  for (const c of css || []) {
+  const sr = host.shadowRoot || host.attachShadow({ mode: 'open' });
+  sr.adoptedStyleSheets = [kit()];
+  const links = (css || []).map(c => {
     const l = document.createElement('link');
     l.rel = 'stylesheet'; l.href = modUrl(id, c);
-    root.append(l);
-  }
+    return l;
+  });
+  const root = document.createElement('div');
+  sr.replaceChildren(...links, root);
   return root;
 }
 
@@ -155,7 +162,7 @@ export function createModuleHost(env) {
         register(def) {
           if (!R.cubes.get(def.id) || R.cubes.get(def.id).module !== id) throw new Error(`Cube ${def.id} isn't in ${id}'s manifest`);
           m.cubes.set(def.id, def);
-          if (def.sheet) R.sheets.set({ id: def.id, module: id, ...def.sheet });
+          if (def.sheet) R.sheets.set({ id: def.id, module: id, ...def.sheet, mount: el => def.sheet.mount(shadowFor(el, id, m.man.ui.css)) });
           // A docked site that needs setting up first says so (and why) through siteReady().
           const site = R.cubes.get(def.id).site && R.sites.get(R.cubes.get(def.id).site);
           if (site && def.siteReady) { site.ready = def.siteReady; site.why = def.siteWhy || ''; }
@@ -182,6 +189,7 @@ export function createModuleHost(env) {
       },
       notify: n => env.notify(id, n),
       open: target => env.open(target),
+      openWeb: url => invoke('open_link', { url }),
       island: env.island,
       settings: { mount(fn) { m.settings = fn; } },
       setup: { card(fn) { R.setup.set({ id, module: id, order: 100, render: fn }); } }

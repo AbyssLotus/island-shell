@@ -145,6 +145,32 @@ impl Host {
     pub fn legacy_dir(&self) -> PathBuf {
         self.init.get().map(|i| PathBuf::from(&i.legacy_dir)).unwrap_or_default()
     }
+
+    /// Takes over a 0.1.x file (`name`, relative to the legacy folder) into `to`: copies it, checks the
+    /// copy, then deletes the original. Does nothing when `to` already exists or there's nothing to take.
+    /// Returns whether it moved something.
+    pub fn take_legacy(&self, name: &str, to: &std::path::Path) -> std::io::Result<bool> {
+        take_legacy(&self.legacy_dir().join(name), to)
+    }
+}
+
+fn take_legacy(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<bool> {
+    if to.exists() || !from.is_file() {
+        return Ok(false);
+    }
+    if let Some(dir) = to.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let bytes = std::fs::read(from)?;
+    let tmp = to.with_extension("legacy-tmp");
+    std::fs::write(&tmp, &bytes)?;
+    if std::fs::read(&tmp)? != bytes {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(std::io::Error::other("the copy didn't match"));
+    }
+    std::fs::rename(&tmp, to)?;
+    std::fs::remove_file(from)?;
+    Ok(true)
 }
 
 /// Runs the module on stdin and stdout until the base says `island.shutdown` or goes away, then exits.
@@ -381,6 +407,24 @@ mod tests {
         // The tick ran on its own thread; it had time to finish before shutdown was read, or not:
         // either way it ran at most once.
         assert!(module.ticks.load(Ordering::Relaxed) <= 1);
+    }
+
+    #[test]
+    fn legacy_files_move_once() {
+        let dir = std::env::temp_dir().join(format!("island-legacy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("old")).unwrap();
+        std::fs::write(dir.join("old/destiny.json"), b"{\"key\":\"x\"}").unwrap();
+        let to = dir.join("new/destiny.json");
+        assert!(take_legacy(&dir.join("old/destiny.json"), &to).unwrap());
+        assert_eq!(std::fs::read(&to).unwrap(), b"{\"key\":\"x\"}");
+        assert!(!dir.join("old/destiny.json").exists());
+        // Nothing left to take, and an existing file is never overwritten.
+        assert!(!take_legacy(&dir.join("old/destiny.json"), &to).unwrap());
+        std::fs::write(dir.join("old/destiny.json"), b"older").unwrap();
+        assert!(!take_legacy(&dir.join("old/destiny.json"), &to).unwrap());
+        assert_eq!(std::fs::read(&to).unwrap(), b"{\"key\":\"x\"}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -256,11 +256,15 @@ fn while_process_follows_the_process() {
 fn scheduled_ticks_then_exits() {
     let r = root("tick");
     let (sup, _) = host(&r);
-    let id = sup.load(&module(&r, "echo-f", json!({ "backend": { "run": "scheduled", "every": "1m" } })), true, true).unwrap();
+    let id = sup.load(&module(&r, "echo-f", json!({ "backend": { "run": "scheduled", "every": "1m", "idle": "2s" } })), true, true).unwrap();
     wait_for("first tick", 5, || state(&sup, &id) == State::Running);
     wait_for("exit after the tick", 5, || state(&sup, &id) == State::Stopped);
     // A UI call starts it again; the tick count lives in the process, so it's back to zero.
     assert_eq!(sup.call(&id, "ticks", Value::Null).unwrap(), json!(0));
+    // After a call it keeps the manifest's idle time (2 s), not the short one after a tick.
+    std::thread::sleep(Duration::from_millis(1000));
+    assert_eq!(state(&sup, &id), State::Running);
+    wait_for("exit once idle", 5, || state(&sup, &id) == State::Stopped);
     sup.shutdown();
 }
 

@@ -9,7 +9,6 @@ mod calendar;
 mod canvas;
 mod clipboard;
 mod conns;
-mod destiny;
 mod diskscan;
 mod discord;
 mod embed;
@@ -485,7 +484,7 @@ fn cc_web(query: String) -> Result<(), String> {
     util::open_web(&format!("https://www.google.com/search?q={}", util::url_encode(query.trim())))
 }
 
-/// Docks a website (discord | canvas | dim) over the given CSS-pixel rectangle of the Command Center.
+/// Docks a website (discord, canvas, or a module's site) over the given CSS-pixel rectangle of the Command Center.
 /// `skin` (Discord only, default on) dresses Discord in the island skin.
 #[tauri::command]
 async fn cc_embed(site: String, x: f64, y: f64, w: f64, h: f64, skin: Option<bool>, app: AppHandle, shared: Shr<'_>) -> Result<(), String> {
@@ -750,42 +749,6 @@ fn canvas_open(url: String, shared: Shr) -> Result<(), String> {
 #[tauri::command]
 fn canvas_forget(shared: Shr) {
     canvas::forget(&shared.dir);
-}
-
-/// Destiny 2 through Bungie's API (see destiny.rs).
-#[tauri::command]
-fn destiny_status(shared: Shr) -> destiny::Status {
-    destiny::status(&shared.dir)
-}
-
-/// Saves the API key (kept if left blank) and looks the Bungie Name up.
-#[tauri::command]
-async fn destiny_configure(key: String, name: String, shared: Shr<'_>) -> Result<destiny::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::configure(&dir, &key, &name)).await?
-}
-
-#[tauri::command]
-async fn destiny_profile(shared: Shr<'_>) -> Result<destiny::Profile, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::profile(&dir)).await?
-}
-
-#[tauri::command]
-async fn destiny_xur(shared: Shr<'_>) -> Result<destiny::Xur, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::xur(&dir)).await?
-}
-
-#[tauri::command]
-fn destiny_forget(shared: Shr) {
-    destiny::forget(&shared.dir);
-}
-
-/// Bungie's page for API keys, in the default browser (never Edge).
-#[tauri::command]
-fn destiny_open() -> Result<(), String> {
-    util::open_web("https://www.bungie.net/en/Application")
 }
 
 /// The Voicemeeter mixer (null while Voicemeeter isn't running or installed).
@@ -1386,12 +1349,6 @@ fn main() {
             canvas_done,
             canvas_open,
             canvas_forget,
-            destiny_status,
-            destiny_configure,
-            destiny_profile,
-            destiny_xur,
-            destiny_forget,
-            destiny_open,
             vm_set,
             vm_levels,
             vm_restart,
