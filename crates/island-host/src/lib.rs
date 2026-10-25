@@ -18,7 +18,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use island_module_proto::manifest::{Manifest, RunMode};
-use island_module_proto::msg::{Activity, CalendarPut, Emit, Init, Log, Notify, Theme, TopicData};
+use island_module_proto::msg::{Activity, CalendarPut, Emit, Images, Init, Log, Notify, Theme, TopicData};
 use island_module_proto::{code, method, write_message, FrameReader, Message, RpcError};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -122,6 +122,9 @@ pub struct ModuleInfo {
     pub error: String,
     /// Crashes in the last window.
     pub crashes: usize,
+    /// Folders whose images its UI may show (`host.images`), canonical.
+    #[serde(skip)]
+    pub image_dirs: Vec<PathBuf>,
 }
 
 const LOG_LINES: usize = 200;
@@ -220,6 +223,7 @@ struct Slot {
     next_tick: Option<Instant>,
     ticking: bool,
     logs: VecDeque<String>,
+    image_dirs: Vec<PathBuf>,
 }
 
 impl Slot {
@@ -234,6 +238,7 @@ impl Slot {
             pid: self.proc.as_ref().map(|p| p.pid),
             error: self.error.clone(),
             crashes: self.crashes.len(),
+            image_dirs: self.image_dirs.clone(),
         }
     }
 
@@ -326,6 +331,7 @@ impl Supervisor {
             next_tick,
             ticking: false,
             logs: VecDeque::new(),
+            image_dirs: vec![],
         };
         let info = slot.info();
         slots.insert(id.clone(), slot);
@@ -772,6 +778,16 @@ fn handle(inner: &Inner, id: &str, proc: &Proc, msg: Message) {
                     }
                 }
                 Err(e) => log(inner, id, "warn", &format!("bad host.publish: {e}")),
+            },
+            method::IMAGES => match serde_json::from_value::<Images>(params) {
+                Ok(m) => {
+                    // Real, absolute folders only (what's served is checked against these again).
+                    let dirs: Vec<PathBuf> = m.dirs.iter().take(64).map(PathBuf::from).filter(|d| d.is_absolute()).filter_map(|d| d.canonicalize().ok()).filter(|d| d.is_dir()).collect();
+                    if let Some(s) = inner.slots.lock().unwrap().get_mut(id) {
+                        s.image_dirs = dirs;
+                    }
+                }
+                Err(e) => log(inner, id, "warn", &format!("bad host.images: {e}")),
             },
             method::LOG => {
                 if let Ok(l) = serde_json::from_value::<Log>(params) {

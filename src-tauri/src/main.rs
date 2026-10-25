@@ -11,7 +11,6 @@ mod conns;
 mod diskscan;
 mod discord;
 mod embed;
-mod games;
 mod ics;
 mod gaze;
 mod icons;
@@ -311,25 +310,6 @@ async fn media_app_volume(level: f32, shared: Shr<'_>) -> Result<(), String> {
 async fn media_lyrics(title: String, artist: String, album: String, duration: f64, shared: Shr<'_>) -> Result<Option<lyrics::Lyrics>, String> {
     let dir = shared.dir.clone();
     blocking(move || lyrics::fetch(&dir, &title, &artist, &album, duration)).await?
-}
-
-/// Installed Steam games, most recently played first.
-#[tauri::command]
-async fn games_list(app: AppHandle) -> Result<games::Library, String> {
-    let lib = blocking(games::library).await?;
-    // The covers live in Steam's folders (custom artwork and its cache); let the page load them.
-    for dir in &lib.art_dirs {
-        if let Err(e) = app.asset_protocol_scope().allow_directory(dir, true) {
-            util::log_line(&format!("games: couldn't allow {} ({e})", dir.display()));
-        }
-    }
-    Ok(lib)
-}
-
-/// play | library | folder
-#[tauri::command]
-async fn game_action(appid: u32, what: String) -> Result<(), String> {
-    blocking(move || games::action(appid, &what)).await?
 }
 
 #[tauri::command]
@@ -1260,8 +1240,6 @@ fn main() {
             audio_mic,
             audio_apps,
             audio_app_set,
-            games_list,
-            game_action,
             gaze_status,
             gaze_set,
             copy_text,

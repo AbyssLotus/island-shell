@@ -14,6 +14,7 @@
 //   on(name, fn) → off              its backend's host.emit events
 //   store.get(k, d) / .set(k, v)    localStorage, as "mod.<id>.<k>"
 //   url(path), cacheUrl(path)       a file in the module, an image in its cache folder
+//   imageUrl(file)                  an image in a folder its backend shared (host.images)
 //   ui                              the island's helpers: icon(), esc(), setHtml(), txt(), clip(), grad(), glyph(), ago(), note()
 //   tabs.register({ id, mount(root), show(), hide() })        an island tab from its manifest
 //   sections.register({ id, mount(root), show(), hide() })    a section of a base tab
@@ -29,7 +30,8 @@
 //   open('tab:<id>' | 'cube:<id>')
 //   openWeb(url)                    a link in the default browser (never Edge)
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
-//                                   accentFrom(imageUrl)
+//                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
+//                                   apps.list() / .open(id) / .menu(id, x, y): the Start menu's apps
 //   settings.mount(fn(root))        its page in the Modules sheet
 
 const BASE = () => window.__ISLAND_MOD_BASE__ || 'http://mod.localhost/';
@@ -144,6 +146,7 @@ export function createModuleHost(env) {
       },
       url: path => modUrl(id, path),
       cacheUrl: path => modUrl(id, `~cache/${path}`),
+      imageUrl: file => `${BASE()}${id}/~img/${encodeURIComponent(file)}`,
       ui: env.ui,
       tabs: {
         register(def) {
@@ -164,7 +167,22 @@ export function createModuleHost(env) {
         register(def) {
           if (!R.cubes.get(def.id) || R.cubes.get(def.id).module !== id) throw new Error(`Cube ${def.id} isn't in ${id}'s manifest`);
           m.cubes.set(def.id, def);
-          if (def.sheet) R.sheets.set({ id: def.id, module: id, ...def.sheet, mount: el => def.sheet.mount(shadowFor(el, id, m.man.ui.css)) });
+          // A sheet mounts in a box of its own inside the Command Center's host (which base sheets
+          // share), filling it.
+          if (def.sheet) {
+            let box = null;
+            R.sheets.set({
+              id: def.id, module: id, ...def.sheet,
+              mount(host) {
+                box = Object.assign(document.createElement('div'), { className: 'mod-sheet' });
+                host.append(box);
+                const root = shadowFor(box, id, m.man.ui.css);
+                root.style.height = '100%';
+                def.sheet.mount(root);
+              },
+              unmount() { try { def.sheet.unmount && def.sheet.unmount(); } finally { box?.remove(); box = null; } }
+            });
+          }
           // A docked site that needs setting up first says so (and why) through siteReady().
           const site = R.cubes.get(def.id).site && R.sites.get(R.cubes.get(def.id).site);
           if (site && def.siteReady) { site.ready = def.siteReady; site.why = def.siteWhy || ''; }

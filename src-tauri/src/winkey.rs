@@ -2,9 +2,11 @@
 //!
 //! - Tapping Win on its own opens the island (Apps) instead of the Start menu.
 //! - A few Win shortcuts whose Windows panels the island replaces open the island's version
-//!   instead: Win+A (Quick Settings) → Audio, Win+G (Xbox Game Bar) → Games, Win+V (clipboard
-//!   history) → Clipboard, Win+N (notifications and calendar) and Win+W (Widgets) → Today, and
-//!   Win+Space (switch keyboard language) → the Command Center.
+//!   instead: Win+A (Quick Settings) → Audio, Win+V (clipboard history) → Clipboard, Win+N
+//!   (notifications and calendar) and Win+W (Widgets) → Today, and Win+Space (switch keyboard
+//!   language) → the Command Center. Modules add theirs from their manifests (`contributes.hotkeys`,
+//!   see set_module_keys): the Games module takes Win+G (Xbox Game Bar), which reaches Windows
+//!   again when it's turned off or removed.
 //! - Every other Win shortcut (Win+E, Win+L, Win+D, Win+Shift+S…) still reaches Windows.
 //!
 //! How: a low-level keyboard hook that holds Win back. A Win press goes no further than the hook.
@@ -38,7 +40,7 @@
 //! state decides, and Windows resets that after the lock screen.
 
 use std::sync::mpsc::{channel, Sender};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -52,8 +54,34 @@ use windows::Win32::UI::WindowsAndMessaging::{
     LLKHF_EXTENDED, LLKHF_INJECTED, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER,
 };
 
-/// Win + key → island tab ("cc" is the full-screen Command Center, on Win + Space).
-const SHORTCUTS: [(u8, &str); 6] = [(b'A', "audio"), (b'G', "games"), (b'V', "clipboard"), (b'N', "today"), (b'W', "today"), (b' ', "cc")];
+/// Win + key → island tab ("cc" is the full-screen Command Center, on Win + Space): the base's own.
+const SHORTCUTS: [(u8, &str); 5] = [(b'A', "audio"), (b'V', "clipboard"), (b'N', "today"), (b'W', "today"), (b' ', "cc")];
+/// Win + letter → what a module's hotkey opens (`games`, or `cube:<id>`), set from the manifests of
+/// the modules that are on.
+static MODULE_KEYS: RwLock<Vec<(u32, String)>> = RwLock::new(Vec::new());
+
+/// The modules' Win + letter shortcuts: (letter, tab or `cube:<id>`). Letters the base keeps are
+/// ignored, and the first module to claim a letter keeps it.
+pub fn set_module_keys(keys: Vec<(char, String)>) {
+    let mut out: Vec<(u32, String)> = vec![];
+    for (c, target) in keys {
+        let vk = c.to_ascii_uppercase() as u32;
+        if c.is_ascii_alphabetic() && !SHORTCUTS.iter().any(|(l, _)| *l as u32 == vk) && !out.iter().any(|(k, _)| *k == vk) {
+            out.push((vk, target));
+        }
+    }
+    *MODULE_KEYS.write().unwrap_or_else(|e| e.into_inner()) = out;
+}
+
+/// Whether Win + `vk` is one of the island's shortcuts (asked inside the hook: quick, no allocation).
+fn is_shortcut(vk: u32) -> bool {
+    SHORTCUTS.iter().any(|(l, _)| *l as u32 == vk) || MODULE_KEYS.read().map(|m| m.iter().any(|(k, _)| *k == vk)).unwrap_or(false)
+}
+
+/// What Win + `vk` opens.
+fn target(vk: u32) -> Option<String> {
+    SHORTCUTS.iter().find(|(l, _)| *l as u32 == vk).map(|(_, t)| t.to_string()).or_else(|| MODULE_KEYS.read().ok()?.iter().find(|(k, _)| *k == vk).map(|(_, t)| t.clone()))
+}
 
 const VK_LWIN_U32: u32 = 0x5B;
 const VK_RWIN_U32: u32 = 0x5C;
@@ -63,8 +91,8 @@ const HELD_BACK_MS: u32 = 1500;
 /// How often a fresh hook replaces the old one (see the module notes).
 const REHOOK_MS: u32 = 3000;
 
-/// None = a solo Win tap; Some(tab) = one of the shortcuts.
-static EVENTS: OnceLock<Sender<Option<&'static str>>> = OnceLock::new();
+/// None = a solo Win tap; Some(letter) = one of the shortcuts.
+static EVENTS: OnceLock<Sender<Option<u32>>> = OnceLock::new();
 static STATE: Mutex<Keys> = Mutex::new(Keys { held_back: None, last_win: 0, combo: false, swallowing: 0 });
 
 /// A key exactly as the keyboard sent it, so it can be sent on to Windows later.
@@ -103,8 +131,8 @@ enum Action {
     Pass,
     /// Keep the key from Windows.
     Swallow,
-    /// Keep the key from Windows: it's this shortcut.
-    Shortcut(&'static str),
+    /// Keep the key from Windows: it's the shortcut on this letter.
+    Shortcut(u32),
     /// Keep the key from Windows: a solo Win tap just ended (Windows never saw any of it).
     Tap,
     /// Keep the key from Windows and send it again right behind the held-back Win press.
@@ -153,10 +181,10 @@ fn decide(st: &mut Keys, ev: Ev, win_sent: bool, plain: bool) -> Action {
     }
     if let (true, Some(win)) = (ev.down, st.held_back) {
         if plain {
-            if let Some((_, tab)) = SHORTCUTS.iter().find(|(l, _)| *l as u32 == vk) {
+            if is_shortcut(vk) {
                 st.combo = true;
                 st.swallowing = vk;
-                return Action::Shortcut(tab);
+                return Action::Shortcut(vk);
             }
         }
         // Any other key: Windows gets Win now, right in front of it.
@@ -178,7 +206,7 @@ fn held(vk: VIRTUAL_KEY) -> bool {
     unsafe { GetAsyncKeyState(vk.0 as i32) as u16 & 0x8000 != 0 }
 }
 
-fn send(event: Option<&'static str>) {
+fn send(event: Option<u32>) {
     if let Some(tx) = EVENTS.get() {
         let _ = tx.send(event);
     }
@@ -202,8 +230,8 @@ unsafe extern "system" fn hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
             match action {
                 Action::Pass => {}
                 Action::Swallow => return LRESULT(1),
-                Action::Shortcut(tab) => {
-                    send(Some(tab));
+                Action::Shortcut(vk) => {
+                    send(Some(vk));
                     return LRESULT(1);
                 }
                 Action::Tap => {
@@ -226,18 +254,23 @@ unsafe extern "system" fn hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
 
 /// Installs the hook on its own thread; `on_key` runs on another thread with None for a solo Win
 /// tap or the tab of a shortcut.
-pub fn spawn(on_key: impl Fn(Option<&'static str>) + Send + 'static) {
-    let (tx, rx) = channel::<Option<&'static str>>();
+pub fn spawn(on_key: impl Fn(Option<&str>) + Send + 'static) {
+    let (tx, rx) = channel::<Option<u32>>();
     if EVENTS.set(tx).is_err() {
         return;
     }
     std::thread::spawn(move || {
         while let Ok(ev) = rx.recv() {
             // Logged here, never in the hook itself (file writes there could make it time out).
-            if let Some(tab) = ev {
-                crate::util::log_line(&format!("Win shortcut kept from Windows → {tab}"));
+            match ev.map(|vk| (vk, target(vk))) {
+                None => on_key(None),
+                Some((_, Some(tab))) => {
+                    crate::util::log_line(&format!("Win shortcut kept from Windows → {tab}"));
+                    on_key(Some(&tab));
+                }
+                // Its module was turned off between the key and now.
+                Some((vk, None)) => crate::util::log_line(&format!("Win+{} has no shortcut any more", char::from_u32(vk).unwrap_or('?'))),
             }
-            on_key(ev);
         }
     });
     std::thread::spawn(|| unsafe {
@@ -246,7 +279,7 @@ pub fn spawn(on_key: impl Fn(Option<&'static str>) + Send + 'static) {
         let install = || SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), module, 0);
         let mut current = match install() {
             Ok(h) => {
-                crate::util::log_line("Windows key hook installed (Win, Win+A/G/V/N/W/Space), renewed every 3 s");
+                crate::util::log_line("Windows key hook installed (Win, Win+A/V/N/W/Space and module shortcuts), renewed every 3 s");
                 h
             }
             Err(e) => {
@@ -311,6 +344,23 @@ mod tests {
         }
     }
 
+    /// Module shortcuts come and go with their modules; the base's letters stay the base's.
+    #[test]
+    fn module_shortcuts() {
+        let g = b'G' as u32;
+        set_module_keys(vec![('g', "games".into()), ('a', "taken".into()), ('G', "second".into()), ('1', "not a letter".into())]);
+        assert_eq!((target(g).as_deref(), target(A).as_deref(), target(b'1' as u32)), (Some("games"), Some("audio"), None));
+        let mut st = Keys::default();
+        assert_eq!(d(&mut st, WIN, true, 0, false), Action::Swallow);
+        assert_eq!(d(&mut st, g, true, 50, false), Action::Shortcut(g));
+        assert_eq!(d(&mut st, g, false, 90, false), Action::Swallow);
+        assert_eq!(d(&mut st, WIN, false, 120, false), Action::Swallow);
+        // Without the module, Win + G is Windows' again.
+        set_module_keys(vec![]);
+        assert_eq!(d(&mut st, WIN, true, 1000, false), Action::Swallow);
+        assert_eq!(d(&mut st, g, true, 1050, false), Action::WinThenKey(key(WIN)));
+    }
+
     /// A Win tap on its own, quick or held with key repeats, never reaches Windows: no Start.
     #[test]
     fn solo_tap_is_kept_from_windows() {
@@ -363,7 +413,7 @@ mod tests {
     fn win_a_opens_audio_and_windows_sees_none_of_it() {
         let mut st = Keys::default();
         assert_eq!(d(&mut st, WIN, true, 0, false), Action::Swallow);
-        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut("audio"));
+        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut(A));
         assert_eq!(d(&mut st, A, true, 600, false), Action::Swallow); // key repeat
         assert_eq!(d(&mut st, A, false, 650, false), Action::Swallow); // release
         assert_eq!(d(&mut st, WIN, false, 700, false), Action::Swallow); // not a solo tap
@@ -374,7 +424,7 @@ mod tests {
     fn win_space_opens_the_command_center_and_space_still_types() {
         let mut st = Keys::default();
         assert_eq!(d(&mut st, WIN, true, 0, false), Action::Swallow);
-        assert_eq!(d(&mut st, SPACE, true, 40, false), Action::Shortcut("cc"));
+        assert_eq!(d(&mut st, SPACE, true, 40, false), Action::Shortcut(SPACE));
         assert_eq!(d(&mut st, SPACE, false, 90, false), Action::Swallow);
         assert_eq!(d(&mut st, WIN, false, 120, false), Action::Swallow);
         assert_eq!(d(&mut st, SPACE, true, 300, false), Action::Pass);
@@ -386,7 +436,7 @@ mod tests {
     fn island_shortcut_then_windows_shortcut() {
         let mut st = Keys::default();
         d(&mut st, WIN, true, 0, false);
-        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut("audio"));
+        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut(A));
         assert_eq!(d(&mut st, A, false, 100, false), Action::Swallow);
         assert_eq!(d(&mut st, E, true, 200, false), Action::WinThenKey(key(WIN)));
         assert_eq!(d(&mut st, WIN, false, 300, true), Action::Pass);
@@ -396,7 +446,7 @@ mod tests {
     fn letter_release_missed_then_typed_normally() {
         let mut st = Keys::default();
         d(&mut st, WIN, true, 0, false);
-        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut("audio"));
+        assert_eq!(d(&mut st, A, true, 50, false), Action::Shortcut(A));
         d(&mut st, WIN, false, 100, false);
         // A's release never arrived; the next plain A must still type.
         assert_eq!(d(&mut st, A, true, 400, false), Action::Pass);

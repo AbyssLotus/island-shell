@@ -18,7 +18,7 @@
   <div class="bar-l">
     <button class="bchip strong" type="button" id="barApps" data-open="apps">Apps</button>
     <button class="bchip icon" type="button" id="barGear" data-open="controls" title="Controls" aria-label="Controls"><i data-ic="gear"></i></button>
-    <button class="bchip icon" type="button" id="barGames" data-open="games" title="Games" aria-label="Games"><i data-ic="gamepad"></i></button>
+    <button class="bchip icon" type="button" id="barGames" data-open="games" title="Games" aria-label="Games" hidden><i data-ic="gamepad"></i></button>
     <span class="bar-mods" id="barModsL"></span>
     <div class="dock" id="barDock" aria-label="Pinned and running apps"></div>
     <button class="bchip icon" type="button" id="barFiles" title="File Explorer" aria-label="File Explorer"><i data-ic="folder"></i></button>
@@ -297,13 +297,6 @@
           </div>
         </div>
         <p class="note" id="dcNote" hidden></p>
-      </section>
-
-      <section class="view" id="v-games" data-tab="games" role="tabpanel" aria-labelledby="tab-games">
-        <div class="shelf" id="gShelf" role="list" aria-label="Steam games, most recently played first"></div>
-        <div class="g-rule" aria-hidden="true"></div>
-        <div class="apps launchers" id="gLaunchers" aria-label="Launchers"></div>
-        <p class="note" id="gNote" hidden></p>
       </section>
 
       <section class="view" id="v-stats" data-tab="stats" role="tabpanel" aria-labelledby="tab-stats">

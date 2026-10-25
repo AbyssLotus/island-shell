@@ -148,6 +148,8 @@ body.cc-on #ctx { z-index: 300; }
 
 /* ---------- Today: the calendar app (cc-calendar.js) ---------- */
 #cc .cc-sbody.native .cc-host { display: block; justify-items: normal; overflow: hidden; }
+/* A module's sheet: its own box (with its shadow root) filling the host. */
+#cc .cc-host > .mod-sheet { height: 100%; }
 .cal { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; color-scheme: dark; --line: rgba(var(--glow), .075); --line2: rgba(var(--glow), .14); }
 .cal-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
 .cal-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -390,82 +392,6 @@ textarea.cal-in { height: auto; padding: 10px 12px; line-height: 1.45; resize: v
 .mus.idle .mus-left, .mus.idle .mus-right { visibility: hidden; }
 .cc-cw.c .cc-cube { --ry: 0deg; }
 
-/* ---------- Games (cc-games.js): the Steam library, full size ---------- */
-.gms { height: 100%; display: grid; grid-template-rows: minmax(300px, 46%) minmax(0, 1fr); gap: 0; border-radius: 18px; overflow: hidden; background: #050609; }
-.gms-hero { position: relative; overflow: hidden; isolation: isolate; animation: gms-in .6s ease; }
-@keyframes gms-in { from { opacity: .4; } }
-.gms-art { position: absolute; inset: 0; z-index: -2; }
-.gms-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; opacity: 0; filter: saturate(.82) contrast(1.06) brightness(.92); transition: opacity .6s ease; }
-.gms-img.on { opacity: 1; }
-/* Taken light: the banner sinks into black from the bottom and the left, with a cold rim of light along the seam. */
-.gms-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, #050609 0%, rgba(5, 6, 9, .82) 18%, rgba(5, 6, 9, .1) 58%, rgba(5, 6, 9, .35) 100%), linear-gradient(90deg, rgba(5, 6, 9, .78) 0%, rgba(5, 6, 9, .1) 52%), radial-gradient(120% 70% at 50% 120%, rgba(var(--glow), .18), transparent 60%); }
-.gms-hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--glow), .6) 30%, rgba(var(--glow), .6) 70%, transparent); box-shadow: 0 0 18px rgba(var(--glow), .7); }
-.gms-in { position: absolute; inset: 0; padding: 26px 34px 24px; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: 14px; }
-.gms-logo { position: relative; min-height: 0; display: flex; }
-.gms-logo img { max-width: max(200px, var(--lw)); max-height: 100%; object-fit: contain; filter: drop-shadow(0 6px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 14px rgba(var(--glow), .25)); }
-.gms-logo.bl { align-items: flex-end; justify-content: flex-start; }
-.gms-logo.tl { align-items: flex-start; justify-content: flex-start; }
-.gms-logo.tc { align-items: flex-start; justify-content: center; }
-.gms-logo.cc { align-items: center; justify-content: center; }
-.gms-logo.bc { align-items: flex-end; justify-content: center; }
-.gms-logo h2 { margin: 0; align-self: flex-end; max-width: 60%; font: 600 clamp(30px, 4.4vh, 60px)/1.05 var(--f-display); letter-spacing: .01em; text-shadow: 0 0 34px rgba(var(--glow), .45), 0 4px 30px rgba(0, 0, 0, .8); }
-.gms-acts { display: flex; align-items: center; gap: 10px; }
-.gms-acts[hidden] { display: none; }
-.gms-play { display: inline-flex; align-items: center; gap: 12px; height: 54px; padding: 0 34px 0 28px; border: 0; border-radius: 14px; background: #f4fbff; color: #04070b; font: 700 17px/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 0 1px rgba(255, 255, 255, .5), 0 0 40px rgba(var(--glow), .55), 0 12px 30px -10px rgba(0, 0, 0, .8); transition: transform .15s, box-shadow .25s; }
-.gms-play:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px #fff, 0 0 60px rgba(var(--glow), .8), 0 14px 34px -10px rgba(0, 0, 0, .8); }
-.gms-play svg.i { width: 20px; height: 20px; fill: currentColor; }
-.gms-play.update { background: #c9e9ff; }
-.gms-play.running { background: rgba(155, 227, 138, .14); color: #c6f0b8; box-shadow: inset 0 0 0 1px rgba(155, 227, 138, .5), 0 0 30px rgba(155, 227, 138, .25); cursor: default; transform: none; }
-.gms-live { width: 9px; height: 9px; border-radius: 50%; background: #9be38a; box-shadow: 0 0 10px #9be38a; animation: gms-live 1.6s ease-in-out infinite; }
-@keyframes gms-live { 50% { opacity: .35; } }
-.gms-ib { width: 46px; height: 46px; display: grid; place-items: center; border: 0; border-radius: 13px; background: rgba(8, 10, 16, .55); color: #eef6ff; box-shadow: inset 0 0 0 1px rgba(var(--glow), .2); backdrop-filter: blur(10px); cursor: pointer; transition: background .15s, box-shadow .2s; }
-.gms-ib:hover { background: rgba(var(--glow), .14); box-shadow: inset 0 0 0 1px rgba(var(--glow), .5), 0 0 18px rgba(var(--glow), .3); }
-.gms-ib svg.i { width: 19px; height: 19px; }
-.gms-stats { display: flex; gap: 34px; }
-.gms-stats div { display: grid; gap: 4px; }
-.gms-stats small { color: rgba(238, 246, 255, .55); font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-.gms-stats b { font: 500 19px/1 var(--f-mono); color: #f4fbff; }
-.gms-stats em { color: rgba(var(--glow), .8); font-style: normal; font-size: 11.5px; }
-.gms-hero.empty .gms-logo { align-items: center; justify-content: center; }
-.gms-lib { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-.gms-bar { display: flex; align-items: center; gap: 14px; padding: 16px 30px 10px; flex-wrap: wrap; }
-.gms-bar h3 { margin: 0; font: 600 18px/1 var(--f-display); letter-spacing: .02em; }
-.gms-bar h3 small { margin-left: 8px; color: var(--muted); font: 500 12px/1 var(--f-mono); }
-.gms-bar .grow { flex: 1; }
-.gms-chips { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .04); }
-.gms-chips button { height: 30px; padding: 0 13px; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 600 12px/1 var(--f-body); cursor: pointer; }
-.gms-chips button[aria-pressed="true"] { background: rgba(var(--glow), .14); color: #f4fbff; box-shadow: inset 0 0 0 1px rgba(var(--glow), .35); }
-.gms-sort { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
-.gms-sort[hidden] { display: none; }
-.gms-sort select { height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); color: #eef6ff; font: 500 12px/1 var(--f-body); color-scheme: dark; }
-.gms-search { display: flex; align-items: center; gap: 8px; width: 240px; height: 34px; padding: 0 12px; border-radius: 11px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); cursor: text; }
-.gms-search:focus-within { box-shadow: inset 0 0 0 1.5px rgba(var(--glow), .7), 0 0 18px rgba(var(--glow), .2); }
-.gms-search svg.i { width: 14px; height: 14px; color: var(--muted); }
-.gms-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: #eef6ff; font: 400 13px/1 var(--f-body); }
-.gms-grid { min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); grid-auto-rows: max-content; gap: 16px; align-content: start; padding: 8px 30px 18px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .1) transparent; }
-.gms-cv { position: relative; display: block; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: #0c0e14; cursor: pointer; box-shadow: 0 0 0 1px rgba(var(--glow), .08), 0 12px 26px -16px rgba(0, 0, 0, .9); transition: transform .25s var(--spring), box-shadow .25s, filter .25s; }
-/* Rows are max-content (above) and the 2:3 shape is a padding box: auto rows in a grid of a fixed
-   height squeeze overflow: hidden items to share the height, so the covers came out squashed. */
-.gms-cv::before { content: ""; display: block; padding-top: 150%; }
-.gms-cv img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.gms-cv.wide img { object-fit: contain; background: #0c0e14; }
-.gms-cv:hover { transform: translateY(-4px); box-shadow: 0 0 0 1px rgba(var(--glow), .4), 0 0 24px -4px rgba(var(--glow), .45), 0 18px 30px -16px rgba(0, 0, 0, .9); }
-.gms-cv.sel { transform: translateY(-4px); box-shadow: 0 0 0 2px #f4fbff, 0 0 30px rgba(var(--glow), .75), 0 18px 34px -14px rgba(0, 0, 0, .9); }
-.gms-cv.sel::after { content: ""; position: absolute; inset: 7px; color: #f4fbff; background: var(--brackets), linear-gradient(0deg, rgba(var(--glow), .22), transparent 40%); pointer-events: none; filter: drop-shadow(0 0 4px rgba(var(--glow), .9)); }
-.gms-cv:focus-visible { outline: 2px solid #c9e9ff; outline-offset: 3px; }
-.gms-name { position: absolute; inset: 0; display: grid; place-items: center; padding: 10px; text-align: center; font: 600 13px/1.2 var(--f-display); color: #eef6ff; background: radial-gradient(circle at 50% 30%, rgba(var(--glow), .16), transparent 70%); }
-.gms-tag { position: absolute; left: 7px; top: 7px; padding: 4px 7px; border-radius: 6px; background: rgba(155, 227, 138, .92); color: #071006; font: 700 9.5px/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; }
-.gms-tag.up { background: rgba(201, 233, 255, .92); color: #04070b; }
-.gms-none { grid-column: 1 / -1; margin: 18px 0; color: var(--muted); }
-.gms-more { display: flex; align-items: center; gap: 14px; padding: 12px 30px 16px; border-top: 1px solid rgba(var(--glow), .08); }
-.gms-more[hidden] { display: none; }
-.gms-more > small { color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
-.gms-apps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.gms-app { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px 0 8px; border: 0; border-radius: 11px; background: rgba(255, 255, 255, .04); color: #dbe6f0; box-shadow: inset 0 0 0 1px rgba(var(--glow), .1); cursor: pointer; white-space: nowrap; }
-.gms-app:hover { background: rgba(var(--glow), .12); box-shadow: inset 0 0 0 1px rgba(var(--glow), .35); }
-.gms-app img, .gms-app span { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; display: grid; place-items: center; font-weight: 600; }
-.gms-app small { font-size: 12px; font-weight: 500; }
-
 /* ---------- Apps (cc-apps.js): the Start menu, full size ---------- */
 .aps { position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 400px); gap: 14px; }
 .aps-main, .aps-side { position: relative; min-height: 0; border-radius: 18px; overflow: hidden; background: #050609; box-shadow: inset 0 0 0 1px rgba(var(--glow), .06); isolation: isolate; }
@@ -594,9 +520,9 @@ textarea.cal-in { height: auto; padding: 10px 12px; line-height: 1.45; resize: v
 /* ---------- Taken details for the Command Center ---------- */
 /* The sigil beside the name, and Destiny's diamond before each heading. */
 .cc-brand b::before { content: ""; display: inline-block; width: 15px; height: 15px; margin: 0 8px -2px 0; background: #e6f5ff; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; filter: drop-shadow(0 0 6px rgba(var(--glow), .9)); }
-:is(.gms-bar h3, .cal-rail h4, .mus-src, .aps-h, .aps-side h4)::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 9px 2px 1px; border: 1px solid #c9e9ff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(var(--glow), .8); vertical-align: middle; }
+:is(.cal-rail h4, .mus-src, .aps-h, .aps-side h4)::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 9px 2px 1px; border: 1px solid #c9e9ff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(var(--glow), .8); vertical-align: middle; }
 .mus-src::before { margin-right: 4px; }
-.gms-none::before, .cal-empty::before, .aps-none:not(.sm)::before { content: ""; display: block; width: 22px; height: 22px; margin: 0 0 9px; background: currentColor; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; opacity: .5; }
+.cal-empty::before, .aps-none:not(.sm)::before { content: ""; display: block; width: 22px; height: 22px; margin: 0 0 9px; background: currentColor; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; opacity: .5; }
 /* The chosen Task Manager row and calendar day get the reticle. */
 .tm-procs tr.sel td:first-child { position: relative; }
 .cal-cell.is-today { position: relative; }

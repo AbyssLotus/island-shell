@@ -290,10 +290,6 @@
  "mod:destiny.status": {
   "configured": false
  },
- "games_list": {
-  "games": [],
-  "running": 0
- },
  "cc_places": [
   {
    "kind": "drive",
@@ -450,5 +446,9 @@
  "mod:vpn.status": {
   "tailscale": null,
   "radmin": null
+ },
+ "mod:games.library": {
+  "games": [],
+  "running": 0
  }
 }

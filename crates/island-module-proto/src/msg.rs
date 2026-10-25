@@ -274,6 +274,14 @@ pub struct CalendarEvent {
     pub notes: Option<String>,
 }
 
+/// `host.images`: folders whose images the module's own UI may show, at
+/// `http://mod.localhost/<id>/~img/<absolute path>` (Steam's artwork, for Games). Images only;
+/// each message replaces the last list.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct Images {
+    pub dirs: Vec<String>,
+}
+
 /// `host.log`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Log {

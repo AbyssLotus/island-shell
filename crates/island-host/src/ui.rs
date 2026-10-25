@@ -5,7 +5,9 @@
 //! - only files their manifest lists, after their sha256 matches (checked once per session);
 //!   developer-mode folders are unsigned, so any file in them with a known type is served;
 //! - `~cache/<path>` serves images from the module's cache folder, with no hash check;
-//! - nothing outside the module's folders, ever.
+//! - `~img/<absolute path>` serves images from folders the module's backend shared (`host.images`,
+//!   like Steam's artwork for Games), and only from inside them;
+//! - nothing else outside the module's folders, ever.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -71,6 +73,14 @@ impl UiFiles {
                 return Served::Forbidden("bad path".into());
             }
             return read(&cache_root.join(id).join(rest), mime);
+        }
+        if let Some(file) = rel.strip_prefix("~img/") {
+            let Some(mime) = mime_of(file).filter(|m| m.starts_with("image/")) else { return Served::Forbidden("only images can be shared".into()) };
+            let Ok(real) = Path::new(file).canonicalize() else { return Served::NotFound };
+            if !real.is_absolute() || !m.image_dirs.iter().any(|d| real.starts_with(d)) {
+                return Served::Forbidden("that folder isn't shared".into());
+            }
+            return read(&real, mime);
         }
         if safe_path(rel).is_err() || rel == "module.json" {
             return Served::Forbidden("bad path".into());
@@ -148,7 +158,7 @@ mod tests {
         let mut manifest = Manifest { id: "destiny".into(), name: "Destiny 2".into(), version: "1.0.0".into(), api: 1, description: "x".into(), icon: "ui/icon.svg".into(), ..Default::default() };
         manifest.files.insert("ui/destiny.js".into(), sri(b"export function activate() {}"));
         manifest.files.insert("ui/destiny.css".into(), sri(b"something else"));
-        let info = ModuleInfo { id: "destiny".into(), manifest, dir: dir.to_string_lossy().into(), dev: false, enabled: true, state: State::Stopped, pid: None, error: String::new(), crashes: 0 };
+        let info = ModuleInfo { id: "destiny".into(), manifest, dir: dir.to_string_lossy().into(), dev: false, enabled: true, state: State::Stopped, pid: None, error: String::new(), crashes: 0, image_dirs: vec![] };
         (root, vec![info])
     }
 
@@ -202,6 +212,28 @@ mod tests {
         assert_eq!(mime, "image/png");
         assert!(matches!(ui.serve(&mods, &cache, "/destiny/~cache/data.json"), Served::Forbidden(_)));
         assert_eq!(ui.serve(&mods, &cache, "/destiny/~cache/icons/missing.png"), Served::NotFound);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn shared_image_folders_only() {
+        let (root, mut mods) = setup("img");
+        let ui = UiFiles::new();
+        let cache = root.join("cache");
+        std::fs::create_dir_all(root.join("steam/art")).unwrap();
+        std::fs::write(root.join("steam/art/hero.jpg"), [0xff, 0xd8]).unwrap();
+        std::fs::write(root.join("steam/art/notes.txt"), "no").unwrap();
+        std::fs::write(root.join("steam/other.png"), [137, 80]).unwrap();
+        let url = |p: PathBuf| format!("/destiny/~img/{}", p.to_string_lossy().bytes().map(|b| format!("%{b:02X}")).collect::<String>());
+        let hero = root.join("steam/art/hero.jpg");
+        // Nothing until the backend shares the folder.
+        assert!(matches!(ui.serve(&mods, &cache, &url(hero.clone())), Served::Forbidden(_)));
+        mods[0].image_dirs = vec![root.join("steam/art").canonicalize().unwrap()];
+        assert_eq!(ok(ui.serve(&mods, &cache, &url(hero))).1, "image/jpeg");
+        assert!(matches!(ui.serve(&mods, &cache, &url(root.join("steam/art/notes.txt"))), Served::Forbidden(_)));
+        assert!(matches!(ui.serve(&mods, &cache, &url(root.join("steam/other.png"))), Served::Forbidden(_)));
+        assert!(matches!(ui.serve(&mods, &cache, &url(root.join("steam/art/../other.png"))), Served::Forbidden(_)));
+        assert_eq!(ui.serve(&mods, &cache, &url(root.join("steam/art/missing.png"))), Served::NotFound);
         let _ = std::fs::remove_dir_all(root);
     }
 

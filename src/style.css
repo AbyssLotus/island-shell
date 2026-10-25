@@ -559,25 +559,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .bchip .net-badge .i { width: 13px; height: 13px; }
 
 /* ---------- games ---------- */
-.shelf { display: flex; align-items: center; gap: 12px; min-height: 120px; margin: 0 -12px; padding: 8px 16px 14px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; scroll-padding: 16px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 48px), transparent); }
-.shelf::-webkit-scrollbar { display: none; }
-.cover { position: relative; flex: none; width: 128px; aspect-ratio: 2 / 3; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: var(--ink-3); cursor: pointer; box-shadow: 0 12px 26px -16px rgba(0, 0, 0, .75), 0 0 0 1px var(--line); transition: transform .4s var(--spring), box-shadow .3s ease; }
-.cover.big { width: 160px; }
-.cover img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; transition: transform .6s var(--glide); }
-.cover:hover { transform: translateY(-4px); box-shadow: 0 20px 32px -16px rgba(0, 0, 0, .85), 0 0 0 2px var(--accent); }
-.cover:hover img { transform: scale(1.04); }
-.cover:active { transform: scale(.97); }
-.cover .cv-play { position: absolute; left: 50%; bottom: 12px; width: 40px; height: 40px; margin-left: -20px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, .7); opacity: 0; transform: translateY(8px) scale(.8); transition: opacity .2s ease, transform .35s var(--spring); }
-.cover:hover .cv-play, .cover:focus-visible .cv-play { opacity: 1; transform: none; }
-.cover .cv-tag { position: absolute; top: 8px; left: 8px; padding: 4px 7px; border-radius: 7px; background: var(--good); color: #0b1a10; font: 700 9.5px/1 var(--f-body); letter-spacing: .05em; text-transform: uppercase; }
-.cover .cv-tag.up { background: rgba(0, 0, 0, .62); color: #fff; }
-.cover.playing { box-shadow: 0 0 0 2px var(--good), 0 12px 26px -12px var(--good); }
-.cover .cv-name { position: absolute; left: 10px; right: 10px; bottom: 12px; color: #fff; font: 650 13px/1.25 var(--f-display); text-align: left; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
-.cover.wide img { object-position: 30% center; }
-.g-rule { height: 2px; margin: 2px 6px 10px; border-radius: 1px; background: color-mix(in oklab, var(--fg) 16%, transparent); }
-.launchers { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: minmax(78px, 1fr); overflow-x: auto; scrollbar-width: none; }
-.launchers::-webkit-scrollbar { display: none; }
-.launchers:empty::before { content: "No other game launchers found."; grid-column: 1 / -1; padding: 8px; color: var(--muted); font-size: 12px; text-align: center; }
 
 /* ---------- audio ---------- */
 .au-master { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
@@ -777,10 +758,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 /* Audio: the chosen device and the level meters in Taken light. */
 .au-dv[aria-checked="true"] .dot { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px var(--accent); }
 .au-app .meter i { background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 45%, transparent), var(--accent)); box-shadow: 0 0 8px var(--accent); }
-/* Games: covers lit at the rim; a Destiny reticle on the one under the pointer. */
-.cover:hover { box-shadow: 0 20px 32px -16px rgba(0, 0, 0, .85), 0 0 0 1.5px var(--accent), 0 0 26px -6px color-mix(in oklab, var(--accent) 70%, transparent); }
-.cover::before { content: ""; position: absolute; inset: 7px; z-index: 2; color: #f4fbff; background: var(--brackets); opacity: 0; transform: scale(1.06); transition: opacity .2s, transform .35s var(--spring); pointer-events: none; filter: drop-shadow(0 0 4px rgba(var(--glow), .9)); }
-.cover:hover::before, .cover:focus-visible::before { opacity: 1; transform: none; }
 /* Apps, wallpapers, power: lit rims. */
 .app:hover, .app.first { box-shadow: inset 0 0 0 1px rgba(var(--glow), .12), 0 0 18px -10px rgba(var(--glow), .5); }
 .app .dot { box-shadow: 0 0 0 2px var(--ink-solid), 0 0 8px var(--accent); }
@@ -795,5 +772,4 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 :is(.tile, .pw, .app):focus-visible::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; color: var(--accent); background: var(--brackets); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   #island[data-mode="pill"], #island[data-mode="toast"], #L-toast.on .t-ico, #L-toast.on .t-txt, #L-panel::before { animation: none; }
-  .cover::before { transition: none; }
 }

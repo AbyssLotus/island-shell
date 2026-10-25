@@ -1,0 +1,18 @@
+{
+  "id": "games",
+  "name": "Games",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Your Steam library: covers, playtime and Play on the island and full size in the Command Center, plus your other game launchers. Win + G opens it.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "games-module.exe", "run": "on-demand" },
+  "ui": { "entry": "ui/games.js", "css": ["ui/games.css"], "eager": true },
+  "contributes": {
+    "tabs": [{ "id": "games", "title": "Games", "icon": "gamepad", "order": 80 }],
+    "cubes": [{ "id": "games", "title": "Games", "icon": "gamepad", "size": "M", "slot": "games" }],
+    "hotkeys": [{ "key": "G", "opens": "tab:games" }],
+    "setup": { "card": true }
+  },
+  "talksTo": [],
+  "keywords": ["games", "steam", "play", "library", "launcher"]
+}

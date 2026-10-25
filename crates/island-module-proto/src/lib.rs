@@ -30,6 +30,7 @@ pub mod method {
     pub const CALENDAR: &str = "host.calendar";
     pub const PUBLISH: &str = "host.publish";
     pub const LOG: &str = "host.log";
+    pub const IMAGES: &str = "host.images";
 
     /// UI calls can't use the reserved prefixes.
     pub fn is_ui_call(name: &str) -> bool {

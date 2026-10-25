@@ -107,7 +107,7 @@ pub fn init(app: &AppHandle, dir: &Path) {
         }
     }
     let _ = SUP.set(sup);
-    sync_calendar(dir);
+    sync_contributions(dir);
     spawn_process_watch();
 }
 
@@ -125,16 +125,24 @@ pub fn publish(topic: &str, data: Value) {
     }
 }
 
-/// Tells the calendar which module sources are live.
-fn sync_calendar(dir: &Path) {
+/// Tells the calendar which module sources are live, and the Windows key which Win + letter
+/// shortcuts modules have (`tab:<id>` opens the tab, `cube:<id>` the Command Center sheet).
+fn sync_contributions(dir: &Path) {
     let Some(s) = sup() else { return };
-    let list: Vec<(String, String, String, String)> = s
-        .list()
-        .into_iter()
-        .filter(|m| m.enabled)
-        .flat_map(|m| m.manifest.contributes.calendar.iter().map(|c| (m.id.clone(), c.source.clone(), c.name.clone(), c.color.clone())).collect::<Vec<_>>())
-        .collect();
+    let on: Vec<ModuleInfo> = s.list().into_iter().filter(|m| m.enabled).collect();
+    let list: Vec<(String, String, String, String)> =
+        on.iter().flat_map(|m| m.manifest.contributes.calendar.iter().map(|c| (m.id.clone(), c.source.clone(), c.name.clone(), c.color.clone())).collect::<Vec<_>>()).collect();
     crate::calendar::set_module_sources(dir, &list);
+    let keys: Vec<(char, String)> = on
+        .iter()
+        .flat_map(|m| m.manifest.contributes.hotkeys.iter())
+        .filter_map(|h| {
+            let c = h.key.chars().next()?;
+            let target = h.opens.strip_prefix("tab:").map(String::from).or_else(|| h.opens.starts_with("cube:").then(|| h.opens.clone()))?;
+            Some((c, target))
+        })
+        .collect();
+    crate::winkey::set_module_keys(keys);
 }
 
 /// Every 2 s, while some `while-process` module is waiting, tells the supervisor what's running.
@@ -232,7 +240,7 @@ pub fn mod_set_enabled(id: String, on: bool, shared: tauri::State<'_, Arc<crate:
             e.enabled = on;
         }
     })?;
-    sync_calendar(&shared.dir);
+    sync_contributions(&shared.dir);
     Ok(())
 }
 
@@ -279,7 +287,7 @@ pub async fn mod_load_folder(path: Option<String>, app: AppHandle, shared: tauri
         set.modules.insert(id.clone(), Entry { version: manifest.version.clone(), enabled: true, auto_update: false, dev: true, installed: now_rfc3339(), source: folder.to_string_lossy().into_owned() });
     })?;
     BROKEN.lock().unwrap().retain(|(b, _)| *b != id);
-    sync_calendar(&dir);
+    sync_contributions(&dir);
     let _ = app.emit("mod:installed", &id);
     log_line(&format!("modules: loaded {id} from {} (developer mode)", folder.display()));
     Ok(s.info(&id))
@@ -306,7 +314,7 @@ pub fn mod_remove(id: String, forget: bool, app: AppHandle, shared: tauri::State
         set.modules.remove(&id);
     })?;
     BROKEN.lock().unwrap().retain(|(b, _)| *b != id);
-    sync_calendar(&shared.dir);
+    sync_contributions(&shared.dir);
     let _ = app.emit("mod:removed", &id);
     log_line(&format!("modules: removed {id}{}", if forget { " and its data" } else { "" }));
     Ok(())

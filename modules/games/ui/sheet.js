@@ -1,7 +1,7 @@
 // The Command Center's Games sheet: your Steam library, full size. The chosen game fills the top
 // with its hero banner and logo (your custom artwork first, placed the way Steam places it), with
 // Play, how long you've played, when you last did and its size; the covers sit below with search,
-// filters and sorting, and your other launchers at the end. Data from games.rs (games_list),
+// filters and sorting, and your other launchers at the end. Data from the backend's `library`,
 // refreshed every 6 seconds while the sheet shows so a game you start shows as playing.
 
 const DAY = 864e5;
@@ -20,8 +20,11 @@ const SORTS = [['recent', 'Last played'], ['name', 'Name'], ['played', 'Hours pl
 /** Steam's logo pins → where the logo box sits on the hero. */
 const PIN = { BottomLeft: 'bl', UpperLeft: 'tl', CenterCenter: 'cc', UpperCenter: 'tc', BottomCenter: 'bc' };
 
-export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close, games }) {
-  let el = null, lib = null, sel = 0, q = '', filter = store.get('gmFilter', 'all'), sort = store.get('gmSort', 'recent'), timer = 0, heroFor = -1;
+/** g: { ctx, art(path) → URL, library() (the last one read), load() → a fresh one, play(game), launchers() } */
+export function createSheet(g) {
+  const { ctx, art: assetUrl } = g, { esc, icon: ic } = ctx.ui, store = ctx.store;
+  const flash = msg => ctx.island.flash(msg), close = then => ctx.island.closeCommandCenter(then);
+  let el = null, lib = null, sel = 0, q = '', filter = store.get('filter', 'all'), sort = store.get('sort', 'recent'), timer = 0, heroFor = -1;
   const $ = s => el && el.querySelector(s), $$ = s => (el ? [...el.querySelectorAll(s)] : []);
 
   function build() {
@@ -52,11 +55,11 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
     const qi = $('.gms-search input');
     qi.value = q;
     qi.addEventListener('input', () => { q = qi.value; renderGrid(); });
-    $('.gms-sort select').addEventListener('change', e => { sort = e.target.value; store.set('gmSort', sort); renderGrid(); });
+    $('.gms-sort select').addEventListener('change', e => { sort = e.target.value; store.set('sort', sort); renderGrid(); });
   }
 
   async function load() {
-    try { lib = await invoke('games_list'); } catch (e) { flash(String(e)); }
+    try { lib = await g.load(); } catch (e) { flash(e.message || String(e)); }
     if (!el) return;
     if (lib && lib.games.length && !lib.games.some(g => g.appid === sel)) sel = (lib.games.find(g => g.appid === lib.running) || lib.games[0]).appid;
     render();
@@ -123,9 +126,9 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
     $('.gms-sort').hidden = filter === 'most';
   }
   function renderApps() {
-    const apps = games.launchers();
+    const apps = g.launchers();
     $('.gms-more').hidden = !apps.length;
-    $('.gms-apps').innerHTML = apps.map(a => `<button type="button" class="gms-app" data-app="${esc(a.id)}" title="${esc(a.name)}">${a.icon ? `<img src="${esc(assetUrl(a.icon))}" alt="" draggable="false">` : `<span>${esc(a.name.charAt(0))}</span>`}<small>${esc(a.name)}</small></button>`).join('');
+    $('.gms-apps').innerHTML = apps.map(a => `<button type="button" class="gms-app" data-app="${esc(a.id)}" title="${esc(a.name)}">${a.icon ? `<img src="${esc(a.icon)}" alt="" draggable="false">` : `<span>${esc(a.name.charAt(0))}</span>`}<small>${esc(a.name)}</small></button>`).join('');
   }
   function render() { if (!el) return; renderHero(); renderGrid(); renderApps(); }
   function select(id, scroll) {
@@ -136,9 +139,9 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
 
   /* ---------- input ---------- */
   function act(what) {
-    const g = game(sel); if (!g) return;
-    if (what === 'play') { close(() => games.play(g)); return; }
-    invoke('game_action', { appid: g.appid, what }).then(() => close()).catch(e => flash(String(e)));
+    const gm = game(sel); if (!gm) return;
+    if (what === 'play') { close(() => g.play(gm)); return; }
+    ctx.call('action', { appid: gm.appid, what }).then(() => close()).catch(e => flash(e.message || String(e)));
   }
   let lastPress = { id: 0, t: 0 };
   function onPointerDown(e) {
@@ -150,9 +153,9 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
   }
   function onClick(e) {
     const b = e.target.closest('[data-g]'); if (b) { act(b.dataset.g); return; }
-    const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; store.set('gmFilter', filter); renderGrid(); return; }
+    const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; store.set('filter', filter); renderGrid(); return; }
     const a = e.target.closest('[data-app]');
-    if (a) { const app = (S.apps || []).find(x => x.id === a.dataset.app); if (app) close(() => games.openApp(app)); }
+    if (a) close(() => ctx.island.apps.open(a.dataset.app));
   }
   function onContext(e) {
     const c = e.target.closest('.gms-cv'); if (!c) return;
@@ -161,15 +164,17 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
   /** Keys while the sheet shows; true when it used the key. */
   function key(e) {
     if (!el) return false;
-    const typing = e.target.matches && e.target.matches('input, select');
-    if (e.key === 'Escape' && typing && e.target.value) { e.target.value = ''; q = ''; renderGrid(); return true; }
+    // Keys come from the page, so the element they're for is inside this shadow root.
+    const target = (e.composedPath && e.composedPath()[0]) || e.target;
+    const typing = target.matches && target.matches('input, select');
+    if (e.key === 'Escape' && typing && target.value) { target.value = ''; q = ''; renderGrid(); return true; }
     const cards = $$('.gms-cv');
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && cards.length && !(typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))) {
       const i = Math.max(0, cards.findIndex(c => +c.dataset.appid === sel));
       const top = cards[0].offsetTop, cols = Math.max(1, cards.filter(c => c.offsetTop === top).length);
       const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
       const j = Math.max(0, Math.min(cards.length - 1, i + step));
-      if (typing) e.target.blur();
+      if (typing) target.blur();
       select(+cards[j].dataset.appid, true);
       return true;
     }
@@ -184,7 +189,8 @@ export function createGames({ S, invoke, esc, ic, assetUrl, store, flash, close,
       build(); host.append(el);
       el.addEventListener('pointerdown', onPointerDown); el.addEventListener('click', onClick); el.addEventListener('contextmenu', onContext);
       heroFor = -1;
-      if (S.games) { lib = S.games; if (!lib.games.some(g => g.appid === sel) && lib.games.length) sel = (lib.games.find(g => g.appid === lib.running) || lib.games[0]).appid; render(); }
+      const known = g.library();
+      if (known) { lib = known; if (!lib.games.some(x => x.appid === sel) && lib.games.length) sel = (lib.games.find(x => x.appid === lib.running) || lib.games[0]).appid; render(); }
       load();
     },
     unmount() { clearTimeout(timer); if (el) el.remove(); el = null; },

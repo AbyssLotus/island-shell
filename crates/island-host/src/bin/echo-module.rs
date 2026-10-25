@@ -46,6 +46,11 @@ impl Module for Echo {
             }
             "events" => Ok(json!(*self.events.lock().unwrap())),
             "ticks" => Ok(json!(*self.ticks.lock().unwrap())),
+            "share" => {
+                let dirs: Vec<std::path::PathBuf> = params.as_array().into_iter().flatten().filter_map(|d| d.as_str().map(Into::into)).collect();
+                host.share_images(&dirs);
+                Ok(Value::Null)
+            }
             "print" => {
                 // Stray stdout must not break the protocol.
                 println!("this goes nowhere");

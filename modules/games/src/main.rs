@@ -1,162 +1,84 @@
-//! Installed Steam games for the Games tab, read straight from Steam's own files: the library
-//! folders, each game's app manifest (name, install state, last played), and portrait cover art:
-//! the custom covers the user set in Steam (userdata/<id>/config/grid/<appid>p.png) first, then
-//! the default art Steam keeps in its library cache. Games launch through `steam://rungameid/`.
+//! Installed Steam games, an Island Shell module backend (docs/design/modules.md); its UI is
+//! ui/games.js (the Games tab, its Command Center sheet, search results and Win + G). Read straight
+//! from Steam's own files: the library folders, each game's app manifest (name, install state, last
+//! played), and portrait cover art: the custom covers the user set in Steam
+//! (userdata/<id>/config/grid/<appid>p.png) first, then the default art Steam keeps in its library
+//! cache. Games launch through `steam://rungameid/`.
 //!
 //! For the Command Center's Games sheet there's more: each game's wide hero banner and logo (custom
 //! ones first, with Steam's own logo placement), its size on disk, and how long you've played it
 //! (all time and the last two weeks), read from your account's localconfig.vdf.
+//!
+//! Art is either a small copy in the module's cache folder (`cache:<path>`) or a file in one of
+//! Steam's art folders, which the module shares with its UI (`host.images`). Nothing goes on the
+//! network.
+//!
+//! RPC methods: `library`, `action { appid, what }`.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+use island_module::{CallResult, Host, Init, Module, RpcError, Value};
+use island_win::steam::{decode, libraries, tokens};
+use island_win::{image, reg, shell, steam};
 use serde::Serialize;
-use windows::core::{HSTRING, PCWSTR};
-use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RRF_RT_REG_SZ};
-use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
 #[derive(Serialize, Clone)]
-pub struct Game {
-    pub appid: u32,
-    pub name: String,
+struct Game {
+    appid: u32,
+    name: String,
     /// Unix seconds; 0 = never.
-    pub last_played: u64,
+    last_played: u64,
     /// Portrait cover on disk: the user's custom one from Steam, else Steam's; a small cached copy once
     /// one has been made (animated covers stay as they are, so they keep playing).
-    pub cover: Option<String>,
+    cover: Option<String>,
     /// The cover is the user's own custom artwork.
-    pub custom: bool,
+    custom: bool,
     /// Landscape header, used when there's no portrait cover.
-    pub header: Option<String>,
+    header: Option<String>,
     /// Install folder, for "Open install folder".
-    pub dir: String,
+    dir: String,
     /// Installed but waiting on an update.
-    pub needs_update: bool,
+    needs_update: bool,
     /// The wide banner for the game's page: your custom one, else Steam's (a 2560-wide copy once made).
-    pub hero: Option<String>,
+    hero: Option<String>,
     /// The game's logo, to lay over the hero.
-    pub logo: Option<String>,
+    logo: Option<String>,
     /// Where Steam puts that logo on the hero (from your custom artwork settings).
-    pub logo_pos: Option<LogoPos>,
+    logo_pos: Option<LogoPos>,
     /// Bytes on disk.
-    pub size: u64,
+    size: u64,
     /// Minutes played, all time and in the last two weeks (Steam's own count).
-    pub playtime: u32,
-    pub playtime_2wks: u32,
+    playtime: u32,
+    playtime_2wks: u32,
 }
 
 #[derive(Serialize, Clone)]
-pub struct LogoPos {
+struct LogoPos {
     /// BottomLeft, UpperLeft, CenterCenter, UpperCenter or BottomCenter.
-    pub pin: String,
+    pin: String,
     /// Largest size as a share of the hero's width and height, in percent.
-    pub w: f64,
-    pub h: f64,
+    w: f64,
+    h: f64,
 }
 
 #[derive(Serialize, Clone, Default)]
-pub struct Library {
-    pub installed: bool,
-    pub games: Vec<Game>,
+struct Library {
+    installed: bool,
+    games: Vec<Game>,
     /// The game Steam says is running right now.
-    pub running: u32,
+    running: u32,
     /// Folders the page may load cover images from (custom artwork and Steam's cache).
     #[serde(skip)]
-    pub art_dirs: Vec<PathBuf>,
+    art_dirs: Vec<PathBuf>,
 }
 
 /// Steam's own tools and things that aren't games (Wallpaper Engine gets its own integration).
 const NOT_GAMES: [u32; 9] = [228980, 431960, 250820, 1070560, 1391110, 1628350, 1493710, 1887720, 2180100];
 const NOT_GAME_WORDS: [&str; 6] = ["redistributable", "dedicated server", "sdk", "soundtrack", "proton", "steam linux runtime"];
-
-fn reg_str(sub: &str, value: &str) -> Option<String> {
-    let mut buf = [0u16; 1024];
-    let mut size = (buf.len() * 2) as u32;
-    unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, &HSTRING::from(sub), &HSTRING::from(value), RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as _), Some(&mut size)).ok().ok()?;
-    }
-    let n = (size as usize / 2).saturating_sub(1);
-    Some(String::from_utf16_lossy(&buf[..n]))
-}
-
-fn reg_dword(sub: &str, value: &str) -> Option<u32> {
-    let mut v = 0u32;
-    let mut size = 4u32;
-    unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, &HSTRING::from(sub), &HSTRING::from(value), RRF_RT_REG_DWORD, None, Some(&mut v as *mut u32 as _), Some(&mut size)).ok().ok()?;
-    }
-    Some(v)
-}
-
-pub fn steam_dir() -> Option<PathBuf> {
-    let p = PathBuf::from(reg_str("Software\\Valve\\Steam", "SteamPath")?.replace('/', "\\"));
-    p.join("steam.exe").is_file().then_some(p)
-}
-
-/// Quoted strings of a Valve KeyValues (.vdf/.acf) file, in order. Braces are skipped; that's
-/// enough to pick out the flat keys we need.
-fn tokens(text: &str) -> Vec<String> {
-    let mut out = vec![];
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c != '"' {
-            continue;
-        }
-        let mut s = String::new();
-        while let Some(c) = chars.next() {
-            match c {
-                '\\' => {
-                    if let Some(n) = chars.next() {
-                        s.push(n);
-                    }
-                }
-                '"' => break,
-                _ => s.push(c),
-            }
-        }
-        out.push(s);
-    }
-    out
-}
-
-/// Steam writes names as UTF-8, but some older manifests hold Windows-1252 bytes (e.g. "™").
-fn decode(bytes: &[u8]) -> String {
-    match std::str::from_utf8(bytes) {
-        Ok(s) => s.to_string(),
-        Err(_) => bytes
-            .iter()
-            .map(|&b| match b {
-                0x99 => '\u{2122}',
-                0x80 => '\u{20ac}',
-                0x92 => '\u{2019}',
-                0x93 => '\u{201c}',
-                0x94 => '\u{201d}',
-                0x96 => '\u{2013}',
-                0x97 => '\u{2014}',
-                _ => b as char,
-            })
-            .collect(),
-    }
-}
-
-pub(crate) fn libraries(steam: &Path) -> Vec<PathBuf> {
-    let mut libs = vec![steam.to_path_buf()];
-    if let Ok(b) = std::fs::read(steam.join("steamapps").join("libraryfolders.vdf")) {
-        let t = tokens(&decode(&b));
-        for w in t.windows(2) {
-            if w[0] == "path" {
-                let p = PathBuf::from(&w[1]);
-                if !libs.iter().any(|l| l.to_string_lossy().eq_ignore_ascii_case(&p.to_string_lossy())) {
-                    libs.push(p);
-                }
-            }
-        }
-    }
-    libs
-}
 
 /// The newest file with one of `names` in the game's cache folder (Steam keeps old versions in
 /// hashed subfolders).
@@ -209,23 +131,23 @@ fn custom_cover(grids: &[PathBuf], appid: u32) -> Option<String> {
         return Some(src.to_string_lossy().into_owned());
     }
     if kind != Kind::Png {
-        crate::util::log_line(&format!("games: custom cover {} is {w}x{h}, too big to show; using Steam's", src.display()));
+        eprintln!("custom cover {} is {w}x{h}, too big to show; using Steam's", src.display());
         return None;
     }
     let stamp = std::fs::metadata(&src).and_then(|m| m.modified()).ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
-    let dst = crate::util::data_dir().join("covers").join(format!("{appid}-{stamp}.png"));
+    let dst = cache().join("covers").join(format!("{appid}-{stamp}.png"));
     if !dst.is_file() {
         let _ = std::fs::create_dir_all(dst.parent()?);
         let t = std::time::Instant::now();
         match shrink_png(&src, &dst, 600) {
-            Some(()) => crate::util::log_line(&format!("games: shrank the {w}x{h} custom cover for {appid} in {:.1} s", t.elapsed().as_secs_f32())),
+            Some(()) => eprintln!("shrank the {w}x{h} custom cover for {appid} in {:.1} s", t.elapsed().as_secs_f32()),
             None => {
-                crate::util::log_line(&format!("games: couldn't shrink the {w}x{h} custom cover for {appid}; using Steam's"));
+                eprintln!("couldn't shrink the {w}x{h} custom cover for {appid}; using Steam's");
                 return None;
             }
         }
     }
-    Some(dst.to_string_lossy().into_owned())
+    Some(art(&dst))
 }
 
 /// A custom hero or logo from Steam (`<appid>_hero.png`, `<appid>_logo.png`).
@@ -273,19 +195,22 @@ fn small_path(src: &Path, w: u32) -> PathBuf {
         h ^= b as u64;
         h = h.wrapping_mul(0x100000001b3);
     }
-    crate::util::data_dir().join("gamethumbs").join(format!("{h:016x}-{stamp}-{w}.png"))
+    cache().join("thumbs").join(format!("{h:016x}-{stamp}-{w}.png"))
 }
 
 /// The small copy of `src` when it exists; otherwise `src`, noting the copy to make.
 fn small_or(src: Option<String>, w: u32, todo: &mut Vec<(PathBuf, PathBuf, u32)>) -> Option<String> {
     let s = src?;
+    if s.starts_with("cache:") {
+        return Some(s); // already a small copy of ours
+    }
     let p = Path::new(&s);
     if animated(p) || image_info(p).is_some_and(|(_, iw, _)| iw <= w) {
         return Some(s);
     }
     let small = small_path(p, w);
     if small.is_file() {
-        return Some(small.to_string_lossy().into_owned());
+        return Some(art(&small));
     }
     todo.push((p.to_path_buf(), small, w));
     Some(s)
@@ -299,7 +224,7 @@ fn make_small(todo: Vec<(PathBuf, PathBuf, u32)>) {
         return;
     }
     std::thread::spawn(move || {
-        crate::util::com_mta();
+        image::com();
         let t = std::time::Instant::now();
         let mut made = 0;
         for (src, dst, w) in &todo {
@@ -308,7 +233,7 @@ fn make_small(todo: Vec<(PathBuf, PathBuf, u32)>) {
                 made += 1;
             }
         }
-        crate::util::log_line(&format!("games: made {made} small copies of covers and heroes in {:.1} s", t.elapsed().as_secs_f32()));
+        eprintln!("made {made} small copies of covers and heroes in {:.1} s", t.elapsed().as_secs_f32());
         MAKING.store(false, std::sync::atomic::Ordering::SeqCst);
     });
 }
@@ -427,6 +352,21 @@ fn playtimes(steam: &Path) -> HashMap<u32, (u32, u32)> {
     map
 }
 
+/// The module's cache folder (small copies of covers and heroes), set at init.
+static CACHE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+fn cache() -> PathBuf {
+    CACHE.lock().unwrap().clone().unwrap_or_else(std::env::temp_dir)
+}
+
+/// How the page finds a picture: a file in the cache as `cache:<path>`, anything else as it is.
+fn art(p: &Path) -> String {
+    match p.strip_prefix(cache()) {
+        Ok(rel) => format!("cache:{}", rel.to_string_lossy().replace('\\', "/")),
+        Err(_) => p.to_string_lossy().into_owned(),
+    }
+}
+
 /// Bigger than this (3× a 600×900 cover) gets shrunk.
 const MAX_W: u32 = 1800;
 const MAX_H: u32 = 2700;
@@ -529,12 +469,12 @@ fn shrink_png(src: &Path, dst: &Path, tw: u32) -> Option<()> {
     }
     flush(&mut acc, &mut cnt, &mut out);
     let rows = (out.len() / (tw as usize * 4)) as u32;
-    let bytes = crate::util::encode_png(tw, rows, &out)?;
+    let bytes = image::encode_png(tw, rows, &out)?;
     std::fs::write(dst, bytes).ok()
 }
 
-pub fn library() -> Library {
-    let Some(steam) = steam_dir() else { return Library::default() };
+fn library() -> Library {
+    let Some(steam) = steam::dir() else { return Library::default() };
     let cache = steam.join("appcache").join("librarycache");
     let grids = grid_dirs(&steam);
     let played = playtimes(&steam);
@@ -580,17 +520,15 @@ pub fn library() -> Library {
     games.sort_by(|a, b| b.last_played.cmp(&a.last_played).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     let mut art_dirs = grids;
     art_dirs.push(cache);
-    art_dirs.push(crate::util::data_dir().join("gamethumbs"));
-    Library { installed: true, games, running: reg_dword("Software\\Valve\\Steam", "RunningAppID").unwrap_or(0), art_dirs }
+    Library { installed: true, games, running: reg::user_dword("Software\\Valve\\Steam", "RunningAppID").unwrap_or(0), art_dirs }
 }
 
 fn open(target: &str) -> Result<(), String> {
-    let r = unsafe { ShellExecuteW(None, &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };
-    if r.0 as isize > 32 { Ok(()) } else { Err(format!("Windows couldn't open {target}")) }
+    shell::open(target)
 }
 
 /// play | library (show in Steam) | folder (install folder) | screenshots | store
-pub fn action(appid: u32, what: &str) -> Result<(), String> {
+fn action(appid: u32, what: &str) -> Result<(), String> {
     match what {
         "play" => open(&format!("steam://rungameid/{appid}")),
         "library" => open(&format!("steam://nav/games/details/{appid}")),
@@ -601,10 +539,41 @@ pub fn action(appid: u32, what: &str) -> Result<(), String> {
             if !Path::new(&g.dir).is_dir() {
                 return Err("Its install folder is missing".into());
             }
-            std::process::Command::new("explorer.exe").arg(&g.dir).spawn().map(|_| ()).map_err(|e| e.to_string())
+            open(&g.dir)
         }
         _ => Err(format!("Unknown game action {what}")),
     }
+}
+
+// ---------- the module ----------
+
+struct Games;
+
+impl Module for Games {
+    fn init(&self, host: &Host, _init: &Init) -> Result<(), RpcError> {
+        *CACHE.lock().unwrap() = Some(host.cache_dir());
+        Ok(())
+    }
+
+    fn call(&self, host: &Host, method: &str, params: Value) -> CallResult {
+        match method {
+            "library" => {
+                let lib = library();
+                // Steam's art folders, for the covers, heroes and logos that aren't copies of ours.
+                host.share_images(&lib.art_dirs);
+                Ok(serde_json::to_value(&lib).unwrap_or(Value::Null))
+            }
+            "action" => {
+                let appid = params["appid"].as_u64().and_then(|a| u32::try_from(a).ok()).ok_or_else(|| RpcError::bad_params("appid"))?;
+                action(appid, params["what"].as_str().unwrap_or("")).map(|_| Value::Null).map_err(RpcError::failed)
+            }
+            _ => Err(RpcError::unknown_method(method)),
+        }
+    }
+}
+
+fn main() {
+    island_module::run(Games);
 }
 
 #[cfg(test)]
@@ -626,14 +595,31 @@ mod tests {
         // Left half red, right half blue.
         let rgba: Vec<u8> = (0..w * h).flat_map(|i| if i % w < w / 2 { [255, 0, 0, 255] } else { [0, 0, 255, 255] }).collect();
         let src = dir.join("big.png");
-        std::fs::write(&src, crate::util::encode_png(w, h, &rgba).unwrap()).unwrap();
+        std::fs::write(&src, image::encode_png(w, h, &rgba).unwrap()).unwrap();
         assert_eq!(image_info(&src), Some((Kind::Png, w, h)));
         let dst = dir.join("small.png");
         shrink_png(&src, &dst, 600).unwrap();
-        let (sw, sh, px) = crate::util::decode_png_rgba(&dst).unwrap();
+        let mut reader = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(&dst).unwrap())).read_info().unwrap();
+        let mut px = vec![0u8; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut px).unwrap();
+        let (sw, sh) = (info.width, info.height);
         assert_eq!((sw, sh), (600, 900));
         assert_eq!(&px[..4], &[255, 0, 0, 255]);
         assert_eq!(&px[(599 * 4) as usize..(600 * 4) as usize], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn manifest_is_valid() {
+        let m: island_module::proto::manifest::Manifest = serde_json::from_str(include_str!("../module.json")).unwrap();
+        m.validate().unwrap();
+        assert_eq!(m.contributes.hotkeys[0].key, "G");
+    }
+
+    #[test]
+    fn cached_art_is_marked() {
+        *CACHE.lock().unwrap() = Some(std::env::temp_dir().join("games-cache-test"));
+        assert_eq!(art(&cache().join("thumbs").join("a.png")), "cache:thumbs/a.png");
+        assert!(!art(Path::new("/elsewhere/a.png")).starts_with("cache:"));
     }
 
     #[test]
@@ -650,7 +636,7 @@ mod tests {
     #[test]
     #[ignore = "needs Steam with games installed"]
     fn small_copy_live() {
-        crate::util::com_mta();
+        image::com();
         for g in library().games {
             for (what, p) in [("cover", &g.cover), ("hero", &g.hero)] {
                 let Some(p) = p else { continue };

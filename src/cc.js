@@ -6,18 +6,17 @@
 // (island_rect with urgent).
 //
 // Some sections are their own apps here instead of the island's view: Today is a full calendar
-// (cc-calendar.js), Music a full-size player with synced lyrics (cc-music.js) and Games the Steam
-// library with each game's hero banner (cc-games.js). The Stats cube opens
+// (cc-calendar.js) and Music a full-size player with synced lyrics (cc-music.js); modules bring
+// their own (Games: the Steam library with each game's hero banner). The Stats cube opens
 // the Task Manager (cc-taskmgr.js), a window over the eclipse.
 //
-// Search covers Start apps, open windows, Steam games, drives and folders, recently opened files,
+// Search covers Start apps, open windows, drives and folders, recently opened files, what modules add (Steam games),
 // Windows settings and quick commands. What you open from here is remembered (localStorage) and
 // ranked higher next time, since Windows' own recent-items list may be switched off.
 
 import { createCalendar } from './cc-calendar.js';
 import { createTaskManager } from './cc-taskmgr.js';
 import { createMusic } from './cc-music.js';
-import { createGames } from './cc-games.js';
 import { createApps } from './cc-apps.js';
 import { createSetup } from './setup.js';
 import { placeCubes } from './registry.js';
@@ -113,26 +112,27 @@ export function createCommandCenter(ctx) {
   const cv = $('.cc-canvas'), g2 = cv.getContext('2d'), input = $('.cc-q');
 
   /* ---------- state ---------- */
-  let isOpen = false, busy = false, wins = [], games = [], places = [], index = [], flat = [], sel = 0, scope = 'all', sheetTab = null, sheetMode = 'island', embedT = 0;
+  let isOpen = false, busy = false, wins = [], places = [], index = [], flat = [], sel = 0, scope = 'all', sheetTab = null, sheetMode = 'island', embedT = 0;
   let hist = store.get('ccHist', []), nextEv = null, nativeOn = null;
   const cal = createCalendar({ invoke, esc, ic, store, S, flash });
   const mus = createMusic({ S, invoke, esc, ic, media: ctx.media, listen: ctx.listen, flash, close: after => close(after, true) });
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
-  const gms = createGames({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), games: ctx.games });
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
   [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
-    ['games', 'Games', 'gamepad'], ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
+    ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
     ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: id === 'discord' ? 'discord' : null }));
   REG.sites.add({ id: 'discord', site: 'discord', label: 'Discord app', default: true });
-  for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus, games: gms })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
+  for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
   const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
   const NATIVE = new Proxy({}, { get: (_, k) => REG.sheets.get(k), has: (_, k) => REG.sheets.has(k) });
   REG.cubes.on(() => { if (isOpen) renderCubes(); });
+  // A module's search results changed (its data arrived): index them now.
+  REG.search.on(() => { if (isOpen) { buildIndex(); if (input.value.trim()) search(); } });
   const tm = createTaskManager({ invoke, esc, ic, store, flash, assetUrl, root });
-  const setup = createSetup({ root, invoke, store, ic, esc, S, setDark: ctx.setDark, openTab: ctx.openTab, getGames: () => games, moduleCards: ctx.moduleCards || (() => []) });
+  const setup = createSetup({ root, invoke, store, ic, esc, S, setDark: ctx.setDark, openTab: ctx.openTab, moduleCards: ctx.moduleCards || (() => []) });
   const EC = { x: 0, y: 0, r: 120 }, ET = { x: 0, y: 0, r: 120 };
   let R = 120, CX = 0, CY = 0, DPR = 1, running = false, lastT = 0, hoverA = null, hoverK = 0, reachA = 0;
 
@@ -189,9 +189,8 @@ export function createCommandCenter(ctx) {
 
   /* ---------- data ---------- */
   async function refresh() {
-    const [w, g, p] = await Promise.allSettled([invoke('windows_list'), S.games ? Promise.resolve(S.games) : invoke('games_list'), invoke('cc_places')]);
+    const [w, p] = await Promise.allSettled([invoke('windows_list'), invoke('cc_places')]);
     if (w.status === 'fulfilled') wins = w.value;
-    if (g.status === 'fulfilled' && g.value) { games = g.value.games || []; if (!S.games) S.games = g.value; }
     if (p.status === 'fulfilled') places = p.value;
     buildIndex();
     loadNext();
@@ -240,7 +239,6 @@ export function createCommandCenter(ctx) {
     const items = [];
     for (const a of S.apps || []) items.push({ kind: 'app', id: 'app:' + a.id, name: a.name, sub: a.exe || 'Start menu', img: a.icon, app: a });
     for (const w of wins) { const a = appForWin(w); items.push({ kind: 'window', id: 'win:' + w.hwnd, name: w.title, sub: `${a ? a.name : exeName(w.exe)}${w.minimized ? ' · minimized' : ''}`, keys: a ? a.name : exeName(w.exe), img: (a && a.icon) || w.icon, win: w }); }
-    for (const gm of games) items.push({ kind: 'game', id: 'game:' + gm.appid, name: gm.name, sub: gm.last_played ? `Steam · played ${agoText(gm.last_played * 1000)}` : 'Steam', keys: 'steam game', cover: gm.cover || gm.header, game: gm });
     for (const p of places) {
       const kind = p.kind === 'file' ? 'file' : 'folder';
       const sub = p.kind === 'drive' ? `${p.sub}${p.free_gb != null ? ` · ${Math.round(p.free_gb)} GB free of ${Math.round(p.total_gb)}` : ''}` : p.kind === 'file' ? p.sub : p.path;
@@ -281,7 +279,7 @@ export function createCommandCenter(ctx) {
     const raw = input.value, q = raw.trim().toLowerCase();
     showResults(!!q);
     if (!q) return;
-    $('.cc-scopes').innerHTML = SCOPES.map(([k, n, icn]) => `<button class="cc-chip" type="button" data-scope="${k}" aria-pressed="${k === scope}">${ic(icn)}${n}</button>`).join('');
+    $('.cc-scopes').innerHTML = SCOPES.filter(([k]) => k === 'all' || k === scope || k !== 'game' || index.some(it => it.kind === k)).map(([k, n, icn]) => `<button class="cc-chip" type="button" data-scope="${k}" aria-pressed="${k === scope}">${ic(icn)}${n}</button>`).join('');
     flat = [];
     const groups = [];
     const mathSrc = q.startsWith('=') ? q.slice(1) : /^[\d\s.+\-*/%^()×÷]+$/.test(q) && /[+\-*/%^×÷]/.test(q) ? q : null;
@@ -308,7 +306,6 @@ export function createCommandCenter(ctx) {
     switch (it.kind) {
       case 'app': return [['Open', 'ext', () => invoke('app_launch', { id: it.app.id })], ...(it.app.exe ? [['Show in folder', 'folder', () => invoke('cc_open', { path: it.app.exe, reveal: true })]] : [])];
       case 'window': return [['Switch to', 'window', () => invoke('window_activate', { hwnd: it.win.hwnd })], ['Close the window', 'x', () => invoke('window_close', { hwnd: it.win.hwnd }), true]];
-      case 'game': return [['Play', 'play', () => invoke('game_action', { appid: it.game.appid, what: 'play' })], ['Show in Steam', 'gamepad', () => invoke('game_action', { appid: it.game.appid, what: 'library' })], ['Open install folder', 'folder', () => invoke('game_action', { appid: it.game.appid, what: 'folder' })]];
       case 'folder': return [['Open', 'folder', () => invoke('cc_open', { path: it.place.path })], ['Copy path', 'copy', () => invoke('copy_text', { text: it.place.path }), true]];
       case 'file': return [['Open', 'ext', () => invoke('cc_open', { path: it.place.path })], ['Show in folder', 'folder', () => invoke('cc_open', { path: it.place.path, reveal: true })], ['Copy path', 'copy', () => invoke('copy_text', { text: it.place.path }), true]];
       case 'setting': return [['Open Settings', 'gear', () => invoke('open_settings', { uri: it.uri })]];
@@ -354,7 +351,6 @@ export function createCommandCenter(ctx) {
       case 'discord': return dc && dc.voice ? `${dc.voice.members.length} in ${dc.voice.name}` : dc && dc.connected ? 'Connected' : 'Not connected';
       case 'audio': return S.audio ? `${S.audio.device} · ${S.audio.muted ? 'muted' : Math.round(S.audio.level * 100) + '%'}` : 'Sound';
       case 'today': { if (nextEv) { const d = new Date(nextEv.start), sameDay = d.toDateString() === new Date().toDateString(); return `${nextEv.all_day ? (sameDay ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })) : (sameDay ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${nextEv.title}`; } const w = store.get('weather', null); return w ? `${Math.round(S.unit === 'C' ? w.temp : w.temp * 9 / 5 + 32)}° · ${w.name || ''}` : 'Weather & to-dos'; }
-      case 'games': return `${games.length} games`;
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
       case 'clipboard': return `${(S.clips || []).length} items`;
       case 'music': { const m = S.media; return m ? `${m.playing ? '' : 'Paused · '}${m.title || 'Unknown title'}` : 'Nothing playing'; }

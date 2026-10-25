@@ -231,6 +231,11 @@ fn ui_events_activities_and_calendar() {
     assert_eq!(ids, ["call", "song"]);
     sup.call(&id, "activity", json!({ "id": "call", "clear": true })).unwrap();
     wait_for("cleared", 5, || rec.activities.lock().unwrap().len() == 1);
+    // Shared image folders: real absolute folders only, kept as their canonical paths.
+    let art = r.join("art");
+    std::fs::create_dir_all(&art).unwrap();
+    sup.call(&id, "share", json!([art.to_string_lossy(), "relative/dir", r.join("missing").to_string_lossy()])).unwrap();
+    wait_for("shared", 5, || sup.info(&id).unwrap().image_dirs == vec![art.canonicalize().unwrap()]);
     sup.shutdown();
 }
 

@@ -35,7 +35,7 @@ pub use island_module_proto::msg::{Activity, CalendarEvent, Init, Notify};
 pub use island_module_proto::RpcError;
 pub use serde_json::{json, Value};
 
-use island_module_proto::msg::{CalendarPut, Emit, Log, TopicData};
+use island_module_proto::msg::{CalendarPut, Emit, Images, Log, TopicData};
 use island_module_proto::{method, write_message, FrameReader, Message};
 use serde::Serialize;
 
@@ -118,6 +118,12 @@ impl Host {
     /// A line in island.log, as `[mod:<id>] …`.
     pub fn log(&self, level: &str, msg: impl Into<String>) {
         self.notify_host(method::LOG, Log { level: level.into(), msg: msg.into() });
+    }
+    /// Lets the module's UI show the images in these folders (see `ctx.imageUrl`). Replaces the
+    /// last list; the base keeps it until the module is turned off.
+    pub fn share_images(&self, dirs: &[std::path::PathBuf]) {
+        let dirs: Vec<String> = dirs.iter().map(|d| d.to_string_lossy().into_owned()).collect();
+        self.notify_host(method::IMAGES, Images { dirs });
     }
     pub fn info(&self, msg: impl Into<String>) {
         self.log("info", msg);

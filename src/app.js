@@ -6,7 +6,8 @@ import { createModuleHost } from './modhost.js';
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI.core.invoke;
-const assetUrl = p => TAURI.core.convertFileSrc(p);
+/** A file on disk as a URL the page can load (URLs, like a module's images, pass through). */
+const assetUrl = p => (/^(https?|data|blob):/.test(p) ? p : TAURI.core.convertFileSrc(p));
 const listen = TAURI.event.listen;
 const appWin = TAURI.window.getCurrentWindow();
 
@@ -111,9 +112,9 @@ $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 /* ---------- tabs (src/registry.js) ---------- */
 const R = createRegistry();
 // The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
-// (src/modhost.js), slotting in by order: Canvas's 50 and Destiny's 90 keep their old places.
+// (src/modhost.js), slotting in by order: Canvas's 50, Games' 80 and Destiny's 90 keep their old places.
 [['controls', 'Controls', 'gear', 600, 10], ['music', 'Music', 'note', 700, 20], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
-  ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70], ['games', 'Games', 'gamepad', 760, 80],
+  ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70],
   ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
   ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
   .forEach(([id, title, ic, width, order]) => R.tabs.add({ id, title, icon: ic, width, order }));
@@ -170,19 +171,10 @@ function renderTabs() {
 const pillW = () => (S.timer.running ? 236 : 200) + callW();
 const maxW = () => Math.max(240, innerWidth - 24);
 
-/** Drops heavy, image-filled views a moment after they stop showing, so their decoded images
- * (the Games covers, some animated) don't sit in memory while the island rests. */
-function releaseHidden() {
-  clearTimeout(S.releaseT);
-  S.releaseT = setTimeout(() => {
-    if (!(S.mode === 'panel' && S.tab === 'games')) setHtml($('#gShelf'), '');
-  }, 900);
-}
 function setMode(m) {
   S.mode = m; island.dataset.mode = m;
   if (m !== 'toast') S.toastTop = false;
   if (m !== 'toast' && S.urgent) { S.urgent = false; island.classList.toggle('fs-hidden', !!S.fullscreen && m !== 'panel'); }
-  if (m !== 'panel') releaseHidden();
   syncVmLevels();
   for (const [k, el] of Object.entries(L)) el.classList.toggle('on', k === m);
   L.pill.setAttribute('aria-expanded', m === 'panel');
@@ -273,7 +265,6 @@ function switchView(t, instant) {
   if (!instant) { nv.style.transition = 'none'; nv.style.setProperty('--dx', `${28 * dir}px`); void nv.offsetWidth; nv.style.transition = ''; }
   nv.style.setProperty('--dx', '0px'); nv.classList.add('on');
   S.tab = t; store.set('tab', t); syncTabs();
-  if (from === 'games' || from === 'wallpaper') releaseHidden();
   syncVmLevels(); syncModViews();
 }
 function setTab(t) {
@@ -286,7 +277,6 @@ function onTabShown(t) {
   if (t === 'stats') statsLoop();
   if (t === 'network') { renderNetNow(); layout(); }
   if (t === 'discord') loadDc();
-  if (t === 'games') gamesLoop();
   if (t === 'wallpaper') showWallpapers();
   if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } syncVmLevels(); }
   if (t === 'clipboard') renderClip();
@@ -714,96 +704,7 @@ $('#muLyricsBtn').addEventListener('click', () => {
   renderLyrics(); maybeLyrics(S.media);
 });
 
-/* ---------- games: Steam covers + other launchers ---------- */
-S.games = null; S.gamesT = 0;
-// Other launchers, shown as app icons under the covers (matched against Start menu names).
-const LAUNCHERS = [/^steam$/i, /^epic games launcher$/i, /^ea( app)?$/i, /^ubisoft connect$/i, /^riot client$/i, /^rockstar games launcher$/i, /^rsi launcher$/i,
-  /^hytale launcher$/i, /^battle\.net$/i, /^gog galaxy/i, /^xbox$/i, /^minecraft launcher$/i, /^prism launcher$/i, /^modrinth app$/i, /^kyber launcher$/i, /^roblox player$/i];
-/** The other game launchers that are installed (Start menu apps), in LAUNCHERS order. */
-function launcherApps() {
-  const seen = new Set();
-  return LAUNCHERS.map(re => (S.apps || []).find(a => re.test(a.name.trim()) && !seen.has(a.id) && seen.add(a.id))).filter(Boolean);
-}
-async function loadGames() {
-  try { S.games = await invoke('games_list'); } catch (e) { note('#gNote', String(e)); }
-  renderGames();
-}
-/** Refreshes every 6 s while the tab is open, so a game you start shows as playing. */
-function gamesLoop() {
-  clearTimeout(S.gamesT);
-  loadGames().finally(() => { if (S.mode === 'panel' && S.tab === 'games') S.gamesT = setTimeout(gamesLoop, 6000); });
-}
-function coverHtml(g, i, running) {
-  const img = g.cover || g.header;
-  const art = img ? `<img src="${esc(assetUrl(img))}" alt="" loading="${i < 8 ? 'eager' : 'lazy'}" draggable="false">` : `<span class="cv-name">${esc(g.name)}</span>`;
-  const tag = running ? '<span class="cv-tag">Playing</span>' : g.needs_update ? '<span class="cv-tag up">Update</span>' : '';
-  return `<button type="button" role="listitem" class="cover${i === 0 ? ' big' : ''}${running ? ' playing' : ''}${!g.cover && g.header ? ' wide' : ''}" data-appid="${g.appid}" title="${esc(g.name)}" aria-label="Play ${esc(g.name)}"${img ? '' : ` style="background:${gradFor(g.name)}"`}>${art}${tag}<span class="cv-play">${icon('play')}</span></button>`;
-}
-function renderGames() {
-  const lib = S.games;
-  if (!lib) return;
-  const shelf = $('#gShelf');
-  // Covers (some animated) are only in the page while the tab shows; see releaseHidden().
-  if (!(S.mode === 'panel' && S.tab === 'games')) setHtml(shelf, '');
-  else if (!lib.installed) setHtml(shelf, '<p class="empty">Steam isn’t installed.</p>');
-  else if (!lib.games.length) setHtml(shelf, '<p class="empty">No Steam games installed yet.</p>');
-  else {
-    // A running game goes first, then most recently played.
-    const games = [...lib.games].sort((a, b) => (b.appid === lib.running) - (a.appid === lib.running));
-    setHtml(shelf, games.map((g, i) => coverHtml(g, i, g.appid === lib.running)).join(''));
-  }
-  setHtml($('#gLaunchers'), launcherApps().map(appTile).join(''));
-  if (S.mode === 'panel' && S.tab === 'games') layout();
-}
-function playGame(g) {
-  closePanel(true);
-  invoke('game_action', { appid: g.appid, what: 'play' })
-    .then(() => setTimeout(() => toast(g.name, 'Starting through Steam…', null, g.cover ? { img: assetUrl(g.cover), ms: 2600, sound: 'small' } : { glyph: glyphOf(g.name), bg: gradFor(g.name), ms: 2600, sound: 'small' }), 260))
-    .catch(e => setTimeout(() => toast(`Couldn't start ${g.name}`, String(e), 'x', { sound: 'problem' }), 260));
-}
-const gameOf = el => S.games && S.games.games.find(g => String(g.appid) === el.dataset.appid);
-$('#v-games').addEventListener('click', e => {
-  const c = e.target.closest('.cover[data-appid]');
-  if (c) { const g = gameOf(c); if (g) playGame(g); return; }
-  const tile = e.target.closest('.app[data-id]');
-  if (tile) { const a = appOf(tile.dataset.id); if (a) openPinned(a); }
-});
-$('#v-games').addEventListener('contextmenu', e => {
-  const c = e.target.closest('.cover[data-appid]'), tile = e.target.closest('.app[data-id]');
-  if (!c && !tile) return;
-  e.preventDefault();
-  if (tile) { const a = appOf(tile.dataset.id); if (a) appMenu(a, e.clientX, e.clientY); return; }
-  const g = gameOf(c); if (!g) return;
-  const act = what => invoke('game_action', { appid: g.appid, what }).then(() => closePanel(true)).catch(err => note('#gNote', String(err)));
-  showCtx(e.clientX, e.clientY, [
-    { heading: g.name },
-    { label: 'Play', icon: 'play', action: () => playGame(g) },
-    { label: 'Show in Steam', icon: 'gamepad', action: () => act('library') },
-    { label: 'Open install folder', icon: 'folder', action: () => act('folder') }
-  ]);
-});
-// The mouse wheel scrolls the covers and launchers sideways (and doesn't switch tabs or close the panel).
-// A cover that won't load falls back to the wide header art, then to a name card.
-$('#gShelf').addEventListener('error', e => {
-  const img = e.target; if (img.tagName !== 'IMG') return;
-  const c = img.closest('.cover'), g = c && gameOf(c); if (!g) return;
-  if (g.header && !img.dataset.fallback) { img.dataset.fallback = '1'; c.classList.add('wide'); img.src = assetUrl(g.header); }
-  else { c.style.background = gradFor(g.name); img.replaceWith(Object.assign(document.createElement('span'), { className: 'cv-name', textContent: g.name })); }
-}, true);
-// Load the library shortly after start so the tab opens instantly, and note once whether covers load.
-setTimeout(async () => {
-  await loadGames();
-  const first = S.games && S.games.games.find(g => g.cover);
-  if (!first) return;
-  const img = new Image();
-  img.onload = () => log(`games: ${S.games.games.length} Steam games; covers load (${img.naturalWidth}x${img.naturalHeight})`);
-  img.onerror = () => log(`games: a cover didn't load (${first.cover})`);
-  img.src = assetUrl(first.cover);
-}, 7000);
-['#gShelf', '#gLaunchers'].forEach(sel => $(sel).addEventListener('wheel', e => {
-  e.preventDefault(); e.stopPropagation();
-  e.currentTarget.scrollLeft += (Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * 1.1;
-}, { passive: false }));
+
 
 /* ---------- audio: master volume, devices, microphone, per-app mixer ---------- */
 S.audioDev = null; S.audioApps = []; S.auDevT = 0; S.auAppsT = 0;
@@ -2374,6 +2275,7 @@ setInterval(tickClock, 1000);
 // opens that section full size inside it.
 listen('island:toggle', e => {
   if (e.payload === 'cc') { cmdCenter.toggle(); return; }
+  if (String(e.payload).startsWith('cube:')) { openTarget(e.payload); return; }
   if (cmdCenter.isOpen()) { if (!cmdCenter.openSheet(e.payload || 'apps')) cmdCenter.close(() => openPanel(e.payload || 'apps', true), true); return; }
   togglePanel(true, e.payload);
 });
@@ -2405,6 +2307,15 @@ const modHost = createModuleHost({
     layout: () => layout(),
     /** The accent from an image (a module's wallpaper), when the accent follows the wallpaper. */
     accentFrom: url => { if (S.follow) accentFrom(url); },
+    /** For a module's Command Center sheet: a short message in it, and closing it before `then`. */
+    flash: msg => cmdCenter.flash(msg),
+    closeCommandCenter: then => cmdCenter.close(then, true),
+    /** The Start menu's apps (icons as URLs, `running` when one has a window), to open or offer a menu for. */
+    apps: {
+      list: () => (S.apps || []).map(a => ({ id: a.id, name: a.name, icon: a.icon ? assetUrl(a.icon) : null, running: winsFor(a).length > 0 })),
+      open: id => { const a = appOf(id); if (a) openPinned(a); },
+      menu: (id, x, y) => { const a = appOf(id); if (a) appMenu(a, x, y); }
+    },
     showing: tab => S.mode === 'panel' && S.tab === tab,
     closePanel: keep => closePanel(keep),
     releaseFocus: () => quiet(invoke('release_focus')),
@@ -2431,10 +2342,14 @@ function syncViews() {
     v.className = 'view mod-view'; v.id = `v-${t.id}`; v.dataset.tab = t.id; v.setAttribute('role', 'tabpanel'); v.setAttribute('aria-labelledby', `tab-${t.id}`);
     v.innerHTML = '<div class="mod-host"></div><p class="note mod-fail"></p>';
     box.append(v); views[t.id] = v;
+    // Its size settles as its stylesheet and pictures arrive: follow it, like the base's views.
+    new ResizeObserver(() => { if (S.mode === 'panel' && S.tab === t.id) layout(); }).observe(v);
   }
   for (const id of Object.keys(views)) if (!R.tabs.has(id)) { views[id].remove(); delete views[id]; if (S.tab === id) { S.tab = 'controls'; views.controls.classList.add('on'); } }
 }
-R.tabs.on(() => { syncViews(); renderTabs(); syncTabs(); if (S.mode === 'panel') { moveInk(); layout(); } });
+R.tabs.on(() => { syncViews(); renderTabs(); syncTabs(); syncBarTabs(); if (S.mode === 'panel') { moveInk(); layout(); } });
+/** The bar's Games button opens a module's tab: it shows only while that tab exists. */
+function syncBarTabs() { $('#barGames').hidden = !R.tabs.has('games'); }
 /** Which module tab (and sections) are on screen; the module hears show() and hide(). */
 let modShown = null;
 function syncModViews() {
@@ -2551,7 +2466,6 @@ const cmdCenter = createCommandCenter({
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },
   media: { curPos, seekTo, toggleLyrics: () => $('#muLyricsBtn').click() },
-  games: { play: playGame, launchers: launcherApps, openApp: openPinned },
   setDark: on => { S.dark = on; store.set('dark', on); applySkin(); },
   apps: {
     appOf, appForWin, pinIdForWin, launch, openPinned, activate: activateWin,

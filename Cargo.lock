@@ -1233,6 +1233,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "games-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "island-win",
+ "png 0.18.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "gdk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,7 +5,7 @@
 
 const STEPS = ['welcome', 'island', 'cc', 'look', 'start', 'connect', 'done'];
 
-export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab, getGames, moduleCards }) {
+export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab, moduleCards }) {
   const el = document.createElement('div');
   el.className = 'su-wrap'; el.hidden = true;
   el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Island Shell setup');
@@ -27,10 +27,9 @@ export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab,
   };
 
   function connectCards() {
-    const games = getGames() || [], dc = S.dc || {};
+    const dc = S.dc || {};
     const card = (icn, title, sub, state, tab) => `<div class="su-card${state ? ' su-ok' : ''}"><span class="su-cic">${ic(icn)}</span><span class="su-ctx"><b>${title}</b><small>${sub}</small></span>${state ? `<span class="su-cst">${state}</span>` : `<button class="su-btn su-ghost" type="button" data-su-tab="${tab}">Set up</button>`}</div>`;
     return card('note', 'Music', 'Apple Music, Spotify, your browser: anything Windows knows is playing. Lyrics come along.', S.media ? 'Playing now' : 'Automatic')
-      + card('gamepad', 'Steam', games.length ? `${games.length} games found: covers, playtime and Play from the Games cube.` : 'Install Steam and your games show up by themselves.', games.length ? 'Ready' : '')
       + card('chat', 'Discord', 'Your call (mute, deafen, who’s talking) and notifications on the island. Needs the Discord app and a free Discord application, about two minutes.', dc.authorized ? 'Connected' : '', 'discord')
       + moduleCards().map(m => card(m.icon, esc(m.title), esc(m.sub), '', m.tab)).join('')
       + card('calendar', 'Calendars', 'Add any calendar’s iCal link (Google, Outlook, school) in the Today cube.', '', 'today');
