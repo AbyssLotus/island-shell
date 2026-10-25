@@ -1945,6 +1945,7 @@ dependencies = [
  "arboard",
  "base64 0.22.1",
  "island-catalog",
+ "island-host",
  "png 0.18.1",
  "serde",
  "serde_json",

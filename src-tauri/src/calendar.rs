@@ -3,7 +3,9 @@
 //! - any calendar feeds you add: Google Calendar, iCloud and Outlook each give a private iCal link,
 //!   no account access needed (the links are stored DPAPI-encrypted, since anyone with one can read
 //!   the calendar),
-//! - Canvas due dates (when Canvas is connected) and Destiny's weekly reset (when Destiny is).
+//! - Canvas due dates (when Canvas is connected) and Destiny's weekly reset (when Destiny is),
+//! - and the sources modules declare (`contributes.calendar`): a module replaces its events with
+//!   `host.calendar`, and the last set is kept here so the calendar works while the module isn't running.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -56,7 +58,38 @@ struct Saved {
     /// Colors picked for the built-in sources.
     #[serde(default)]
     colors: HashMap<String, String>,
+    /// Module sources by source id, with their last events.
+    #[serde(default)]
+    modules: HashMap<String, ModuleSource>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct ModuleSource {
+    module: String,
+    name: String,
+    color: String,
+    #[serde(default)]
+    events: Vec<ModuleEvent>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct ModuleEvent {
+    id: String,
+    title: String,
+    start: i64,
+    end: i64,
+    #[serde(default)]
+    all_day: bool,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    color: String,
+    #[serde(default)]
+    kind: String,
+}
+
+/// Module sources whose module is installed and on (the rest stay cached but hidden).
+static ACTIVE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 fn path(dir: &Path) -> PathBuf {
     dir.join("calendar.json")
@@ -139,7 +172,105 @@ pub fn sources(dir: &Path) -> Vec<Source> {
         .map(|(id, name, color)| Source { id: id.into(), name: name.into(), kind: id.into(), color: s.colors.get(id).cloned().unwrap_or_else(|| color.into()), on: !s.hidden.iter().any(|h| h == id), error: String::new() })
         .collect();
     out.extend(s.feeds.iter().map(|f| Source { id: f.id.clone(), name: f.name.clone(), kind: "feed".into(), color: f.color.clone(), on: !s.hidden.contains(&f.id), error: errors.get(&f.id).cloned().unwrap_or_default() }));
+    let active = ACTIVE.lock().unwrap().clone().unwrap_or_default();
+    let mut mods: Vec<_> = s.modules.iter().filter(|(id, _)| active.contains(*id)).collect();
+    mods.sort_by(|a, b| a.1.name.cmp(&b.1.name));
+    out.extend(mods.into_iter().map(|(id, m)| Source { id: id.clone(), name: m.name.clone(), kind: "module".into(), color: s.colors.get(id).cloned().unwrap_or_else(|| m.color.clone()), on: !s.hidden.contains(id), error: String::new() }));
     out
+}
+
+/// The module sources that are live now: `(module, source, name, color)` for every enabled module.
+/// New sources are added; known ones keep their events and the user's color.
+pub fn set_module_sources(dir: &Path, list: &[(String, String, String, String)]) {
+    let mut s = load(dir);
+    let mut dirty = false;
+    for (module, source, name, color) in list {
+        let e = s.modules.entry(source.clone()).or_insert_with(|| {
+            dirty = true;
+            ModuleSource { module: module.clone(), name: name.clone(), color: color.clone(), events: vec![] }
+        });
+        if e.name != *name || e.module != *module {
+            e.name = name.clone();
+            e.module = module.clone();
+            dirty = true;
+        }
+    }
+    if dirty {
+        save(dir, &s);
+    }
+    *ACTIVE.lock().unwrap() = Some(list.iter().map(|(_, source, ..)| source.clone()).collect());
+}
+
+/// Forgets a removed module's sources and their events.
+pub fn forget_module(dir: &Path, module: &str) {
+    let mut s = load(dir);
+    s.modules.retain(|_, m| m.module != module);
+    save(dir, &s);
+}
+
+/// `host.calendar`: replaces all of a source's events (RFC 3339 times; bad ones are skipped).
+pub fn put_module_events(dir: &Path, module: &str, source: &str, events: &[island_host::proto::msg::CalendarEvent]) {
+    let mut s = load(dir);
+    let Some(src) = s.modules.get_mut(source).filter(|m| m.module == module) else { return };
+    src.events = events
+        .iter()
+        .take(2000)
+        .filter_map(|e| {
+            let (start, all_day) = parse_rfc3339(&e.start)?;
+            let end = e.end.as_deref().and_then(parse_rfc3339).map(|(t, _)| t).unwrap_or(start);
+            Some(ModuleEvent {
+                id: e.id.chars().take(200).collect(),
+                title: e.title.chars().take(200).collect(),
+                start,
+                end: end.max(start),
+                all_day: e.all_day || all_day,
+                url: e.url.clone().filter(|u| u.starts_with("https://")).unwrap_or_default(),
+                color: e.color.clone().filter(|c| c.starts_with('#') && c.len() <= 9).unwrap_or_default(),
+                kind: e.kind.clone().unwrap_or_default(),
+            })
+        })
+        .collect();
+    save(dir, &s);
+}
+
+/// Unix ms from RFC 3339 (`2026-10-27T17:00:00Z`, `…+02:00`, fractions allowed), or a bare date
+/// (`2026-10-27`, which is an all-day date at local midnight).
+pub fn parse_rfc3339(t: &str) -> Option<(i64, bool)> {
+    let t = t.trim();
+    let n = |a: usize, l: usize| t.get(a..a + l).filter(|x| x.bytes().all(|b| b.is_ascii_digit())).and_then(|x| x.parse::<i64>().ok());
+    let (y, mo, d) = (n(0, 4)?, n(5, 2)?, n(8, 2)?);
+    if t.as_bytes().get(4) != Some(&b'-') || t.as_bytes().get(7) != Some(&b'-') || !(1..=12).contains(&mo) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let days = ics::days_from_ymd(y, mo, d);
+    if t.len() == 10 {
+        return Some((ics::to_utc(days * DAY), true));
+    }
+    if !matches!(t.as_bytes().get(10), Some(b'T' | b't' | b' ')) {
+        return None;
+    }
+    let (h, mi, se) = (n(11, 2)?, n(14, 2)?, n(17, 2)?);
+    let mut rest = &t[19..];
+    let mut frac_ms = 0;
+    if let Some(r) = rest.strip_prefix('.') {
+        let digits: String = r.chars().take_while(|c| c.is_ascii_digit()).collect();
+        frac_ms = format!("{digits:0<3}")[..3].parse::<i64>().ok()?;
+        rest = &r[digits.len()..];
+    }
+    let offset_min = match rest {
+        "Z" | "z" => 0,
+        _ => {
+            let sign = match rest.as_bytes().first()? {
+                b'+' => 1,
+                b'-' => -1,
+                _ => return None,
+            };
+            let oh: i64 = rest.get(1..3)?.parse().ok()?;
+            let om: i64 = rest.get(4..6)?.parse().ok()?;
+            sign * (oh * 60 + om)
+        }
+    };
+    Some((days * DAY + ((h * 60 + mi - offset_min) * 60 + se) * 1000 + frac_ms, false))
 }
 
 /// Every event overlapping [from, to), from the sources that are switched on.
@@ -232,6 +363,23 @@ pub fn events(dir: &Path, from: i64, to: i64) -> Vec<CalEvent> {
             }
             day += 1;
         }
+    }
+    let active = ACTIVE.lock().unwrap().clone().unwrap_or_default();
+    for (id, m) in s.modules.iter().filter(|(id, _)| active.contains(*id) && on(id)) {
+        let c = color(id, &m.color);
+        out.extend(m.events.iter().filter(|e| e.start < to && e.end.max(e.start + 1) > from).map(|e| CalEvent {
+            id: format!("{id}:{}", e.id),
+            source: id.clone(),
+            title: e.title.clone(),
+            start: e.start,
+            end: e.end,
+            all_day: e.all_day,
+            color: if e.color.is_empty() { c.clone() } else { e.color.clone() },
+            location: m.name.clone(),
+            notes: String::new(),
+            url: e.url.clone(),
+            editable: false,
+        }));
     }
     out.sort_by_key(|e| (e.start, !e.all_day));
     out
@@ -326,6 +474,18 @@ pub fn delete_event(dir: &Path, id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rfc3339() {
+        assert_eq!(parse_rfc3339("2026-10-27T17:00:00Z"), Some((1_793_120_400_000, false)));
+        assert_eq!(parse_rfc3339("2026-10-27T19:00:00+02:00"), Some((1_793_120_400_000, false)));
+        assert_eq!(parse_rfc3339("2026-10-27T12:00:00.250-05:00"), Some((1_793_120_400_250, false)));
+        assert_eq!(parse_rfc3339("2026-10-27T17:00:00.5Z"), Some((1_793_120_400_500, false)));
+        assert!(parse_rfc3339("2026-10-27").is_some_and(|(_, all_day)| all_day));
+        for bad in ["", "2026-13-01T00:00:00Z", "2026/10/27", "2026-10-27T17:00:00", "2026-10-27T17:00:00+2", "tomorrow"] {
+            assert_eq!(parse_rfc3339(bad), None, "{bad}");
+        }
+    }
 
     #[test]
     fn feed_links() {

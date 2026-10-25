@@ -22,6 +22,8 @@ arboard = "3.6"
 vd-vm-core = { path = "../crates/vd-vm-core" }
 # The signed release catalog: the updater (and later the module installer) reads it.
 island-catalog = { path = "../crates/island-catalog" }
+# Runs module backends (crates/island-host) and speaks their protocol.
+island-host = { path = "../crates/island-host" }
 # Same versions Tauri uses, for WebView2 calls Tauri doesn't wrap (memory usage target).
 webview2-com = "0.39"
 windows-core-wv = { package = "windows-core", version = "0.62" }
@@ -51,6 +53,7 @@ features = [
   "Win32_Foundation",
   "Win32_Devices_Display",
   "Win32_Devices_FunctionDiscovery",
+  "Win32_Globalization",
   "Win32_Graphics_Dwm",
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",

@@ -21,6 +21,7 @@ mod installed;
 mod island;
 mod lyrics;
 mod media;
+mod modules;
 mod music;
 mod places;
 mod power;
@@ -1101,6 +1102,7 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
             if fade != shared.fullscreen_hidden.load(Ordering::Relaxed) {
                 shared.fullscreen_hidden.store(fade, Ordering::Relaxed);
                 let _ = win.emit("island:fullscreen", fade);
+                modules::publish(island_host::proto::topic::FULLSCREEN, serde_json::json!({ "active": fade }));
                 util::log_line(&format!("fullscreen fade {fade} ({})", fullscreen.unwrap_or_default()));
             }
             let hidden = shared.taskbar_hidden.load(Ordering::Relaxed);
@@ -1437,6 +1439,14 @@ fn main() {
             update_check,
             update_install,
             update_auto,
+            modules::mod_list,
+            modules::mod_call,
+            modules::mod_set_enabled,
+            modules::mod_restart,
+            modules::mod_logs,
+            modules::mod_theme,
+            modules::mod_load_folder,
+            modules::mod_remove,
             quit,
             log
         ])
@@ -1493,6 +1503,7 @@ fn main() {
             clipboard::spawn(app.handle().clone(), shared.clone());
             apps::spawn(app.handle().clone(), shared.clone());
             updater::spawn(app.handle().clone());
+            modules::init(app.handle(), &shared.dir);
             build_tray(app, shared)?;
             Ok(())
         })
@@ -1519,6 +1530,8 @@ fn main() {
             // Give the bar's reserved screen strip back.
             bar::appbar_unregister(windows::Win32::Foundation::HWND(exit_shared.island_hwnd.load(Ordering::Relaxed) as _));
             taskbar::restore(&exit_dir);
+            // Then let module backends save and stop (the job object ends any that don't).
+            modules::shutdown();
         }
     });
 }
