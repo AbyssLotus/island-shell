@@ -1,6 +1,6 @@
 # One lockfile and one target dir for the app, its crates, the modules and the tools.
 [workspace]
-members = ["src-tauri", "crates/*", "modules/*"]
+members = ["src-tauri", "crates/*", "modules/*", "tools/pack-modules"]
 resolver = "2"
 
 [profile.release]

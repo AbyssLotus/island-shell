@@ -29,6 +29,40 @@ The repo is one Cargo workspace (the root `Cargo.toml`): the app, its crates, th
 
 Tests: `cargo test --workspace` from the repo root. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`). Each one's `#[ignore = "needs …"]` says what it needs. CI (`.github/workflows/ci.yml`) runs `cargo check --workspace --all-targets` and `cargo test --workspace` on Windows for every push and pull request, plus `node --test` over `dev/tests` once that folder exists.
 
+## Releases and updates
+
+Island Shell updates itself, and its modules, from a **signed catalog** attached to every GitHub release: `modules.json` (crates/island-catalog) and its minisign signature `modules.json.minisig`. The island checks it at most once a day (Power → *Check daily*) and when asked (Power → *Check now*, or the tray's *Check for updates*). Everything it downloads is kept only if its size and sha256 match what the signed catalog says.
+
+- **Island Shell itself:** Power shows the new version; *Update* downloads the installer, runs it with `/UPDATE` and quits (the installer quits a running island first and opens the new one).
+- **Modules:** newer versions of installed modules are swapped in by the island. The old folder is kept aside until the new one is in place, and an update cut short is undone at the next start. With *Check daily* on, they update by themselves; otherwise Power shows *Update modules*.
+
+### One-time setup (the owner)
+
+1. Make the signing key, on your own PC: `cargo tauri signer generate -w %USERPROFILE%\.island\update.key`. Give it a password. Keep the key file and password safe and never commit them: anyone with them can push updates to every install.
+2. Put the **public** key it prints into `src-tauri/catalog.pub`, below the note, and commit that. Until it's there the updater stays off in every build.
+3. In the repository's Settings → Secrets and variables → Actions, add `ISLAND_SIGNING_KEY` (the whole text of the key file) and `ISLAND_SIGNING_KEY_PASSWORD`.
+
+### Making a release
+
+1. Bump the version in **both** `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the updater compares the latter), and the version in a module's `module.json` for every module that changed.
+2. Run **Actions → Release → Run workflow**, with a sentence or two of notes for the update prompt.
+   - It builds the installer and every module's backend.
+   - It runs `pack-modules`, which writes a deterministic zip per module (a module whose version is in the last release's catalog keeps that release's zip, and is refused if it changed without a version bump). It also writes the catalog with the installer in it, and signs it.
+   - It checks the signed catalog against `src-tauri/catalog.pub`, then creates a **draft** release with `IslandShellSetup.exe`, the zips, `modules.json` and `modules.json.minisig`.
+3. Review the draft and publish it. Installs see it on their next check (they read the *latest* release, so drafts are invisible to them).
+
+Without the secrets the workflow is a dry run: everything is built and packed, the catalog is left unsigned (no island accepts it), nothing is released, and the files are attached to the run instead.
+
+### Doing it by hand
+
+```
+cargo build --release --workspace --bins --exclude island-shell --exclude pack-modules
+cargo run -p pack-modules -- pack --out dist --version 0.2.0 --release-url https://github.com/AbyssLotus/island-shell/releases/download/v0.2.0 --installer "target\release\bundle\nsis\Island Shell_0.2.0_x64-setup.exe" --notes "What's new" [--previous modules.json] [--unsigned]
+cargo run -p pack-modules -- verify dist --key src-tauri\catalog.pub
+```
+
+`pack` signs with the key in `ISLAND_SIGNING_KEY` (and `ISLAND_SIGNING_KEY_PASSWORD`). `tools/pack-modules/testdata/` holds a key named `test-only` (password `test-only`) for the tool's tests; never sign a release with it.
+
 ## Layout
 
 ```

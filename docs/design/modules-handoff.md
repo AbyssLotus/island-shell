@@ -622,6 +622,9 @@ Extra conditions:
 | D5 | Modules ship on the same GitHub release as the installer, with a signed catalog | modules.md |
 | D6 | First-party modules only in v1; developer mode for unsigned folders | modules.md |
 | D7 | Port order: destiny → canvas → wallpaper-engine → vpn → games → voicemeeter → discord → music → gaze | modules.md |
+| D8 | The base updates itself through the same signed catalog (a `base` entry: version, installer link, sha256, size, notes); its update waits for a click, modules update by themselves while daily checks are on | owner, 2026-10-25 |
+| D9 | One branch for the whole modularization instead of one PR per package; the built-in "M0.5" steps are skipped, each integration goes straight to its module | owner, 2026-10-25 |
+| D10 | Backends speak JSON-RPC over their stdin/stdout (anonymous pipes, made non-inheritable) rather than a named pipe: nothing else on the PC can reach them, with no DACL or PID check needed | implementation, 2026-10-25 |
 
 ## Progress tracker
 
@@ -630,37 +633,37 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | ID | Title | Depends on | Status | PR |
 | --- | --- | --- | --- | --- |
 | M0.0 | CI on Windows | — | in review | [#1](https://github.com/AbyssLotus/island-shell/pull/1) |
-| M0.1 | Cargo workspace | M0.0 | todo | |
-| M0.2 | Dev harness | M0.0 | todo | |
-| M0.3 | Front-end registries | M0.2 | todo | |
-| M0.4 | UI-kit stylesheet | M0.3 | todo | |
-| M0.5a | Built-in: destiny | M0.4 | todo | |
-| M0.5b | Built-in: canvas | M0.5a | todo | |
-| M0.5c | Built-in: wallpaper-engine | M0.5b | todo | |
-| M0.5d | Built-in: vpn | M0.5c | todo | |
-| M0.5e | Built-in: games | M0.5d | todo | |
+| M0.1 | Cargo workspace | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.2 | Dev harness | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.3 | Front-end registries | M0.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.4 | UI-kit stylesheet | M0.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5a | Built-in: destiny | M0.4 | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5b | Built-in: canvas | M0.5a | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5c | Built-in: wallpaper-engine | M0.5b | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5d | Built-in: vpn | M0.5c | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5e | Built-in: games | M0.5d | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5f | Built-in: voicemeeter | M0.5e | todo | |
 | M0.5g | Built-in: discord | M0.5f | todo | |
 | M0.5h | Built-in: music | M0.5g | todo | |
 | M0.5i | Built-in: gaze | M0.5h | todo | |
-| M0.6 | Backend event bus | M0.0 | todo | |
+| M0.6 | Backend event bus | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.7 | Rest state | M0.3 | todo | |
-| M1.1 | Protocol and SDK crates | M0.1 | todo | |
-| M1.2 | Supervisor | M1.1 | todo | |
-| M1.3 | Module UI loading | M1.2, M0.4 | todo | |
+| M1.1 | Protocol and SDK crates | M0.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.2 | Supervisor | M1.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.3 | Module UI loading | M1.2, M0.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.4 | Modules sheet | M1.3 | todo | |
-| M1.5 | Destiny 2 module (pilot) | M1.4, M0.5a, M0.6 | todo | |
-| M2.1 | Module: canvas | M1.5, M0.5b | todo | |
-| M2.2 | Module: wallpaper-engine | M2.1, M0.5c | todo | |
-| M2.3 | Module: vpn | M2.2, M0.5d | todo | |
-| M2.4 | Module: games | M2.3, M0.5e | todo | |
+| M1.5 | Destiny 2 module (pilot) | M1.4, M0.5a, M0.6 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.1 | Module: canvas | M1.5, M0.5b | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.2 | Module: wallpaper-engine | M2.1, M0.5c | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.3 | Module: vpn | M2.2, M0.5d | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.4 | Module: games | M2.3, M0.5e | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.5 | Module: voicemeeter | M2.4, M0.5f | todo | |
 | M2.6 | Module: discord | M2.5, M0.5g | todo | |
 | M2.7 | Module: music | M2.6, M0.5h | todo | |
 | M2.8 | Module: gaze | M2.7, M0.5i | todo | |
-| M3.1 | pack-modules | M1.5 | todo | |
-| M3.2 | Install, update, remove | M3.1 | todo | |
-| M3.3 | Release workflow | M3.1 | todo | |
+| M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.2 | Install, update, remove | M3.1 | in review (no Modules sheet yet) | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.3 | Release workflow | M3.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.4 | Picking modules | M3.2 | todo | |
 | M3.5 | Migration from 0.1.x | M3.2, M2.8 | todo | |
 | M3.6 | Docs | M3.4 | todo | |

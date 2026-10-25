@@ -66,6 +66,9 @@ impl UiFiles {
     pub fn serve(&self, modules: &[ModuleInfo], cache_root: &Path, path: &str) -> Served {
         let path = decode(path.trim_start_matches('/'));
         let Some((id, rel)) = path.split_once('/') else { return Served::NotFound };
+        // `<id>@<version>/…`: the page asks for a module's files under its version, so an update's
+        // files are never mistaken for the old ones it already loaded.
+        let id = id.split_once('@').map_or(id, |(id, _)| id);
         let Some(m) = modules.iter().find(|m| m.id == id && m.enabled) else { return Served::NotFound };
         if let Some(rest) = rel.strip_prefix("~cache/") {
             let Some(mime) = mime_of(rest).filter(|m| m.starts_with("image/")) else { return Served::Forbidden("only images come from the cache".into()) };
@@ -189,6 +192,17 @@ mod tests {
         assert!(matches!(ui.serve(&mods, &cache, "/destiny/ui/destiny.js"), Served::Ok { .. }));
         let fresh = UiFiles::new();
         assert!(matches!(fresh.serve(&mods, &cache, "/destiny/ui/destiny.js"), Served::Forbidden(_)));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn versioned_paths() {
+        let (root, mods) = setup("versioned");
+        let ui = UiFiles::new();
+        let cache = root.join("cache");
+        assert!(matches!(ui.serve(&mods, &cache, "/destiny@1.0.0/ui/destiny.js"), Served::Ok { .. }));
+        assert!(matches!(ui.serve(&mods, &cache, "/destiny@1.0.0/~cache/icons/a.png"), Served::Ok { .. }));
+        assert_eq!(ui.serve(&mods, &cache, "/music@1.0.0/ui/music.js"), Served::NotFound);
         let _ = std::fs::remove_dir_all(root);
     }
 

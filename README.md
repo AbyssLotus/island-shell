@@ -97,6 +97,7 @@ There are no accounts, no telemetry and no servers of its own. Everything stays 
 | Your school's Canvas, Bungie, your calendars | Only if you connect them, with the details you enter |
 | [speed.cloudflare.com](https://speed.cloudflare.com) | Only when you run the internet benchmark |
 | Google Fonts | The island's typefaces |
+| GitHub (this repository's releases) | At most once a day, and when you ask: the signed update catalog, and the updates you install (Power → *Check daily* turns the daily check off) |
 
 The docked websites in the Command Center (Discord, DIM, your Canvas) are those websites, opened like a browser would.
 

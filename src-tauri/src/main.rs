@@ -898,6 +898,24 @@ async fn update_install(app: AppHandle) -> Result<(), String> {
     blocking(move || updater::install(&app)).await?
 }
 
+/// Updates every installed module the last check found a newer version of.
+#[tauri::command]
+async fn update_modules(app: AppHandle) -> Result<Vec<String>, String> {
+    blocking(move || updater::update_modules(&app, false)).await?
+}
+
+/// Installs a module from the release catalog.
+#[tauri::command]
+async fn mod_install(id: String, app: AppHandle) -> Result<(), String> {
+    blocking(move || updater::install_module(&app, &id)).await?
+}
+
+/// The modules the release catalog offers (read by the last check).
+#[tauri::command]
+fn mod_catalog() -> Vec<island_catalog::Module> {
+    updater::catalog_modules()
+}
+
 #[tauri::command]
 fn update_auto(on: bool, app: AppHandle) -> updater::Status {
     updater::set_auto(&app, on)
@@ -1278,6 +1296,9 @@ fn main() {
             update_check,
             update_install,
             update_auto,
+            update_modules,
+            mod_install,
+            mod_catalog,
             modules::mod_list,
             modules::mod_call,
             modules::mod_set_enabled,

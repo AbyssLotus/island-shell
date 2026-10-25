@@ -95,6 +95,10 @@ pub fn init(app: &AppHandle, dir: &Path) {
     let paths = Paths { data_root: data_root(), cache_root: cache_root(), legacy_dir: util::data_dir() };
     let sink = Arc::new(IslandSink { app: app.clone(), dir: dir.to_path_buf() });
     let sup = Supervisor::new(paths, sink, env!("CARGO_PKG_VERSION"), Timing::default());
+    // An install a crash cut short is finished or undone before anything loads.
+    for id in island_host::install::recover(&code_root()) {
+        log_line(&format!("modules: put {id} back after an interrupted update"));
+    }
     let installed = Installed::load(&installed_path());
     for (id, e) in &installed.modules {
         let folder = folder_of(id, e);
@@ -317,6 +321,49 @@ pub fn mod_remove(id: String, forget: bool, app: AppHandle, shared: tauri::State
     sync_contributions(&shared.dir);
     let _ = app.emit("mod:removed", &id);
     log_line(&format!("modules: removed {id}{}", if forget { " and its data" } else { "" }));
+    Ok(())
+}
+
+/// What's installed, by id (for the updater).
+pub fn installed_entries() -> std::collections::BTreeMap<String, Entry> {
+    Installed::load(&installed_path()).modules
+}
+
+/// Puts a module package from the catalog in place and (re)loads it: a new module comes on, an
+/// update keeps whether it was on and its own auto-update setting. If anything fails, the version
+/// that was there runs again.
+pub fn install_package(app: &AppHandle, zip: &[u8], want: &island_catalog::Module) -> Result<(), String> {
+    let pkg = island_host::package::read(zip).map_err(|e| format!("The {} package was refused: {e}", want.name))?;
+    if pkg.manifest.id != want.id || pkg.manifest.version != want.version {
+        return Err(format!("The {} package doesn't hold what the catalog says", want.name));
+    }
+    let s = sup().ok_or("Modules aren't running")?;
+    let old = Installed::load(&installed_path()).modules.get(&want.id).cloned();
+    if old.as_ref().is_some_and(|e| e.dev) {
+        return Err(format!("{} is loaded from a folder in developer mode; remove it first", want.name));
+    }
+    let enabled = old.as_ref().map_or(true, |e| e.enabled);
+    let auto_update = old.as_ref().map_or(true, |e| e.auto_update);
+    let was_loaded = s.info(&want.id).is_some();
+    // Stopped first: its exe can't be replaced while it runs.
+    s.unload(&want.id);
+    let folder = match island_host::install::install(&code_root(), &pkg) {
+        Ok(f) => f,
+        Err(e) => {
+            if was_loaded {
+                let _ = s.load(&code_root().join(&want.id), false, enabled);
+            }
+            return Err(e);
+        }
+    };
+    save_installed(|set| {
+        set.modules.insert(want.id.clone(), Entry { version: want.version.clone(), enabled, auto_update, dev: false, installed: now_rfc3339(), source: "catalog".into() });
+    })?;
+    s.load(&folder, false, enabled)?;
+    BROKEN.lock().unwrap().retain(|(b, _)| *b != want.id);
+    sync_contributions(&util::data_dir());
+    let _ = app.emit("mod:installed", serde_json::json!({ "id": want.id, "version": want.version, "updated": old.is_some() }));
+    log_line(&format!("modules: {} {} {}", if old.is_some() { "updated" } else { "installed" }, want.id, want.version));
     Ok(())
 }
 

@@ -35,7 +35,9 @@
 //   settings.mount(fn(root))        its page in the Modules sheet
 
 const BASE = () => window.__ISLAND_MOD_BASE__ || 'http://mod.localhost/';
-export const modUrl = (id, path) => `${BASE()}${id}/${path.split('/').map(encodeURIComponent).join('/')}`;
+/** A file of a module, under its version (`<id>@<version>`), so an update's files are fetched fresh
+ * rather than taken from what the page already loaded (relative imports inside keep the version). */
+export const modUrl = (id, path, version) => `${BASE()}${id}${version ? '@' + encodeURIComponent(version) : ''}/${path.split('/').map(encodeURIComponent).join('/')}`;
 
 let kitSheet = null;
 /** The kit's rules as one constructable stylesheet, built from the page's own kit.css (same origin). */
@@ -53,12 +55,12 @@ function kit() {
  * A shadow root on `host` with the kit and the module's CSS, and the element in it the module
  * mounts into (so a module setting its root's innerHTML keeps its stylesheets).
  */
-export function shadowFor(host, id, css) {
+export function shadowFor(host, id, css, version) {
   const sr = host.shadowRoot || host.attachShadow({ mode: 'open' });
   sr.adoptedStyleSheets = [kit()];
   const links = (css || []).map(c => {
     const l = document.createElement('link');
-    l.rel = 'stylesheet'; l.href = modUrl(id, c);
+    l.rel = 'stylesheet'; l.href = modUrl(id, c, version);
     return l;
   });
   const root = document.createElement('div');
@@ -75,7 +77,7 @@ export function createModuleHost(env) {
   const mods = new Map(); // id → { info, man, offs, loading, api, ctx, tabs, sections, cubes, settings }
   let seq = 1;
 
-  const iconFor = (id, ic) => (/\.svg$/.test(ic || '') ? modUrl(id, ic) : ic || 'grid');
+  const iconFor = (id, ic, version) => (/\.svg$/.test(ic || '') ? modUrl(id, ic, version) : ic || 'grid');
 
   function register(info) {
     const man = info.manifest, id = man.id, c = man.contributes || {};
@@ -83,13 +85,13 @@ export function createModuleHost(env) {
     mods.set(id, m);
     for (const t of c.tabs || []) {
       if (R.tabs.has(t.id)) { log(`modules: ${id} wants tab ${t.id}, which is taken`); continue; }
-      R.tabs.add({ id: t.id, title: t.title, icon: iconFor(id, t.icon), order: t.order, width: t.width || 760, module: id });
+      R.tabs.add({ id: t.id, title: t.title, icon: iconFor(id, t.icon, man.version), order: t.order, width: t.width || 760, module: id });
     }
     for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name, view: !!s.view });
     for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, module: id });
     for (const cube of c.cubes || []) {
       if (R.cubes.has(cube.id)) { log(`modules: ${id} wants cube ${cube.id}, which is taken`); continue; }
-      R.cubes.add({ id: cube.id, title: cube.title, icon: iconFor(id, cube.icon), size: cube.size, slot: cube.slot, module: id, site: cube.site ? `${id}:${cube.site}` : null, stat: () => (m.cubes.get(cube.id) || {}).stat?.() || '' });
+      R.cubes.add({ id: cube.id, title: cube.title, icon: iconFor(id, cube.icon, man.version), size: cube.size, slot: cube.slot, module: id, site: cube.site ? `${id}:${cube.site}` : null, stat: () => (m.cubes.get(cube.id) || {}).stat?.() || '' });
     }
     for (const h of c.hotkeys || []) if (!R.hotkeys.has(h.key)) R.hotkeys.add({ id: h.key, opens: h.opens, module: id });
     if (man.ui && man.ui.eager) activate(id);
@@ -112,7 +114,7 @@ export function createModuleHost(env) {
     if (!m.man.ui) return Promise.resolve();
     if (!m.loading) {
       m.ctx = makeCtx(m);
-      m.loading = import(modUrl(id, m.man.ui.entry))
+      m.loading = import(modUrl(id, m.man.ui.entry, m.man.version))
         .then(async api => { m.api = api; if (typeof api.activate === 'function') await api.activate(m.ctx); })
         .catch(e => { log(`modules: ${id} UI failed: ${e && e.stack || e}`); m.failed = String(e && e.message || e); throw e; });
     }
@@ -124,7 +126,7 @@ export function createModuleHost(env) {
     await activate(m.man.id);
     const def = m[kind].get(key);
     if (!def) throw new Error(`${m.man.name} didn't set up ${key}`);
-    if (!def.root) { def.root = shadowFor(host, m.man.id, m.man.ui.css); def.mount && def.mount(def.root); }
+    if (!def.root) { def.root = shadowFor(host, m.man.id, m.man.ui.css, m.man.version); def.mount && def.mount(def.root); }
     return def;
   }
 
@@ -144,7 +146,7 @@ export function createModuleHost(env) {
         get(k, d) { try { const v = localStorage.getItem(`mod.${id}.${k}`); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
         set(k, v) { try { localStorage.setItem(`mod.${id}.${k}`, JSON.stringify(v)); } catch (e) {} }
       },
-      url: path => modUrl(id, path),
+      url: path => modUrl(id, path, m.man.version),
       cacheUrl: path => modUrl(id, `~cache/${path}`),
       imageUrl: file => `${BASE()}${id}/~img/${encodeURIComponent(file)}`,
       ui: env.ui,
@@ -176,7 +178,7 @@ export function createModuleHost(env) {
               mount(host) {
                 box = Object.assign(document.createElement('div'), { className: 'mod-sheet' });
                 host.append(box);
-                const root = shadowFor(box, id, m.man.ui.css);
+                const root = shadowFor(box, id, m.man.ui.css, m.man.version);
                 root.style.height = '100%';
                 def.sheet.mount(root);
               },
@@ -267,9 +269,14 @@ export function createModuleHost(env) {
       else if (!info.enabled && had) unregister(info.id);
       else if (had) mods.get(info.id).info = info;
     });
+    // Installed, or updated: an updated module's old UI goes and the new version's comes in.
     listen('mod:installed', async () => {
       const l = await invoke('mod_list').catch(() => null);
-      for (const info of (l && l.modules) || []) if (info.enabled && info.manifest.ui && !mods.has(info.id)) register(info);
+      for (const info of (l && l.modules) || []) {
+        const had = mods.get(info.id);
+        if (had && had.man.version !== info.manifest.version) unregister(info.id);
+        if (info.enabled && info.manifest.ui && !mods.has(info.id)) register(info);
+      }
     });
     listen('mod:removed', e => unregister(e.payload));
   }

@@ -50,7 +50,9 @@ export function start(port = 5174) {
       return;
     }
     // /__harness/* is this folder, /__repo/* the repo (module folders: their UI loads from there), the rest src/.
-    const [root, rel] = pathname.startsWith('/__harness/') ? [here, pathname.slice(10)] : pathname.startsWith('/__repo/') ? [repo, pathname.slice(7)] : [src, pathname];
+    // Module files come under their version (/__repo/modules/<id>@<version>/…), like mod.localhost.
+    const plain = pathname.replace(/^\/__repo\/modules\/([a-z0-9-]+)@[^/]+\//, '/__repo/modules/$1/');
+    const [root, rel] = plain.startsWith('/__harness/') ? [here, plain.slice(10)] : plain.startsWith('/__repo/') ? [repo, plain.slice(7)] : [src, plain];
     const p = inside(root, rel);
     if (!p) { res.writeHead(403); res.end(); return; }
     file(res, p);

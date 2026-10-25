@@ -5,8 +5,10 @@
 //! Everything the island shows goes through a [`Sink`], so this crate has no Tauri in it and its
 //! tests run anywhere with a real backend process (src/bin/echo-module.rs).
 
+pub mod install;
 pub mod installed;
 mod job;
+pub mod package;
 pub mod ui;
 
 use std::collections::{HashMap, HashSet, VecDeque};

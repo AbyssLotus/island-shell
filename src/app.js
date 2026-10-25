@@ -2035,21 +2035,30 @@ function renderUpdate(u) {
     installing: 'Installing; the island will be right back',
     error: u.error || "Couldn't check for updates",
   }[u.state] || (u.checked ? `Up to date · checked ${ago(new Date(u.checked).toISOString())}` : 'Up to date');
-  txt($('#updSub'), sub);
-  $('#updSub').title = u.notes || sub;
+  // Modules: the one updating now, or the updates waiting (when they don't update by themselves).
+  const mods = u.modules || [];
+  const modLine = u.module_busy ? `Updating ${u.module_busy}…` : mods.length ? `Module updates: ${mods.map(m => `${m.name} ${m.to}`).join(', ')}` : '';
+  txt($('#updSub'), [sub, modLine].filter(Boolean).join(' · '));
+  $('#updSub').title = [u.notes || sub, modLine].filter(Boolean).join('\n');
   $('#updAuto').checked = !!u.auto; $('#updAuto').disabled = off;
-  const b = $('#updBtn');
+  const b = $('#updBtn'), modsOnly = !updReady(u) && mods.length > 0;
   b.hidden = off;
-  b.disabled = ['checking', 'downloading', 'installing'].includes(u.state);
-  setHtml(b, updReady(u) ? `${icon('download')}Update` : 'Check now');
-  b.classList.toggle('primary', updReady(u));
+  b.disabled = ['checking', 'downloading', 'installing'].includes(u.state) || !!u.module_busy;
+  setHtml(b, updReady(u) ? `${icon('download')}Update` : modsOnly ? `${icon('download')}Update modules` : 'Check now');
+  b.classList.toggle('primary', updReady(u) || modsOnly);
 }
 function toastUpdate(u) {
   toast('Update available', `Island Shell ${u.latest} · open Power to install`, 'download', { tab: 'power', top: true, ms: 6000 });
 }
 $('#updBtn').addEventListener('click', () => {
   const u = S.upd || {};
-  quiet(invoke(updReady(u) ? 'update_install' : 'update_check'));
+  quiet(invoke(updReady(u) ? 'update_install' : (u.modules || []).length ? 'update_modules' : 'update_check'));
+});
+// A module updated (by itself, or from the button) says so once.
+listen('update:module', e => {
+  const m = e.payload || {};
+  if (m.ok) toast(`${m.name} updated`, `Version ${m.version}`, 'download', { ms: 4000, sound: 'small' });
+  else toast(`${m.name} didn't update`, m.error || '', 'x', { ms: 6000, sound: 'problem' });
 });
 $('#updAuto').addEventListener('change', e => invoke('update_auto', { on: e.target.checked }).then(renderUpdate).catch(() => {}));
 invoke('update_status').then(renderUpdate).catch(() => {});
