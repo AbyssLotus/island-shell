@@ -1908,6 +1908,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "island-module"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "island-module-proto",
+ "serde",
+ "serde_json",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "island-module-proto"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "island-shell"
 version = "0.1.0"
 dependencies = [
