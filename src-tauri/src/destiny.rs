@@ -444,7 +444,7 @@ mod tests {
     /// Against Bungie's real API (checks the plumbing): the manifest index needs no key; a player
     /// search without one is refused with a readable message.
     #[test]
-    #[ignore]
+    #[ignore = "needs the network: calls bungie.net"]
     fn live_without_key() {
         crate::util::com_mta();
         let m = request("", "/Destiny2/Manifest/", None).expect("manifest");

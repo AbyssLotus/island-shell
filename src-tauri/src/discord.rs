@@ -808,7 +808,7 @@ mod tests {
 
     /// Against the running Discord app: a made-up Client ID is refused with a CLOSE frame.
     #[test]
-    #[ignore]
+    #[ignore = "needs Discord running"]
     fn live_pipe_framing() {
         let mut p = Pipe::open().expect("Discord isn't running");
         p.write(0, &json!({ "v": 1, "client_id": "1" })).unwrap();

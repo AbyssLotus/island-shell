@@ -442,7 +442,7 @@ mod tests {
 
     /// `cargo test live_vpn_status -- --ignored --nocapture` prints what the Network tab would show.
     #[test]
-    #[ignore]
+    #[ignore = "needs Tailscale or Radmin VPN: prints what the Network tab would show"]
     fn live_vpn_status() {
         println!("{}", serde_json::to_string_pretty(&status()).unwrap());
     }

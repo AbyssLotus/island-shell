@@ -314,7 +314,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its services and sessions"]
     fn live() {
         let t = std::time::Instant::now();
         let s = list(false).unwrap();

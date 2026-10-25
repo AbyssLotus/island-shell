@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs the network: looks up the iTunes catalog"]
     fn live_lookup() {
         let i = info("Blinding Lights", "The Weeknd", "After Hours").unwrap();
         println!("{} {} {} {} {}/{}", i.cover, i.year, i.genre, i.link, i.track, i.tracks);

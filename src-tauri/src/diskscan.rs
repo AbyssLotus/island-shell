@@ -550,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: scans a folder (SCAN=<path>)"]
     fn live() {
         let root = std::env::var("SCAN").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
         start(&root).unwrap();

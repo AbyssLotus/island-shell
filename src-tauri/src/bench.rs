@@ -585,7 +585,7 @@ mod tests {
 
     /// `BENCH=cpu,memory,disk,net cargo test --release bench::tests::live -- --ignored --nocapture`
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: runs the benchmarks (BENCH=cpu,memory,disk,net)"]
     fn live() {
         let kinds = std::env::var("BENCH").unwrap_or_else(|_| "cpu,memory".into());
         for k in kinds.split(',') {
