@@ -153,13 +153,14 @@ fn crashes_back_off_then_stop() {
     wait_for("activity", 5, || rec.activities.lock().unwrap().len() == 1);
     for n in 1..=2 {
         assert_eq!(sup.call(&id, "crash", Value::Null).unwrap_err().code, code::STOPPED);
-        // Its activities go with it.
+        // Its activities go with it. (The crash is counted first, so the Running below is the
+        // restarted process, not the one still on its way out.)
+        wait_for("crash counted", 5, || sup.info(&id).unwrap().crashes == n);
         wait_for("activities cleared", 5, || rec.activities.lock().unwrap().is_empty());
         wait_for("restart after backoff", 5, || state(&sup, &id) == State::Running);
         let new_pid = sup.call(&id, "pid", Value::Null).unwrap();
         assert_ne!(new_pid, pid, "crash {n} restarts the process");
         pid = new_pid;
-        assert_eq!(sup.info(&id).unwrap().crashes, n);
     }
     let _ = sup.call(&id, "crash", Value::Null);
     wait_for("failed after three crashes", 5, || state(&sup, &id) == State::Failed);
