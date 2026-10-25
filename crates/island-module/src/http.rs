@@ -22,14 +22,20 @@ pub(crate) fn set_hosts(hosts: Vec<String>, data_dir: PathBuf) {
 
 /// Ok when `url` is https and its host is one the manifest declares.
 pub fn check(url: &str) -> Result<(), String> {
+    let hosts = HOSTS.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let settings = SETTINGS.read().unwrap_or_else(|e| e.into_inner()).clone();
+    check_against(url, &hosts, settings.as_deref())
+}
+
+/// [`check`] against a given host list, with `{settings.<key>}` read from `settings` (a settings.json).
+fn check_against(url: &str, hosts: &[String], settings: Option<&std::path::Path>) -> Result<(), String> {
     let rest = url.strip_prefix("https://").ok_or_else(|| format!("{url} isn't an https link"))?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
     let host = authority.rsplit('@').next().unwrap_or("").split(':').next().unwrap_or("");
-    let mut hosts = HOSTS.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let mut hosts = hosts.to_vec();
     if hosts.iter().any(|h| settings_key(h).is_some()) {
-        let file = SETTINGS.read().unwrap_or_else(|e| e.into_inner()).clone();
-        let settings = file.and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
-        hosts = resolve_hosts(&hosts, &settings);
+        let values = settings.and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        hosts = resolve_hosts(&hosts, &values);
     }
     if host_allowed(&hosts, host) {
         Ok(())
@@ -138,19 +144,22 @@ mod tests {
 
     #[test]
     fn only_declared_hosts() {
+        // Against its own list: tests run side by side, and others set the module's real one.
         let dir = std::env::temp_dir().join(format!("island-http-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        set_hosts(vec!["*.bungie.net".into(), "lrclib.net".into(), "{settings.domain}".into()], dir.clone());
+        let file = dir.join("settings.json");
+        let hosts = vec!["*.bungie.net".to_string(), "lrclib.net".to_string(), "{settings.domain}".to_string()];
+        let check = |url: &str| check_against(url, &hosts, Some(&file));
         assert!(check("https://www.bungie.net/Platform/Destiny2/Manifest/").is_ok());
         assert!(check("https://lrclib.net/api/get?x=1").is_ok());
         assert!(check("https://user@lrclib.net:443/api").is_ok());
         assert!(check("http://lrclib.net/").is_err());
         assert!(check("https://evil.example/https://lrclib.net").is_err());
         assert!(check("https://lrclib.net.evil.example/").is_err());
-        assert!(Request::get("https://example.com/").send().unwrap_err().contains("doesn't declare"));
+        assert!(check("https://example.com/").unwrap_err().contains("doesn't declare"));
         // The user's own host, once it's in settings.json.
         assert!(check("https://canvas.school.edu/api/v1/users/self").is_err());
-        std::fs::write(dir.join("settings.json"), r#"{ "domain": "canvas.school.edu" }"#).unwrap();
+        std::fs::write(&file, r#"{ "domain": "canvas.school.edu" }"#).unwrap();
         assert!(check("https://canvas.school.edu/api/v1/users/self").is_ok());
         assert!(check("https://school.edu/").is_err());
         let _ = std::fs::remove_dir_all(&dir);
