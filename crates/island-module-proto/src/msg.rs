@@ -200,6 +200,9 @@ pub struct Notify {
     /// Which notification sound (sounds.js), if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sound: Option<String>,
+    /// Shows above windows (urgent ones show above fullscreen apps too).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub top: bool,
 }
 
 /// `host.activity`: a live item on the pill (§4.8). `{ id, clear: true }` removes it.
@@ -263,6 +266,12 @@ pub struct CalendarEvent {
     /// "due", "event" or "reset".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Shown where an event's place goes, such as a course (default: the source's name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+    /// A short note under it, such as "Done" or "Missing".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 /// `host.log`.

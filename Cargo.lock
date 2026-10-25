@@ -424,6 +424,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "canvas-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

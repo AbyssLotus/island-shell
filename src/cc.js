@@ -1,7 +1,7 @@
 // The Command Center (Win + Space): Island Shell's full-screen mode for going anywhere on the PC.
 // A black eclipse leaking plasma and Taken light, with the clock and search inside it; the island's
 // sections float around it as cubes, and each opens as a full-size glass sheet: the island's own view
-// of it, or the real website docked in (Discord's web app, your Canvas, a module's site like DIM). It grows out of the pill:
+// of it, or the real website docked in (Discord's web app, or a module's site like your Canvas or DIM). It grows out of the pill:
 // while it's open the island's window covers the whole monitor (cc_mode) and stays on top
 // (island_rect with urgent).
 //
@@ -121,11 +121,10 @@ export function createCommandCenter(ctx) {
   const gms = createGames({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), games: ctx.games });
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
-  [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'], ['canvas', 'Canvas', 'cap'],
+  [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
     ['games', 'Games', 'gamepad'], ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
-    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: { discord: 'discord', canvas: 'canvas' }[id] || null }));
+    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: id === 'discord' ? 'discord' : null }));
   REG.sites.add({ id: 'discord', site: 'discord', label: 'Discord app', default: true });
-  REG.sites.add({ id: 'canvas', site: 'canvas', label: 'Canvas website', default: false, ready: () => !!(S.cv && S.cv.configured), why: 'Connect Canvas in its island view first' });
   for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus, games: gms })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
@@ -355,7 +354,6 @@ export function createCommandCenter(ctx) {
       case 'discord': return dc && dc.voice ? `${dc.voice.members.length} in ${dc.voice.name}` : dc && dc.connected ? 'Connected' : 'Not connected';
       case 'audio': return S.audio ? `${S.audio.device} · ${S.audio.muted ? 'muted' : Math.round(S.audio.level * 100) + '%'}` : 'Sound';
       case 'today': { if (nextEv) { const d = new Date(nextEv.start), sameDay = d.toDateString() === new Date().toDateString(); return `${nextEv.all_day ? (sameDay ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })) : (sameDay ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${nextEv.title}`; } const w = store.get('weather', null); return w ? `${Math.round(S.unit === 'C' ? w.temp : w.temp * 9 / 5 + 32)}° · ${w.name || ''}` : 'Weather & to-dos'; }
-      case 'canvas': { const n = S.cvData && S.cvData.upcoming.find(t => !t.done && !t.submitted); return n ? `Next: ${n.title}` : 'Due dates'; }
       case 'games': return `${games.length} games`;
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
       case 'clipboard': return `${(S.clips || []).length} items`;

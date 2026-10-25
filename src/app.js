@@ -111,9 +111,9 @@ $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 /* ---------- tabs (src/registry.js) ---------- */
 const R = createRegistry();
 // The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
-// (src/modhost.js), slotting in by order: Destiny's 90 keeps it between Games and Stats.
+// (src/modhost.js), slotting in by order: Canvas's 50 and Destiny's 90 keep their old places.
 [['controls', 'Controls', 'gear', 600, 10], ['music', 'Music', 'note', 700, 20], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
-  ['canvas', 'Canvas', 'cap', 760, 50], ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70], ['games', 'Games', 'gamepad', 760, 80],
+  ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70], ['games', 'Games', 'gamepad', 760, 80],
   ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
   ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
   .forEach(([id, title, ic, width, order]) => R.tabs.add({ id, title, icon: ic, width, order }));
@@ -287,7 +287,6 @@ function onTabShown(t) {
   if (t === 'stats') statsLoop();
   if (t === 'network') { renderVpn(); vpnLoop(); }
   if (t === 'discord') loadDc();
-  if (t === 'canvas') cvLoop();
   if (t === 'games') gamesLoop();
   if (t === 'wallpaper') showWallpapers();
   if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } syncVmLevels(); }
@@ -1386,125 +1385,6 @@ $('#dcDeaf').addEventListener('click', () => { if (S.dc) { S.dc.deaf = !S.dc.dea
 $('#dcLeave').addEventListener('click', () => dcAction('leave'));
 $('#dcPresence').addEventListener('change', e => invoke('discord_options', { presence: e.target.checked }).catch(err => note('#dcNote', String(err))));
 $('#dcNotify').addEventListener('change', e => invoke('discord_options', { notify: e.target.checked }).catch(err => note('#dcNote', String(err))));
-
-/* ---------- Canvas (school LMS, with the user's own token; see canvas.rs) ---------- */
-S.cv = null; S.cvData = null; S.cvEdit = false; S.cvT = 0; S.cvSetup = store.get('cvSetup', 'feed');
-// Courses without a Canvas color (the calendar feed has none) get one from this set.
-const CV_COLORS = ['#4f8cf7', '#e8704a', '#7fd99a', '#c07fe0', '#f5b45b', '#5bc8d8', '#f07aa0', '#a3b86c'];
-const cvCourse = id => (S.cvData && S.cvData.courses.find(c => c.id === id)) || {};
-const cvColor = id => cvCourse(id).color || (id ? CV_COLORS[id % CV_COLORS.length] : 'var(--faint)');
-const KIND = { assignment: 'Assignment', quiz: 'Quiz', discussion_topic: 'Discussion', wiki_page: 'Page', planner_note: 'To-do', calendar_event: 'Event', assessment_request: 'Peer review' };
-async function cvLoop() {
-  clearTimeout(S.cvT);
-  if (S.mode !== 'panel' || S.tab !== 'canvas') return;
-  try { S.cv = await invoke('canvas_status'); } catch (e) { return; }
-  if (S.cv.configured && !S.cvEdit) {
-    if (!S.cvData) { renderCv(); $('#cvWait').hidden = false; layout(); }
-    try { S.cvData = await invoke('canvas_overview'); note('#cvNote', ''); } catch (e) { note('#cvNote', String(e)); }
-    $('#cvWait').hidden = true;
-  }
-  renderCv();
-  S.cvT = setTimeout(cvLoop, 120000);
-}
-function cvStatus(t) {
-  if (t.graded) return ['Graded', 'ok'];
-  if (t.submitted) return [t.late ? 'Submitted late' : 'Submitted', 'ok'];
-  if (t.missing) return ['Missing', 'bad'];
-  const left = Date.parse(t.due) - Date.now();
-  if (left > 0 && left < 864e5 && !t.done) return [left < 36e5 ? `${Math.max(1, Math.round(left / 6e4))} min left` : `${Math.round(left / 36e5)}h left`, 'warn'];
-  return null;
-}
-function cvRow(t, i, list) {
-  const d = new Date(t.due), c = cvCourse(t.course_id), st = cvStatus(t);
-  const when = isNaN(d) ? '' : t.all_day ? 'All day' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const sub = [KIND[t.kind] || '', c.code || c.name || '', list === 'missing' && !isNaN(d) ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : when, t.points ? `${t.points} pts` : ''].filter(Boolean).join(' · ');
-  return `<div class="cv-row${t.done ? ' done' : ''}" data-list="${list}" data-i="${i}" title="${esc(t.title)}"><button class="cv-check" type="button" aria-pressed="${!!t.done}" title="${t.done ? 'Mark not done' : 'Mark done'}${S.cvData && S.cvData.limited ? ' (on this PC)' : ''}" aria-label="Done">${icon('check')}</button><span class="cv-bar" style="background:${esc(cvColor(t.course_id))}"></span><div><b>${esc(t.title)}</b><small>${esc(sub)}</small></div>${st ? `<span class="cv-chip ${st[1]}">${esc(st[0])}</span>` : '<span></span>'}</div>`;
-}
-const dayLabel = d => { const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(d); b.setHours(0, 0, 0, 0); const n = Math.round((b - a) / 864e5); return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : b.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }); };
-function renderCv() {
-  const st = S.cv || {}, setup = !st.configured || S.cvEdit;
-  $('#cvSetup').hidden = !setup; $('#cvMain').hidden = setup || !S.cvData;
-  if (setup) {
-    if (st.configured && st.mode) S.cvSetup = st.mode === 'feed' && !S.cvSetupPicked ? 'feed' : S.cvSetup;
-    $$('#cvMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.cvSetup));
-    $$('#cvSetup [data-cv]').forEach(el => { el.hidden = el.dataset.cv !== S.cvSetup; });
-    const dom = $('#cvDomain'); if (!dom.value && st.domain) dom.value = st.domain;
-    $('#cvFeed').placeholder = st.configured && st.mode === 'feed' ? 'Feed link (saved; paste a new one to replace it)' : 'https://school.instructure.com/feeds/calendars/user_….ics';
-    $('#cvToken').placeholder = st.configured ? 'Access token (saved; blank keeps it)' : 'Access token';
-    $('#cvBack').hidden = !st.configured; $('#cvForget').hidden = !st.configured;
-    if (S.mode === 'panel' && S.tab === 'canvas') layout();
-    return;
-  }
-  const o = S.cvData; if (!o) return;
-  txt($('#cvWho'), [o.name, o.domain, o.limited ? 'calendar feed: due dates only' : ''].filter(Boolean).join(' · '));
-  $('#cvGrades').hidden = $('#cvAnn').hidden = o.limited;
-  $('#cvCourses').hidden = !o.limited;
-  if (o.limited) {
-    // The feed has no grades: show each course's load for the coming week instead.
-    const week = Date.now() + 7 * 864e5;
-    setHtml($('#cvCourses'), `<header><b>Courses</b><small>next 7 days</small></header>` + (o.courses.length ? o.courses.map(c => {
-      const due = o.upcoming.filter(t => t.course_id === c.id && !t.done && Date.parse(t.due) < week), next = due[0];
-      return `<div class="cv-course" data-url="${esc(c.url)}" title="${esc(c.name)}"><span class="cv-bar" style="background:${esc(cvColor(c.id))}"></span><div><b>${esc(c.name)}</b><small>${next ? `next: ${esc(next.title)} · ${esc(dayLabel(next.due))}` : 'nothing due this week'}</small></div><em>${due.length || ''}</em></div>`;
-    }).join('') : '<p class="empty">No courses in the feed.</p>'));
-  }
-  const miss = $('#cvMissing');
-  miss.hidden = !o.missing.length;
-  setHtml(miss, o.missing.length ? `<header><b>Missing</b><small>${o.missing.length}</small></header><div class="cv-scroll">${o.missing.map((t, i) => cvRow(t, i, 'missing')).join('')}</div>` : '');
-  let last = '', rows = '';
-  o.upcoming.forEach((t, i) => { const l = dayLabel(t.due); if (l !== last) { rows += `<div class="cv-day">${esc(l)}</div>`; last = l; } rows += cvRow(t, i, 'upcoming'); });
-  const open = o.upcoming.filter(t => !t.done && !t.submitted && !t.graded).length;
-  setHtml($('#cvUp'), `<header><b>Coming up</b><small>${open ? `${open} to do` : 'All caught up'}</small></header>` + (rows ? `<div class="cv-scroll">${rows}</div>` : '<p class="empty">Nothing due in the next three weeks.</p>'));
-  setHtml($('#cvGrades'), `<header><b>Grades</b><small>current</small></header>` + (o.courses.length ? o.courses.map(c => `<div class="cv-course" data-url="${esc(c.url + '/grades')}" title="${esc(c.name)}"><span class="cv-bar" style="background:${esc(c.color || 'var(--accent)')}"></span><div><b>${esc(c.code || c.name)}</b><small>${esc(c.code ? c.name : '')}</small></div><em>${c.score != null ? `${c.score.toFixed(1)}%` : '–'}${c.grade ? `<small> ${esc(c.grade)}</small>` : ''}</em></div>`).join('') : '<p class="empty">No active courses.</p>'));
-  setHtml($('#cvAnn'), `<header><b>Announcements</b><small>last 3 weeks</small></header>` + (o.announcements.length ? o.announcements.slice(0, 5).map(a => { const c = cvCourse(a.course_id); return `<div class="cv-an" data-url="${esc(a.url)}"><div><i style="background:${esc(c.color || 'var(--accent)')}"></i><b>${esc(a.title)}</b></div><small>${esc(c.code || c.name || '')} · ${esc(ago(a.posted))}</small>${a.preview ? `<p>${esc(a.preview)}</p>` : ''}</div>`; }).join('') : '<p class="empty">No recent announcements.</p>'));
-  if (S.mode === 'panel' && S.tab === 'canvas') layout();
-}
-$('#cvMain').addEventListener('click', e => {
-  const check = e.target.closest('.cv-check'), row = e.target.closest('.cv-row');
-  if (check && row) {
-    const t = S.cvData[row.dataset.list][+row.dataset.i]; if (!t) return;
-    t.done = !t.done; renderCv();
-    invoke('canvas_done', { key: t.key, kind: t.kind, id: t.id, overrideId: t.override_id, done: t.done })
-      .then(id => { if (id) t.override_id = id; }).catch(err => { t.done = !t.done; renderCv(); note('#cvNote', String(err)); });
-    return;
-  }
-  const url = row ? (S.cvData[row.dataset.list][+row.dataset.i] || {}).url : (e.target.closest('[data-url]') || {}).dataset?.url;
-  if (url) invoke('canvas_open', { url }).then(() => closePanel(true)).catch(err => note('#cvNote', String(err)));
-});
-$('#cvForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const domain = $('#cvDomain').value.trim(), token = $('#cvToken').value.trim();
-  if (!domain) { note('#cvNote', 'Add your school’s Canvas address first.'); return; }
-  note('#cvNote', ''); $('#cvSave').disabled = true;
-  invoke('canvas_configure', { domain, token }).then(st => {
-    $('#cvToken').value = ''; S.cv = st; S.cvEdit = false; S.cvData = null; cvLoop();
-  }).catch(err => note('#cvNote', String(err))).finally(() => { $('#cvSave').disabled = false; });
-});
-$('#cvFeedForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const url = $('#cvFeed').value.trim();
-  if (!url) { note('#cvNote', 'Paste the calendar feed link first.'); return; }
-  note('#cvNote', ''); $('#cvFeedSave').disabled = true;
-  invoke('canvas_configure_feed', { url }).then(st => {
-    $('#cvFeed').value = ''; S.cv = st; S.cvEdit = false; S.cvData = null; cvLoop();
-  }).catch(err => note('#cvNote', String(err))).finally(() => { $('#cvFeedSave').disabled = false; });
-});
-$('#cvMode').addEventListener('click', e => {
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  S.cvSetup = b.dataset.mode; S.cvSetupPicked = true; store.set('cvSetup', S.cvSetup); note('#cvNote', ''); renderCv();
-});
-$('#cvEdit').addEventListener('click', () => { S.cvEdit = true; renderCv(); });
-$('#cvBack').addEventListener('click', () => { S.cvEdit = false; $('#cvToken').value = ''; renderCv(); });
-$('#cvForget').addEventListener('click', () => {
-  const b = $('#cvForget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget';
-  invoke('canvas_forget').then(() => { S.cvEdit = false; S.cvData = null; $('#cvDomain').value = ''; $('#cvFeed').value = ''; cvLoop(); });
-});
-// Due-soon reminders show on top of everything (fullscreen games too); grades and announcements above windows.
-listen('canvas:notify', e => {
-  const n = e.payload || {};
-  toast(clipTxt(n.title, 48), clipTxt(n.body, 72), 'cap', { urgent: !!n.urgent, top: true, ms: n.urgent ? 8000 : 5500, tab: 'canvas', sound: n.urgent ? 'urgent' : 'canvas' });
-});
 
 function note(id, msg) { const n = $(id); n.textContent = msg || ''; n.hidden = !msg; layout(); }
 function renderControls() {

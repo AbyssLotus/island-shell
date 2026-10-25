@@ -285,10 +285,10 @@
    "name": "Canvas",
    "color": "#f5c26b",
    "on": true,
-   "kind": "canvas"
+   "kind": "module"
   }
  ],
- "canvas_status": {
+ "mod:canvas.status": {
   "configured": false
  },
  "mod:destiny.status": {

@@ -363,8 +363,34 @@ pub fn valid_target(t: &str) -> bool {
 
 /// `example.com` or `*.example.com`.
 pub fn valid_host_pattern(h: &str) -> bool {
-    let name = h.strip_prefix("*.").unwrap_or(h);
+    if settings_key(h).is_some() {
+        return true;
+    }
+    valid_host(h.strip_prefix("*.").unwrap_or(h))
+}
+
+/// A plain host name: lowercase labels with a dot somewhere.
+pub fn valid_host(name: &str) -> bool {
     name.contains('.') && name.split('.').all(|l| !l.is_empty() && l.len() <= 63 && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'))
+}
+
+/// `{settings.<key>}`: a host the user chose (a school's Canvas address), read from the module's
+/// settings.json when it's needed.
+pub fn settings_key(pattern: &str) -> Option<&str> {
+    let key = pattern.strip_prefix("{settings.")?.strip_suffix('}')?;
+    (!key.is_empty() && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')).then_some(key)
+}
+
+/// Host patterns with `{settings.<key>}` filled in from `settings` (left out while unset or not a
+/// plain host name).
+pub fn resolve_hosts(patterns: &[String], settings: &serde_json::Value) -> Vec<String> {
+    patterns
+        .iter()
+        .filter_map(|p| match settings_key(p) {
+            Some(k) => settings[k].as_str().map(|v| v.trim().to_ascii_lowercase()).filter(|v| valid_host(v)),
+            None => Some(p.clone()),
+        })
+        .collect()
 }
 
 /// Whether `host` is allowed by a list of patterns (`*.x.com` also matches `x.com`).
@@ -473,6 +499,11 @@ mod tests {
         assert!(!host_allowed(&p, "evilbungie.net"));
         assert!(!host_allowed(&p, "api.lrclib.net"));
         assert!(valid_host_pattern("*.instructure.com") && !valid_host_pattern("*") && !valid_host_pattern("localhost") && !valid_host_pattern("Ex.com"));
+        assert!(valid_host_pattern("{settings.domain}") && !valid_host_pattern("{settings.}") && !valid_host_pattern("{settings.a.b}"));
+        let pats = vec!["*.instructure.com".to_string(), "{settings.domain}".to_string()];
+        assert_eq!(resolve_hosts(&pats, &serde_json::json!({ "domain": "Canvas.School.edu" })), vec!["*.instructure.com", "canvas.school.edu"]);
+        assert_eq!(resolve_hosts(&pats, &serde_json::json!({})), vec!["*.instructure.com"]);
+        assert_eq!(resolve_hosts(&pats, &serde_json::json!({ "domain": "evil.com/x" })), vec!["*.instructure.com"]);
     }
 
     #[test]

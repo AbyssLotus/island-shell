@@ -258,59 +258,6 @@
         </div>
       </section>
 
-      <section class="view" id="v-canvas" data-tab="canvas" role="tabpanel" aria-labelledby="tab-canvas">
-        <div id="cvSetup" hidden>
-          <div class="card dc-setup">
-            <div class="vpn-head">
-              <span class="vpn-logo"><i data-ic="cap"></i></span>
-              <div class="vpn-title"><b>Connect Canvas</b><small>Due dates, grades and announcements from your school's Canvas</small></div>
-              <button class="btn" type="button" id="cvBack" hidden>Cancel</button>
-            </div>
-            <div class="seg" id="cvMode" role="group" aria-label="How to connect">
-              <button type="button" data-mode="feed">Calendar feed</button>
-              <button type="button" data-mode="token">Access token</button>
-            </div>
-            <ol class="dc-steps" data-cv="feed">
-              <li>In Canvas, open <b>Calendar</b> and click <b>Calendar Feed</b> (bottom right of the page).</li>
-              <li>Copy the link it shows (it ends in <code>.ics</code>) and paste it here. No access token or admin approval needed.</li>
-            </ol>
-            <form class="dc-form" id="cvFeedForm" data-cv="feed" autocomplete="off">
-              <input class="field" id="cvFeed" type="password" placeholder="https://school.instructure.com/feeds/calendars/user_….ics" spellcheck="false" aria-label="Canvas calendar feed link">
-              <button class="btn primary" type="submit" id="cvFeedSave">Connect</button>
-            </form>
-            <ol class="dc-steps" data-cv="token">
-              <li>Your school's <b>Canvas address</b>: what's in the browser's address bar on Canvas, like <code>school.instructure.com</code>.</li>
-              <li>In Canvas, open <b>Account → Settings</b>, click <b>+ New Access Token</b>, name it "Island Shell" and copy the token (Canvas shows it only once).</li>
-            </ol>
-            <form class="dc-form" id="cvForm" data-cv="token" autocomplete="off">
-              <input class="field" id="cvDomain" placeholder="school.instructure.com" spellcheck="false" aria-label="Canvas address">
-              <input class="field" id="cvToken" type="password" placeholder="Access token" spellcheck="false" aria-label="Canvas access token">
-              <button class="btn primary" type="submit" id="cvSave">Connect</button>
-            </form>
-            <div class="dc-fine"><span data-cv="feed">The feed has due dates and course events only: no grades, submission status or announcements, and Done ticks are kept on this PC. The link is stored encrypted for your Windows account only.</span><span data-cv="token">The token is stored encrypted for your Windows account only. No token button in Settings means your school has turned them off; use the calendar feed.</span><span class="grow"></span><button class="dc-link" type="button" id="cvForget" hidden>Forget</button></div>
-          </div>
-        </div>
-        <div id="cvMain" hidden>
-          <div class="v-head">
-            <b>Canvas</b><small id="cvWho"></small><span class="grow"></span>
-            <button class="ib" type="button" id="cvEdit" title="Canvas settings" aria-label="Canvas settings"><i data-ic="gear"></i></button>
-          </div>
-          <div class="cv-grid">
-            <div class="cv-col">
-              <div class="card cv-list cv-missing" id="cvMissing" hidden></div>
-              <div class="card cv-list" id="cvUp"></div>
-            </div>
-            <div class="cv-col">
-              <div class="card cv-grades" id="cvCourses" hidden></div>
-              <div class="card cv-grades" id="cvGrades"></div>
-              <div class="card cv-ann" id="cvAnn"></div>
-            </div>
-          </div>
-        </div>
-        <p class="empty" id="cvWait" hidden>Loading Canvas…</p>
-        <p class="note" id="cvNote" hidden></p>
-      </section>
-
       <section class="view" id="v-network" data-tab="network" role="tabpanel" aria-labelledby="tab-network">
         <div class="net-now" id="netNow"></div>
         <div class="vpn-grid">

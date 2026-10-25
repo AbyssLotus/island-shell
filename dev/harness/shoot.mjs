@@ -16,7 +16,7 @@ const out = path.join(here, 'out');
 // name → query string. The island window is 820×660 (tauri.conf.json); the Command Center is full screen.
 export const SHOTS = {
   pill: '',
-  controls: 'tab=controls', music: 'tab=music', audio: 'tab=audio', today: 'tab=today', canvas: 'tab=canvas',
+  controls: 'tab=controls', music: 'tab=music', audio: 'tab=audio', today: 'tab=today', canvas: 'tab=canvas', 'canvas-on': 'tab=canvas&scenario=canvas',
   network: 'tab=network', discord: 'tab=discord', games: 'tab=games', destiny: 'tab=destiny', 'destiny-on': 'tab=destiny&scenario=destiny', stats: 'tab=stats',
   clipboard: 'tab=clipboard', apps: 'tab=apps', wallpaper: 'tab=wallpaper', power: 'tab=power',
   'power-update': 'tab=power&scenario=update',

@@ -6,7 +6,6 @@ mod audio;
 mod bar;
 mod bench;
 mod calendar;
-mod canvas;
 mod clipboard;
 mod conns;
 mod diskscan;
@@ -484,7 +483,7 @@ fn cc_web(query: String) -> Result<(), String> {
     util::open_web(&format!("https://www.google.com/search?q={}", util::url_encode(query.trim())))
 }
 
-/// Docks a website (discord, canvas, or a module's site) over the given CSS-pixel rectangle of the Command Center.
+/// Docks a website (discord, or a module's site such as canvas/web) over the given CSS-pixel rectangle of the Command Center.
 /// `skin` (Discord only, default on) dresses Discord in the island skin.
 #[tauri::command]
 async fn cc_embed(site: String, x: f64, y: f64, w: f64, h: f64, skin: Option<bool>, app: AppHandle, shared: Shr<'_>) -> Result<(), String> {
@@ -706,49 +705,6 @@ async fn tm_startup() -> Result<Vec<taskmgr::Startup>, String> {
 #[tauri::command]
 async fn tm_startup_set(id: String, on: bool) -> Result<Vec<taskmgr::Startup>, String> {
     blocking(move || taskmgr::set_startup(&id, on).map(|_| taskmgr::startup())).await?
-}
-
-/// Canvas (school LMS) with the user's own access token (see canvas.rs).
-#[tauri::command]
-fn canvas_status(shared: Shr) -> canvas::Status {
-    canvas::status(&shared.dir)
-}
-
-/// Saves the Canvas address and token (kept if left blank) after checking them with Canvas.
-#[tauri::command]
-async fn canvas_configure(domain: String, token: String, shared: Shr<'_>) -> Result<canvas::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::configure(&dir, &domain, &token)).await?
-}
-
-/// Links Canvas through its calendar feed link instead of a token.
-#[tauri::command]
-async fn canvas_configure_feed(url: String, shared: Shr<'_>) -> Result<canvas::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::configure_feed(&dir, &url)).await?
-}
-
-#[tauri::command]
-async fn canvas_overview(shared: Shr<'_>) -> Result<canvas::Overview, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::overview(&dir)).await?
-}
-
-/// Ticks a planner item off (or back on); returns the planner override's id.
-#[tauri::command]
-async fn canvas_done(key: String, kind: String, id: u64, override_id: Option<u64>, done: bool, shared: Shr<'_>) -> Result<Option<u64>, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::set_done(&dir, &key, &kind, id, override_id, done)).await?
-}
-
-#[tauri::command]
-fn canvas_open(url: String, shared: Shr) -> Result<(), String> {
-    canvas::open(&shared.dir, &url)
-}
-
-#[tauri::command]
-fn canvas_forget(shared: Shr) {
-    canvas::forget(&shared.dir);
 }
 
 /// The Voicemeeter mixer (null while Voicemeeter isn't running or installed).
@@ -1317,7 +1273,6 @@ fn main() {
             calendar_save,
             calendar_delete,
             open_link,
-            canvas_status,
             tm_snapshot,
             music_info,
             tm_end,
@@ -1343,12 +1298,6 @@ fn main() {
             bench_status,
             bench_cancel,
             tm_startup_set,
-            canvas_configure,
-            canvas_configure_feed,
-            canvas_overview,
-            canvas_done,
-            canvas_open,
-            canvas_forget,
             vm_set,
             vm_levels,
             vm_restart,
@@ -1455,7 +1404,6 @@ fn main() {
             applemusic::spawn();
             voicemeeter::spawn(app.handle().clone());
             discord::spawn(app.handle().clone(), shared.clone());
-            canvas::spawn(app.handle().clone(), shared.dir.clone());
             embed::spawn_reaper(app.handle().clone());
             gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze, settings.gaze_pause);
             spawn_meter(win.clone(), shared.clone());

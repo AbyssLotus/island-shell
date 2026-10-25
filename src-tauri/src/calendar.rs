@@ -86,6 +86,10 @@ struct ModuleEvent {
     color: String,
     #[serde(default)]
     kind: String,
+    #[serde(default)]
+    location: String,
+    #[serde(default)]
+    notes: String,
 }
 
 /// Module sources whose module is installed and on (the rest stay cached but hidden).
@@ -109,7 +113,7 @@ fn save(dir: &Path, s: &Saved) {
 pub struct Source {
     pub id: String,
     pub name: String,
-    /// "local", "feed", "canvas" or "module".
+    /// "local", "feed" or "module".
     pub kind: String,
     pub color: String,
     pub on: bool,
@@ -141,19 +145,15 @@ fn feed_events(f: &Feed) -> Result<Vec<VEvent>, String> {
             return r.clone();
         }
     }
-    let r = crate::canvas::fetch(&unprotect(&f.url)).and_then(|text| {
+    let r = ics::fetch(&unprotect(&f.url)).and_then(|text| {
         if text.contains("BEGIN:VCALENDAR") { Ok(ics::parse(&text)) } else { Err("That link didn't return a calendar".into()) }
     });
     FEEDS.lock().unwrap().get_or_insert_with(HashMap::new).insert(f.id.clone(), (Instant::now(), r.clone()));
     r
 }
 
-fn builtin(dir: &Path) -> Vec<(&'static str, &'static str, &'static str)> {
-    let mut v = vec![("local", "My events", "#c9e9ff")];
-    if crate::canvas::status(dir).configured {
-        v.push(("canvas", "Canvas", "#f5c26b"));
-    }
-    v
+fn builtin() -> Vec<(&'static str, &'static str, &'static str)> {
+    vec![("local", "My events", "#c9e9ff")]
 }
 
 pub fn sources(dir: &Path) -> Vec<Source> {
@@ -164,7 +164,7 @@ pub fn sources(dir: &Path) -> Vec<Source> {
         .as_ref()
         .map(|m| m.iter().filter_map(|(k, (_, r))| r.as_ref().err().map(|e| (k.clone(), e.clone()))).collect())
         .unwrap_or_default();
-    let mut out: Vec<Source> = builtin(dir)
+    let mut out: Vec<Source> = builtin()
         .into_iter()
         .map(|(id, name, color)| Source { id: id.into(), name: name.into(), kind: id.into(), color: s.colors.get(id).cloned().unwrap_or_else(|| color.into()), on: !s.hidden.iter().any(|h| h == id), error: String::new() })
         .collect();
@@ -224,6 +224,8 @@ pub fn put_module_events(dir: &Path, module: &str, source: &str, events: &[islan
                 url: e.url.clone().filter(|u| u.starts_with("https://")).unwrap_or_default(),
                 color: e.color.clone().filter(|c| c.starts_with('#') && c.len() <= 9).unwrap_or_default(),
                 kind: e.kind.clone().unwrap_or_default(),
+                location: e.location.as_deref().unwrap_or("").chars().take(120).collect(),
+                notes: e.notes.as_deref().unwrap_or("").chars().take(200).collect(),
             })
         })
         .collect();
@@ -324,31 +326,6 @@ pub fn events(dir: &Path, from: i64, to: i64) -> Vec<CalEvent> {
             }
         }
     }
-    if on("canvas") && crate::canvas::status(dir).configured {
-        if let Ok(o) = crate::canvas::overview(dir) {
-            let c = color("canvas", "#f5c26b");
-            for t in o.upcoming.iter().chain(o.missing.iter()) {
-                let Some(due) = crate::canvas::parse_iso(&t.due) else { continue };
-                if due < from || due >= to {
-                    continue;
-                }
-                let course = o.courses.iter().find(|x| x.id == t.course_id);
-                out.push(CalEvent {
-                    id: format!("canvas:{}", t.key),
-                    source: "canvas".into(),
-                    title: t.title.clone(),
-                    start: due,
-                    end: due,
-                    all_day: t.all_day,
-                    color: course.map(|x| x.color.clone()).filter(|x| !x.is_empty()).unwrap_or_else(|| c.clone()),
-                    location: course.map(|x| if x.code.is_empty() { x.name.clone() } else { x.code.clone() }).unwrap_or_default(),
-                    notes: if t.done || t.submitted { "Done".into() } else if t.missing { "Missing".into() } else { String::new() },
-                    url: t.url.clone(),
-                    editable: false,
-                });
-            }
-        }
-    }
     let active = ACTIVE.lock().unwrap().clone().unwrap_or_default();
     for (id, m) in s.modules.iter().filter(|(id, _)| active.contains(*id) && on(id)) {
         let c = color(id, &m.color);
@@ -360,8 +337,8 @@ pub fn events(dir: &Path, from: i64, to: i64) -> Vec<CalEvent> {
             end: e.end,
             all_day: e.all_day,
             color: if e.color.is_empty() { c.clone() } else { e.color.clone() },
-            location: m.name.clone(),
-            notes: String::new(),
+            location: if e.location.is_empty() { m.name.clone() } else { e.location.clone() },
+            notes: e.notes.clone(),
             url: e.url.clone(),
             editable: false,
         }));
@@ -379,7 +356,7 @@ fn clean_url(url: &str) -> Option<String> {
 
 pub fn add_feed(dir: &Path, name: &str, url: &str) -> Result<Vec<Source>, String> {
     let url = clean_url(url).ok_or("Paste the calendar's iCal link (it starts with https:// or webcal://)")?;
-    let text = crate::canvas::fetch(&url)?;
+    let text = ics::fetch(&url)?;
     if !text.contains("BEGIN:VCALENDAR") {
         return Err("That link didn't return a calendar. Use the private or public iCal (.ics) address".into());
     }

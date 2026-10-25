@@ -1,0 +1,45 @@
+/* Canvas's tab (ui/canvas.js), inside its shadow root; the kit (kit.css) brings the cards,
+   buttons, fields and the setup card. Moved unchanged from the island's style.css. */
+#mode { justify-self: start; }
+[data-cv][hidden] { display: none; }
+.cv-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+@container (max-width: 620px) { .cv-grid { grid-template-columns: 1fr; } }
+.cv-col { display: grid; gap: 8px; min-width: 0; }
+.cv-list { display: grid; gap: 4px; padding: 12px; }
+.cv-list header { margin: 0 0 4px; }
+.cv-missing header b { color: var(--bad); }
+.cv-scroll { display: grid; gap: 2px; max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; margin: 0 -4px; padding: 0 4px; }
+.cv-day { font: 600 10.5px/1 var(--f-body); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 8px 2px 3px; }
+.cv-day:first-child { margin-top: 0; }
+.cv-row { display: grid; grid-template-columns: 22px 4px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 6px 6px; border-radius: 11px; cursor: pointer; transition: background .2s, opacity .3s; }
+.cv-row:hover { background: var(--ink-3); }
+.cv-row.done { opacity: .5; }
+.cv-row.done b { text-decoration: line-through; text-decoration-color: color-mix(in oklab, currentColor 50%, transparent); }
+.cv-check { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border: 1.5px solid var(--faint); border-radius: 6px; background: none; color: transparent; cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
+.cv-check .i { width: 13px; height: 13px; stroke-width: 3; }
+.cv-check:hover { border-color: var(--fg); }
+.cv-check[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: #0c2015; }
+.cv-bar { width: 4px; height: 28px; border-radius: 2px; background: var(--accent); }
+.cv-row b { display: block; font: 500 12.5px/1.25 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-row small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-chip { font: 600 10.5px/1 var(--f-body); padding: 4px 7px; border-radius: 999px; background: var(--ink-3); color: var(--muted); white-space: nowrap; }
+.cv-chip.ok { color: var(--good); }
+.cv-chip.bad { color: var(--bad); }
+.cv-chip.warn { color: #f5b45b; }
+.cv-grades, .cv-ann { display: grid; gap: 6px; padding: 12px; }
+.cv-grades header, .cv-ann header { margin: 0 0 2px; }
+.cv-course { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 4px; border-radius: 10px; cursor: pointer; }
+.cv-course:hover { background: var(--ink-3); }
+.cv-course b { display: block; font: 500 12.5px/1.25 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-course small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-course em { font: 600 13px/1 var(--f-mono); font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.cv-course em small { font: 500 10.5px/1.4 var(--f-body); }
+.cv-an { display: grid; gap: 3px; padding: 7px 8px; border-radius: 10px; cursor: pointer; }
+.cv-an:hover { background: var(--ink-3); }
+.cv-an div { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.cv-an i { width: 8px; height: 8px; flex: none; border-radius: 50%; }
+.cv-an b { font: 600 12px/1.25 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-an small { font-size: 11px; color: var(--muted); }
+.cv-an p { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Taken: the row under the pointer catches a thin edge of light. */
+.cv-row:hover, .cv-course:hover, .cv-an:hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }

@@ -173,6 +173,34 @@ fn take_legacy(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<
     Ok(true)
 }
 
+/// Unix ms now.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// This PC's offset from UTC right now, in ms (local = UTC + offset), in whole quarter hours.
+#[cfg(windows)]
+pub fn local_offset_ms() -> i64 {
+    use windows::Win32::Foundation::SYSTEMTIME;
+    use windows::Win32::System::SystemInformation::{GetLocalTime, GetSystemTime};
+    let ms = |t: SYSTEMTIME| {
+        let (y, m, d) = (t.wYear as i64, t.wMonth as i64, t.wDay as i64);
+        let (y2, m2) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+        let era = y2.div_euclid(400);
+        let yoe = y2 - era * 400;
+        let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + (153 * m2 + 2) / 5 + d - 1 - 719_468;
+        ((days * 24 + t.wHour as i64) * 60 + t.wMinute as i64) * 60_000 + t.wSecond as i64 * 1000
+    };
+    let (local, utc) = unsafe { (GetLocalTime(), GetSystemTime()) };
+    // The two clock reads can straddle a second.
+    ((ms(local) - ms(utc)) as f64 / 900_000.0).round() as i64 * 900_000
+}
+
+#[cfg(not(windows))]
+pub fn local_offset_ms() -> i64 {
+    0
+}
+
 /// Runs the module on stdin and stdout until the base says `island.shutdown` or goes away, then exits.
 pub fn run<M: Module>(module: M) -> ! {
     let out = take_stdout();
@@ -230,7 +258,7 @@ pub fn run_with<M: Module>(module: M, input: impl BufRead, output: impl Write + 
                 method::INIT => {
                     let reply = match serde_json::from_value::<Init>(params) {
                         Ok(init) => {
-                            http::set_hosts(init.hosts.clone());
+                            http::set_hosts(init.hosts.clone(), PathBuf::from(&init.data_dir));
                             let _ = host.init.set(init.clone());
                             module.init(&host, &init).map(|_| json!({}))
                         }
