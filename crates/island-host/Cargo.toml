@@ -1,0 +1,28 @@
+[package]
+name = "island-host"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Island Shell's module host: loads manifests, runs module backends (run modes, crash backoff, a job object on Windows) and routes their messages and topics."
+
+[dependencies]
+island-module-proto = { path = "../island-module-proto" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Only for the test module below (src/bin/echo-module.rs).
+island-module = { path = "../island-module" }
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.61"
+features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+]
+
+[[bin]]
+name = "echo-module"
+path = "src/bin/echo-module.rs"
+test = false
+doc = false
