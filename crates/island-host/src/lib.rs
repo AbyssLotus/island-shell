@@ -137,6 +137,8 @@ struct Proc {
     ready: (Mutex<Option<Result<(), RpcError>>>, Condvar),
     /// Calls in flight, so an idle stop never cuts one off.
     busy: AtomicUsize,
+    /// Set once its exit has been handled (state, log, waiting callers).
+    gone: (Mutex<bool>, Condvar),
 }
 
 impl Proc {
@@ -181,6 +183,18 @@ impl Proc {
 
     fn kill(&self) {
         let _ = self.child.lock().unwrap_or_else(|e| e.into_inner()).kill();
+    }
+
+    fn set_gone(&self) {
+        let (lock, cv) = &self.gone;
+        *lock.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        cv.notify_all();
+    }
+
+    fn wait_gone(&self, timeout: Duration) {
+        let (lock, cv) = &self.gone;
+        let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = cv.wait_timeout_while(guard, timeout, |g| !*g);
     }
 }
 
@@ -535,6 +549,7 @@ fn spawn(inner: &Arc<Inner>, slot: &mut Slot) -> Result<Arc<Proc>, String> {
         next_id: AtomicU64::new(1),
         ready: (Mutex::new(None), Condvar::new()),
         busy: AtomicUsize::new(0),
+        gone: (Mutex::new(false), Condvar::new()),
     });
     slot.proc = Some(proc.clone());
     slot.state = State::Starting;
@@ -568,6 +583,7 @@ fn spawn(inner: &Arc<Inner>, slot: &mut Slot) -> Result<Arc<Proc>, String> {
                 }
             };
             exited(&i, &mid, &p, code);
+            p.set_gone();
         })
         .map_err(|e| e.to_string())?;
     // stderr: the module's own log.
@@ -691,6 +707,8 @@ fn request_stop(inner: &Inner, id: &str) -> Option<Arc<Proc>> {
     Some(proc)
 }
 
+/// Waits for each process to exit (killing what outlives `timeout`) and for its exit to be handled,
+/// so the module's state is final when this returns.
 fn wait_exit(procs: &[Arc<Proc>], timeout: Duration) {
     let until = Instant::now() + timeout;
     for p in procs {
@@ -705,6 +723,7 @@ fn wait_exit(procs: &[Arc<Proc>], timeout: Duration) {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+        p.wait_gone(Duration::from_secs(1));
     }
 }
 

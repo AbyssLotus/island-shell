@@ -182,14 +182,20 @@ pub fn run<M: Module>(module: M) -> ! {
 }
 
 /// The protocol's stdout, with the process's own stdout pointed at nothing, so stray prints can't
-/// break the framing.
+/// break the framing. The protocol pipes stop being inheritable, so an app the module starts can't
+/// hold them open after the module is gone (the base would think it still running).
 #[cfg(windows)]
 fn take_stdout() -> Box<dyn Write + Send> {
     use std::os::windows::io::{FromRawHandle, IntoRawHandle};
-    use windows::Win32::System::Console::{GetStdHandle, SetStdHandle, STD_OUTPUT_HANDLE};
+    use windows::Win32::Foundation::{SetHandleInformation, HANDLE_FLAGS, HANDLE_FLAG_INHERIT};
+    use windows::Win32::System::Console::{GetStdHandle, SetStdHandle, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
     unsafe {
+        if let Ok(h) = GetStdHandle(STD_INPUT_HANDLE) {
+            let _ = SetHandleInformation(h, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0));
+        }
         match GetStdHandle(STD_OUTPUT_HANDLE) {
             Ok(h) if !h.is_invalid() && !h.0.is_null() => {
+                let _ = SetHandleInformation(h, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0));
                 let file = std::fs::File::from_raw_handle(h.0 as _);
                 if let Ok(nul) = std::fs::OpenOptions::new().write(true).open("NUL") {
                     let _ = SetStdHandle(STD_OUTPUT_HANDLE, windows::Win32::Foundation::HANDLE(nul.into_raw_handle() as _));
