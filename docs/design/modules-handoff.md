@@ -629,7 +629,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 
 | ID | Title | Depends on | Status | PR |
 | --- | --- | --- | --- | --- |
-| M0.0 | CI on Windows | — | in review | |
+| M0.0 | CI on Windows | — | in review | [#1](https://github.com/AbyssLotus/island-shell/pull/1) |
 | M0.1 | Cargo workspace | M0.0 | todo | |
 | M0.2 | Dev harness | M0.0 | todo | |
 | M0.3 | Front-end registries | M0.2 | todo | |
