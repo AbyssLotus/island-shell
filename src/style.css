@@ -505,6 +505,10 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .pw.holding .fill { transform: scaleX(1); transition: transform .8s linear; }
 .pw-note { margin: 11px 2px 0; font-size: 11.5px; color: var(--muted); text-align: center; }
 .pw-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pw-upd { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.pw-upd-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pw-upd-txt b { font: 600 12.5px/1.2 var(--f-body); }
+.pw-upd-txt small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .12s !important; transition-delay: 0s !important; }

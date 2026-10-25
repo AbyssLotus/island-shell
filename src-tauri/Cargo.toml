@@ -20,11 +20,15 @@ png = "0.18"
 arboard = "3.6"
 # VoiceDeck's Voicemeeter engine (a copy of the VoiceDeck project's vm-core crate, MIT).
 vd-vm-core = { path = "../crates/vd-vm-core" }
+# The signed release catalog: the updater (and later the module installer) reads it.
+island-catalog = { path = "../crates/island-catalog" }
 # Same versions Tauri uses, for WebView2 calls Tauri doesn't wrap (memory usage target).
 webview2-com = "0.39"
 windows-core-wv = { package = "windows-core", version = "0.62" }
 # The `windows` crate's own core, which its #[interface] macro refers to by name.
 windows-core = "0.61"
+# The `windows` crate's async types (progress handlers), which it doesn't re-export.
+windows-future = "0.2"
 
 [dependencies.windows]
 version = "0.61"

@@ -60,6 +60,7 @@ const IC = {
   restart: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   cloudsun: '<path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.95 12.65a4 4 0 0 0-5.93-4.13"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
@@ -2478,6 +2479,53 @@ $$('.pw').forEach(b => {
 invoke('autostart_get').then(on => { $('#autostart').checked = on; }).catch(() => {});
 $('#autostart').addEventListener('change', e => quiet(invoke('autostart_set', { on: e.target.checked })));
 $('#quitBtn').addEventListener('click', () => quiet(invoke('quit')));
+
+/* ---------- updates (updater.rs) ---------- */
+const fmtMB = b => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+const updReady = u => !!u.latest && u.latest !== u.current && (u.state === 'available' || u.state === 'error');
+function renderUpdate(u) {
+  if (u) S.upd = u; u = S.upd; if (!u) return;
+  $('#upd').hidden = false;
+  const off = u.state === 'off';
+  txt($('#updTitle'), `Island Shell ${u.current}`);
+  const sub = {
+    off: "Updates aren't set up in this build",
+    checking: 'Checking for updates…',
+    available: `Version ${u.latest} is ready to install${u.size ? ` · ${fmtMB(u.size)}` : ''}`,
+    downloading: `Downloading ${u.latest}… ${Math.round((u.progress || 0) * 100)}%`,
+    installing: 'Installing; the island will be right back',
+    error: u.error || "Couldn't check for updates",
+  }[u.state] || (u.checked ? `Up to date · checked ${ago(new Date(u.checked).toISOString())}` : 'Up to date');
+  txt($('#updSub'), sub);
+  $('#updSub').title = u.notes || sub;
+  $('#updAuto').checked = !!u.auto; $('#updAuto').disabled = off;
+  const b = $('#updBtn');
+  b.hidden = off;
+  b.disabled = ['checking', 'downloading', 'installing'].includes(u.state);
+  setHtml(b, updReady(u) ? `${icon('download')}Update` : 'Check now');
+  b.classList.toggle('primary', updReady(u));
+}
+function toastUpdate(u) {
+  toast('Update available', `Island Shell ${u.latest} · open Power to install`, 'download', { tab: 'power', top: true, ms: 6000 });
+}
+$('#updBtn').addEventListener('click', () => {
+  const u = S.upd || {};
+  quiet(invoke(updReady(u) ? 'update_install' : 'update_check'));
+});
+$('#updAuto').addEventListener('change', e => invoke('update_auto', { on: e.target.checked }).then(renderUpdate).catch(() => {}));
+invoke('update_status').then(renderUpdate).catch(() => {});
+// A background check that finds a new version says so once per version.
+listen('update:status', e => {
+  const u = e.payload; renderUpdate(u);
+  if (u.state === 'available' && store.get('updToast', '') !== u.latest) { store.set('updToast', u.latest); toastUpdate(u); }
+});
+// "Check for updates" in the tray menu always gets an answer.
+listen('update:asked', e => {
+  const u = e.payload; renderUpdate(u);
+  if (updReady(u) && u.state === 'available') { store.set('updToast', u.latest); toastUpdate(u); }
+  else if (u.state === 'error') toast("Couldn't check for updates", u.error, 'x', { top: true, ms: 5000 });
+  else toast('Island Shell is up to date', `Version ${u.current}`, 'check', { top: true });
+});
 
 /* ---------- top-bar style ---------- */
 S.style = 'island'; S.anchor = 0;

@@ -33,6 +33,7 @@ mod sysinfo;
 mod taskbar;
 mod taskmgr;
 mod tray;
+mod updater;
 mod util;
 mod voicemeeter;
 mod vpn;
@@ -1027,6 +1028,26 @@ fn autostart_set(on: bool, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn update_status() -> updater::Status {
+    updater::status()
+}
+
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<updater::Status, String> {
+    blocking(move || updater::check(&app)).await?
+}
+
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    blocking(move || updater::install(&app)).await?
+}
+
+#[tauri::command]
+fn update_auto(on: bool, app: AppHandle) -> updater::Status {
+    updater::set_auto(&app, on)
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
 }
@@ -1159,9 +1180,10 @@ fn build_tray(app: &tauri::App, shared: Arc<Shared>) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open island", true, None::<&str>)?;
     let tb = CheckMenuItem::with_id(app, "taskbar", "Hide Windows taskbar", true, shared.taskbar_hidden.load(Ordering::Relaxed), None::<&str>)?;
     let auto = CheckMenuItem::with_id(app, "autostart", "Start with Windows", true, app.autolaunch().is_enabled().unwrap_or(false), None::<&str>)?;
+    let upd = MenuItem::with_id(app, "update", "Check for updates", updater::status().state != "off", None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Island Shell", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &tb, &auto, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &tb, &auto, &upd, &sep, &quit])?;
     *shared.tray_taskbar.lock().unwrap() = Some(tb);
     let mut builder = TrayIconBuilder::with_id("island").tooltip("Island Shell").menu(&menu).show_menu_on_left_click(false);
     if let Some(icon) = app.default_window_icon() {
@@ -1179,6 +1201,15 @@ fn build_tray(app: &tauri::App, shared: Arc<Shared>) -> tauri::Result<()> {
             "autostart" => {
                 let m = app.autolaunch();
                 let _ = if m.is_enabled().unwrap_or(false) { m.disable() } else { m.enable() };
+            }
+            "update" => {
+                // The page answers on the island: up to date, or the version that's ready to install.
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    util::com_mta();
+                    let st = updater::check(&app).unwrap_or_else(|_| updater::status());
+                    let _ = app.emit("update:asked", st);
+                });
             }
             "quit" => app.exit(0),
             _ => {}
@@ -1402,6 +1433,10 @@ fn main() {
             open_settings,
             autostart_get,
             autostart_set,
+            update_status,
+            update_check,
+            update_install,
+            update_auto,
             quit,
             log
         ])
@@ -1457,6 +1492,7 @@ fn main() {
             taskmgr::history_spawn();
             clipboard::spawn(app.handle().clone(), shared.clone());
             apps::spawn(app.handle().clone(), shared.clone());
+            updater::spawn(app.handle().clone());
             build_tray(app, shared)?;
             Ok(())
         })
