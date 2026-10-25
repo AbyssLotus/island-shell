@@ -157,7 +157,7 @@ pub fn toggle_mic() -> Result<bool, String> {
 /// else wherever it ran from last.
 fn voicedeck_exe() -> Option<PathBuf> {
     let seen = crate::util::data_dir().join("voicedeck_path.txt");
-    let running = crate::vpn::process_path("VoiceDeck.exe").or_else(|| crate::vpn::process_path("voicedeck.exe"));
+    let running = island_win::process::path("VoiceDeck.exe");
     if let Some(p) = running.as_ref() {
         let _ = std::fs::write(&seen, p.to_string_lossy().as_bytes());
     }

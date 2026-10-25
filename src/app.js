@@ -284,7 +284,7 @@ function setTab(t) {
 function onTabShown(t) {
   if (t === 'music' || t === 'controls') { S.ly.idx = -2; syncLyric(curPos(), true); mediaTick(); }
   if (t === 'stats') statsLoop();
-  if (t === 'network') { renderVpn(); vpnLoop(); }
+  if (t === 'network') { renderNetNow(); layout(); }
   if (t === 'discord') loadDc();
   if (t === 'games') gamesLoop();
   if (t === 'wallpaper') showWallpapers();
@@ -441,6 +441,7 @@ function applyStatus(st) {
   if (st.audio && performance.now() - S.volSetAt > 1500) S.audio = st.audio;
   maybeLyrics(m);
   renderMedia(changed); renderControls(); renderBar(); mediaTick();
+  if (S.mode === 'panel' && S.tab === 'network') renderNetNow();
 }
 function setThumb(url) { if (S.thumb) URL.revokeObjectURL(S.thumb); S.thumb = url; }
 const artEls = $$('[data-m="art"]'), titleEls = $$('[data-m="title"]'), artistEls = $$('[data-m="artist"]'), sourceEls = $$('[data-m="source"]'), durEls = $$('[data-m="dur"]'), toggleBtns = $$('[data-act="toggle"]');
@@ -1133,25 +1134,7 @@ $('#gazePause').addEventListener('click', async () => {
   renderControls();
 });
 
-/* ---------- network: Tailscale + Radmin VPN ---------- */
-S.vpn = null; S.vpnBusy = ''; S.vpnT = 0;
-async function loadVpn() {
-  try { S.vpn = await invoke('vpn_status'); } catch (e) {}
-  if (S.vpn && !S.vpnLogged) {
-    S.vpnLogged = true;
-    const t = S.vpn.tailscale, r = S.vpn.radmin;
-    log(`network: tailscale ${t ? `${t.state} ${t.ip} ${t.peers.length} devices` : 'not installed'}; radmin ${r ? `${r.running && r.on ? 'on' : 'off'} ${r.ip} ${r.peers.filter(p => p.online).length}/${r.peers.length} online` : 'not installed'}`);
-  }
-  renderVpn(); renderControls(); renderBar();
-}
-/** Every 4 s while the Network tab is open, every 20 s otherwise (for the tiles and the bar). */
-function vpnLoop() {
-  clearTimeout(S.vpnT);
-  loadVpn().finally(() => { S.vpnT = setTimeout(vpnLoop, S.mode === 'panel' && S.tab === 'network' ? 4000 : 20000); });
-}
-const tsOn = () => !!(S.vpn && S.vpn.tailscale && S.vpn.tailscale.state === 'Running');
-const rvOn = () => { const r = S.vpn && S.vpn.radmin; return !!(r && r.running && r.on && r.server); };
-const vpnOn = () => tsOn() || rvOn();
+/* ---------- network ---------- */
 function ago(iso) {
   const t = Date.parse(iso); if (!t || t < 946684800000) return '';
   const m = Math.round((Date.now() - t) / 60000);
@@ -1161,87 +1144,13 @@ function ago(iso) {
   if (m < 60 * 48) return 'yesterday';
   return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-const tsName = p => p.name && p.name !== 'localhost' ? p.name : (p.dns || '').split('.')[0] || 'Device';
-const TS_STATE = { Running: 'Connected', Stopped: 'Disconnected', NeedsLogin: 'Signed out', Starting: 'Connecting…', NoState: 'Tailscale app isn’t running', NeedsMachineAuth: 'Waiting for admin approval' };
-function renderVpnTiles() {
-  const t = S.vpn && S.vpn.tailscale, r = S.vpn && S.vpn.radmin;
-  const ts = $('.tile[data-tile="tailscale"]'), rv = $('.tile[data-tile="radmin"]');
-  ts.hidden = !t; rv.hidden = !r;
-  if (t) { ts.setAttribute('aria-pressed', tsOn()); txt(ts.querySelector('small'), S.vpnBusy || (tsOn() ? t.ip || 'Connected' : TS_STATE[t.state] || t.state)); }
-  if (r) {
-    const n = r.peers.filter(p => p.online).length;
-    rv.setAttribute('aria-pressed', rvOn());
-    txt(rv.querySelector('small'), !r.running ? 'Service stopped' : !r.on ? 'Off' : !r.server ? 'Connecting…' : `${n} online`);
-  }
+/** What the PC is connected to, at the top of the Network tab (VPNs come from their module). */
+function renderNetNow() {
+  const st = S.status; if (!st) return;
+  const n = st.net || {};
+  setHtml($('#netNow'), n.kind === 'none' || !n.kind ? `${icon('wifioff')}<span>Offline</span>`
+    : `${icon(n.kind === 'ethernet' ? 'ethernet' : 'wifi')}<span><b>${esc(n.name || (n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'))}</b> · ${n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'}${n.bars != null && n.kind === 'wifi' ? ` · ${n.bars * 20}% signal` : ''}</span>`);
 }
-function renderVpn() {
-  const st = S.status;
-  if (st) {
-    const n = st.net || {};
-    $('#netNow').innerHTML = n.kind === 'none' || !n.kind ? `${icon('wifioff')}<span>Offline</span>`
-      : `${icon(n.kind === 'ethernet' ? 'ethernet' : 'wifi')}<span><b>${esc(n.name || (n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'))}</b> · ${n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'}${n.bars != null && n.kind === 'wifi' ? ` · ${n.bars * 20}% signal` : ''}</span>`;
-  }
-  const v = S.vpn, t = v && v.tailscale, r = v && v.radmin;
-  $('#tsCard').hidden = !t; $('#rvCard').hidden = !r;
-  if (t) {
-    const on = tsOn();
-    $('#tsCard').classList.toggle('on', on);
-    $('#tsState').textContent = S.vpnBusy || (on ? `Connected · ${t.tailnet || 'your tailnet'}` : TS_STATE[t.state] || t.state);
-    const btn = $('#tsToggle');
-    btn.hidden = false; btn.disabled = !!S.vpnBusy;
-    btn.textContent = on ? 'Disconnect' : t.state === 'NeedsLogin' ? 'Sign in' : 'Connect';
-    btn.classList.toggle('primary', !on);
-    const me = $('#tsMe');
-    me.hidden = !t.ip;
-    if (t.ip) { me.dataset.copy = t.ip; setHtml(me, `${icon('copy')}<span>This PC · ${esc(t.name)}</span><b>${esc(t.ip)}</b>`); }
-    const exits = t.peers.filter(p => p.exit_option);
-    $('#tsExitRow').hidden = !on || !exits.length;
-    setHtml($('#tsExit'), `<option value="">None</option>` + exits.map(p => `<option value="${esc(p.ip)}"${p.exit_node ? ' selected' : ''}${p.online ? '' : ' disabled'}>${esc(tsName(p))}${p.online ? '' : ' (offline)'}</option>`).join(''));
-    setHtml($('#tsPeers'), !on ? '' : t.peers.length ? t.peers.map(p => {
-      const sub = p.online ? [p.ip, p.os, p.link === 'direct' ? 'direct' : p.link ? `relay ${p.link}` : ''].filter(Boolean).join(' · ') : `Offline${ago(p.last_seen) ? ' · last seen ' + ago(p.last_seen) : ''}`;
-      return `<button type="button" class="peer${p.online ? ' on' : ''}" data-copy="${esc(p.ip)}" title="Copy ${esc(p.ip)}"><i class="dot"></i><span><b>${esc(tsName(p))}</b><small>${esc(sub)}</small></span>${p.exit_node ? '<span class="tag exit">Exit node</span>' : ''}</button>`;
-    }).join('') : '<p class="empty">No other devices on this tailnet.</p>');
-  }
-  if (r) {
-    const on = rvOn(), online = r.peers.filter(p => p.online);
-    $('#rvCard').classList.toggle('on', on);
-    $('#rvState').textContent = !r.running ? 'Service stopped' : !r.on ? 'Switched off' : !r.server ? 'Connecting to Radmin…' : `${online.length} online${r.networks.length ? ' · ' + r.networks.join(', ') : ''}`;
-    $('#rvOpen').hidden = false;
-    const me = $('#rvMe');
-    me.hidden = !r.ip;
-    if (r.ip) { me.dataset.copy = r.ip; setHtml(me, `${icon('copy')}<span>This PC</span><b>${esc(r.ip)}</b>`); }
-    setHtml($('#rvPeers'), r.peers.length ? r.peers.map(p => {
-      const when = new Date(p.since);
-      const t2 = isNaN(when) ? '' : (Date.now() - when < 864e5 ? when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ago(p.since));
-      const how = p.link === 'Relay' ? 'Through Radmin’s relay' : p.link === 'Direct' ? 'Direct connection' : 'Connected';
-      const sub = p.online ? `${how}${t2 ? ' · since ' + t2 : ''}` : `Offline${t2 ? ' · last seen ' + t2 : ''}`;
-      return `<div class="peer${p.online ? ' on' : ''}"><i class="dot"></i><span><b>${esc(p.name)}</b><small>${esc(sub)}</small></span></div>`;
-    }).join('') : '<p class="empty">Nobody has connected yet.</p>');
-  }
-  if (S.mode === 'panel' && S.tab === 'network') layout();
-}
-async function tsToggle() {
-  const t = S.vpn && S.vpn.tailscale; if (!t || S.vpnBusy) return;
-  const up = !tsOn();
-  S.vpnBusy = up ? 'Connecting…' : 'Disconnecting…';
-  renderVpn(); renderVpnTiles();
-  try { await invoke('vpn_tailscale', { action: up ? 'up' : 'down' }); }
-  finally { S.vpnBusy = ''; await loadVpn(); }
-}
-$('#tsToggle').addEventListener('click', () => { note('#vpnNote', ''); tsToggle().catch(err => note('#vpnNote', String(err))); });
-$('#tsExit').addEventListener('change', e => {
-  note('#vpnNote', '');
-  invoke('vpn_tailscale', { action: 'exit', arg: e.target.value }).catch(err => note('#vpnNote', String(err))).finally(loadVpn);
-});
-$('#rvOpen').addEventListener('click', () => { invoke('vpn_radmin_open').then(() => closePanel(true)).catch(err => note('#vpnNote', String(err))); });
-// Click an address (yours or a device's) to copy it.
-$('#v-network').addEventListener('click', e => {
-  const el = e.target.closest('[data-copy]'); if (!el || !el.dataset.copy) return;
-  invoke('copy_text', { text: el.dataset.copy }).then(() => {
-    el.classList.remove('copied'); void el.offsetWidth; el.classList.add('copied');
-    clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('copied'), 1300);
-  }).catch(err => note('#vpnNote', String(err)));
-});
 
 /* ---------- controls ---------- */
 /* ---------- Discord (voice call, notifications, Rich Presence; see discord.rs) ---------- */
@@ -1407,7 +1316,7 @@ function renderControls() {
   set('taskbar', st.taskbar_hidden, st.taskbar_hidden ? 'Hidden' : 'Visible');
   set('night', false, 'Opens Settings');
   set('sounds', sounds.on, sounds.on ? `On · ${Math.round(sounds.vol * 100)}%` : 'Off');
-  renderVpnTiles(); renderGaze(); renderAudioMaster();
+  renderGaze(); renderAudioMaster();
   if (a) {
     const v = Math.round(a.level * 100), input = $('#vol');
     if (document.activeElement !== input || performance.now() - S.volSetAt > 1500) input.value = v;
@@ -1432,9 +1341,7 @@ $$('.tile').forEach(b => b.addEventListener('click', async () => {
     else if (k === 'night') openSettings('ms-settings:nightlight');
     else if (k === 'sounds') { sounds.set({ on: !sounds.on }); if (sounds.on) sounds.sound('glass'); renderControls(); renderSounds(); }
     else if (k === 'dark') { S.dark = !S.dark; store.set('dark', S.dark); applySkin(); renderControls(); }
-    else if (k === 'tailscale') await tsToggle();
     else if (k === 'eye' && S.gazeSt) { S.gazeSt = await invoke('gaze_set', { enabled: !S.gazeSt.enabled }); renderControls(); }
-    else if (k === 'radmin') setTab('network');
     else if (k === 'taskbar' && st) { st.taskbar_hidden = !st.taskbar_hidden; renderControls(); await invoke('set_taskbar', { hidden: st.taskbar_hidden }); }
   } catch (err) { note('#ctlNote', String(err)); }
 }));
@@ -2318,7 +2225,8 @@ function renderBar() {
   if (st.wifi.present && st.wifi.on && st.net.kind === 'wifi') net = `${icon('wifi')}<span>${esc(st.net.name || 'Wi-Fi')}${st.net.bars != null ? ` (${st.net.bars * 20}%)` : ''}</span>`;
   else if (st.net.kind === 'ethernet') net = `${icon('ethernet')}<span>${esc(st.net.name || 'Ethernet')}</span>`;
   else net = `${icon('wifioff')}<span>${st.wifi.present && !st.wifi.on ? 'Wi-Fi off' : 'Offline'}</span>`;
-  if (vpnOn()) net += `<span class="vpn-shield" title="VPN connected">${icon('shield')}</span>`;
+  // Badges modules put on the network chip (the VPN module's shield while one is connected).
+  for (const c of R.chips.all()) if (c.module && !c.hidden && c.in === 'net') net += `<span class="net-badge" title="${esc(c.title || '')}">${icon(c.icon || 'dot')}</span>`;
   setHtml($('#barNet'), net);
   const bat = $('#barBat'), b = st.battery || {};
   bat.hidden = !b.present;
@@ -2507,7 +2415,7 @@ const modHost = createModuleHost({
   addView: () => syncViews(), removeView: () => syncViews(),
   notify: (module, n) => modToast(module, n),
   open: target => openTarget(target),
-  setTiles: () => renderModTiles(), setChips: () => renderModChips(),
+  setTiles: () => renderModTiles(), setChips: () => { renderModChips(); renderBar(); },
   activitiesChanged: () => islandEvents.dispatchEvent(new CustomEvent('activities')),
   sectionsChanged: () => syncSections(),
   tabFailed: (tab, name, e) => { const v = views[tab]; if (v) v.querySelector('.mod-fail').textContent = `${name} couldn't load: ${e && e.message || e}`; layout(); }
@@ -2588,7 +2496,7 @@ $('#modTiles').addEventListener('click', e => {
 function renderModChips() {
   for (const side of ['left', 'right']) {
     const box = $(side === 'left' ? '#barModsL' : '#barModsR'); if (!box) continue;
-    const list = R.chips.all().filter(c => c.module && !c.hidden && (c.side || 'right') === side);
+    const list = R.chips.all().filter(c => c.module && !c.hidden && !c.in && (c.side || 'right') === side);
     setHtml(box, list.map(c => {
       const av = (c.avatars || []).map(a => `<img src="${esc(a.src || '')}" alt="" data-id="${esc(a.id || '')}"${a.talk ? ' class="talk"' : ''} referrerpolicy="no-referrer">`).join('');
       return `<button class="bchip${c.icon && !c.text && !av ? ' icon' : ''}${c.tone ? ' ' + esc(c.tone) : ''}" type="button" data-mchip="${esc(c.id)}" title="${esc(c.title || '')}" aria-label="${esc(c.title || c.text || '')}">${av ? `<span class="dc-stack">${av}</span>` : ''}${c.icon ? icon(c.icon) : ''}${c.text ? `<span>${esc(c.text)}</span>` : ''}</button>`;
@@ -2656,7 +2564,7 @@ $('#openTm').addEventListener('click', () => cmdCenter.openTaskManager());
 if (FIRST_RUN) setTimeout(() => cmdCenter.openSetup(), 1800);
 modHost.start();
 
-pollStatus(); loadClips(); loadApps(); loadWeather(); vpnLoop(); loadDc();
+pollStatus(); loadClips(); loadApps(); loadWeather(); loadDc();
 setInterval(() => loadWeather(), 20 * 60e3);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { tabLabelW = null; moveInk(); layout(); });
 setTimeout(() => log(`ready: apps=${S.apps.length} clips=${S.clips.length} media=${S.media ? S.media.app + ' / ' + S.media.title : 'none'} audio=${S.audio ? S.audio.device + ' ' + Math.round(S.audio.level * 100) + '%' : 'none'} wifi=${JSON.stringify(S.status && S.status.wifi)} net=${JSON.stringify(S.status && S.status.net)}`), 6000);

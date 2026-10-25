@@ -1,89 +1,90 @@
-//! Tailscale and Radmin VPN status for the Network tab.
+//! Tailscale and Radmin VPN, an Island Shell module backend (docs/design/modules.md); its UI is
+//! ui/vpn.js (a section of the Network tab, Controls tiles and a shield on the bar's network chip).
 //!
 //! Tailscale: its own command-line tool (`tailscale status --json`, `up`, `down`, `set`).
 //! Radmin VPN has no command line or API. Its service writes a log of everything that matters
 //! (service and power state, the connection to Radmin's server, our IP, every peer connecting
-//! and dropping and over what kind of link), so the island reads that, plus the network names
+//! and dropping and over what kind of link), so the module reads that, plus the network names
 //! the Radmin window remembers in the registry. Its power switch only exists in its own window,
-//! which the island can bring forward.
+//! which the module can bring forward.
+//!
+//! Nothing here goes on the network itself; Tailscale and Radmin do their own talking.
+//!
+//! RPC methods: `status`, `tailscale { action, arg }`, `radmin_open`.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
+use island_module::{CallResult, Host, Init, Module, RpcError, Value};
+use island_win::{process, shell};
 use serde::Serialize;
-use serde_json::Value;
-use windows::core::{BOOL, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
-use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
-use windows::Win32::System::Registry::{RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_READ};
-use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowTextW, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const TS_DIR: &str = r"C:\Program Files\Tailscale";
+#[cfg_attr(not(windows), allow(dead_code))]
 const RV_DIR: &str = r"C:\Program Files (x86)\Radmin VPN";
 const RV_LOG: &str = r"C:\ProgramData\Famatech\Radmin VPN\service.log";
 
 #[derive(Serialize, Clone, Default)]
-pub struct Status {
-    pub tailscale: Option<Tailscale>,
-    pub radmin: Option<Radmin>,
+struct Status {
+    tailscale: Option<Tailscale>,
+    radmin: Option<Radmin>,
 }
 
 #[derive(Serialize, Clone, Default)]
-pub struct Tailscale {
+struct Tailscale {
     /// "Running", "Stopped", "NeedsLogin", "Starting", or "NoState" when the Tailscale app isn't open.
-    pub state: String,
-    pub tailnet: String,
-    pub name: String,
-    pub ip: String,
-    pub exit_node: String,
-    pub health: Vec<String>,
-    pub peers: Vec<TsPeer>,
+    state: String,
+    tailnet: String,
+    name: String,
+    ip: String,
+    exit_node: String,
+    health: Vec<String>,
+    peers: Vec<TsPeer>,
 }
 
 #[derive(Serialize, Clone, Default)]
-pub struct TsPeer {
-    pub name: String,
-    pub dns: String,
-    pub os: String,
-    pub ip: String,
-    pub online: bool,
-    pub active: bool,
-    pub exit_option: bool,
-    pub exit_node: bool,
-    pub last_seen: String,
+struct TsPeer {
+    name: String,
+    dns: String,
+    os: String,
+    ip: String,
+    online: bool,
+    active: bool,
+    exit_option: bool,
+    exit_node: bool,
+    last_seen: String,
     /// "direct" or the relay (DERP) region code.
-    pub link: String,
+    link: String,
 }
 
 #[derive(Serialize, Clone, Default)]
-pub struct Radmin {
+struct Radmin {
     /// The Radmin VPN service is running.
-    pub running: bool,
+    running: bool,
     /// Its power switch (in the Radmin window) is on.
-    pub on: bool,
+    on: bool,
     /// Connected to Radmin's coordination server.
-    pub server: bool,
-    pub ip: String,
-    pub networks: Vec<String>,
-    pub peers: Vec<RvPeer>,
+    server: bool,
+    ip: String,
+    networks: Vec<String>,
+    peers: Vec<RvPeer>,
 }
 
 #[derive(Serialize, Clone, Default)]
-pub struct RvPeer {
-    pub id: String,
-    pub name: String,
-    pub online: bool,
+struct RvPeer {
+    id: String,
+    name: String,
+    online: bool,
     /// "Direct" (TCP/UDP) or "Relay".
-    pub link: String,
+    link: String,
     /// Local time the current connection started, or when the peer was last seen ("2026-10-13T15:35:25").
-    pub since: String,
+    since: String,
 }
 
-pub fn status() -> Status {
+fn status() -> Status {
     Status { tailscale: tailscale(), radmin: radmin() }
 }
 
@@ -94,9 +95,12 @@ fn ts_exe(name: &str) -> PathBuf {
 }
 
 fn ts(args: &[&str]) -> Result<String, String> {
-    let out = Command::new(ts_exe("tailscale.exe"))
+    let mut cmd = Command::new(ts_exe("tailscale.exe"));
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x0800_0000); // CREATE_NO_WINDOW
+    let out = cmd
         .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("Couldn't run Tailscale: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -159,12 +163,12 @@ fn ts_state() -> String {
 }
 
 /// up | down | exit (`arg` = exit node IP, or "" for none) | open
-pub fn tailscale_cmd(action: &str, arg: &str) -> Result<(), String> {
+fn tailscale_cmd(action: &str, arg: &str) -> Result<(), String> {
     match action {
         "up" => {
             // The Tailscale tray app starts the backend; without it the state stays "NoState".
-            if !process_running("tailscale-ipn.exe") {
-                Command::new(ts_exe("tailscale-ipn.exe")).spawn().map_err(|e| format!("Couldn't start Tailscale: {e}"))?;
+            if !process::running("tailscale-ipn.exe") {
+                shell::command(ts_exe("tailscale-ipn.exe")).spawn().map_err(|e| format!("Couldn't start Tailscale: {e}"))?;
                 let t = Instant::now();
                 while t.elapsed() < Duration::from_secs(8) && matches!(ts_state().as_str(), "NoState" | "") {
                     std::thread::sleep(Duration::from_millis(400));
@@ -175,7 +179,7 @@ pub fn tailscale_cmd(action: &str, arg: &str) -> Result<(), String> {
             match ts_state().as_str() {
                 "Running" | "Starting" => Ok(()),
                 "NeedsLogin" => {
-                    let _ = Command::new(ts_exe("tailscale-ipn.exe")).spawn();
+                    let _ = shell::command(ts_exe("tailscale-ipn.exe")).spawn();
                     Err("Tailscale needs you to sign in. Its window is opening.".into())
                 }
                 _ => ts(&["up", "--timeout=15s"]).map(|_| ()).map_err(|e| {
@@ -194,7 +198,7 @@ pub fn tailscale_cmd(action: &str, arg: &str) -> Result<(), String> {
             }
             ts(&["set", &format!("--exit-node={arg}")]).map(|_| ())
         }
-        "open" => Command::new(ts_exe("tailscale-ipn.exe")).spawn().map(|_| ()).map_err(|e| e.to_string()),
+        "open" => shell::command(ts_exe("tailscale-ipn.exe")).spawn().map(|_| ()).map_err(|e| e.to_string()),
         _ => Err(format!("Unknown Tailscale action {action}")),
     }
 }
@@ -327,7 +331,10 @@ fn parse_log(bytes: &[u8]) -> Radmin {
 }
 
 /// Networks the Radmin window lists (it remembers each one's expanded state under this key).
+#[cfg(windows)]
 fn radmin_networks() -> Vec<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_READ};
     let mut out = vec![];
     unsafe {
         let mut key = HKEY::default();
@@ -348,8 +355,17 @@ fn radmin_networks() -> Vec<String> {
     out
 }
 
+#[cfg(not(windows))]
+fn radmin_networks() -> Vec<String> {
+    vec![]
+}
+
 /// Shows the Radmin VPN window (it normally hides in the tray), or starts it.
-pub fn radmin_open() -> Result<(), String> {
+#[cfg(windows)]
+fn radmin_open() -> Result<(), String> {
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowTextW, GetWindowThreadProcessId, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
     unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
         let out = &mut *(lp.0 as *mut Option<HWND>);
         let mut buf = [0u16; 128];
@@ -357,9 +373,13 @@ pub fn radmin_open() -> Result<(), String> {
         let class = String::from_utf16_lossy(&buf[..n.max(0) as usize]);
         let n = GetWindowTextW(h, &mut buf);
         let title = String::from_utf16_lossy(&buf[..n.max(0) as usize]);
-        if class.starts_with("Qt") && class.ends_with("QWindowIcon") && title == "Radmin VPN" && crate::running::exe_of_window(h).1.ends_with("\\rvrvpngui.exe") {
-            *out = Some(h);
-            return BOOL(0);
+        if class.starts_with("Qt") && class.ends_with("QWindowIcon") && title == "Radmin VPN" {
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(h, Some(&mut pid));
+            if process::path_of(pid).to_lowercase().ends_with("\\rvrvpngui.exe") {
+                *out = Some(h);
+                return BOOL(0);
+            }
         }
         BOOL(1)
     }
@@ -373,39 +393,35 @@ pub fn radmin_open() -> Result<(), String> {
             return Ok(());
         }
     }
-    Command::new(Path::new(RV_DIR).join("RvRvpnGui.exe")).spawn().map(|_| ()).map_err(|e| format!("Couldn't start Radmin VPN: {e}"))
+    shell::command(Path::new(RV_DIR).join("RvRvpnGui.exe")).spawn().map(|_| ()).map_err(|e| format!("Couldn't start Radmin VPN: {e}"))
 }
 
-// ---------- helpers ----------
+#[cfg(not(windows))]
+fn radmin_open() -> Result<(), String> {
+    Err("needs Windows".into())
+}
 
-/// Process id of a running program, by image name.
-fn find_process(exe_name: &str) -> Option<u32> {
-    unsafe {
-        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
-        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-        let mut found = None;
-        let mut ok = Process32FirstW(snap, &mut e).is_ok();
-        while ok {
-            let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
-            if String::from_utf16_lossy(&e.szExeFile[..len]).eq_ignore_ascii_case(exe_name) {
-                found = Some(e.th32ProcessID);
-                break;
-            }
-            ok = Process32NextW(snap, &mut e).is_ok();
+// ---------- the module ----------
+
+struct Vpn;
+
+impl Module for Vpn {
+    fn init(&self, _host: &Host, _init: &Init) -> Result<(), RpcError> {
+        Ok(())
+    }
+
+    fn call(&self, _host: &Host, method: &str, params: Value) -> CallResult {
+        match method {
+            "status" => Ok(serde_json::to_value(status()).unwrap_or(Value::Null)),
+            "tailscale" => tailscale_cmd(params["action"].as_str().unwrap_or(""), params["arg"].as_str().unwrap_or("")).map(|_| Value::Null).map_err(RpcError::failed),
+            "radmin_open" => radmin_open().map(|_| Value::Null).map_err(RpcError::failed),
+            _ => Err(RpcError::unknown_method(method)),
         }
-        let _ = CloseHandle(snap);
-        found
     }
 }
 
-pub fn process_running(exe_name: &str) -> bool {
-    find_process(exe_name).is_some()
-}
-
-/// Full path of a running program, by image name.
-pub fn process_path(exe_name: &str) -> Option<PathBuf> {
-    let path = crate::running::exe_of(find_process(exe_name)?);
-    (!path.is_empty()).then(|| PathBuf::from(path))
+fn main() {
+    island_module::run(Vpn);
 }
 
 #[cfg(test)]
@@ -438,6 +454,19 @@ mod tests {
 
         let stopped = parse_log(&utf16(&format!("{log}2026.10.12 11:00:00.000\tINFO\tService stopped\r\n")));
         assert!(!stopped.running && !stopped.server && stopped.peers.iter().all(|p| !p.online));
+    }
+
+    #[test]
+    fn manifest_is_valid() {
+        let m: island_module::proto::manifest::Manifest = serde_json::from_str(include_str!("../module.json")).unwrap();
+        m.validate().unwrap();
+        assert_eq!(m.id, "vpn");
+    }
+
+    #[test]
+    fn exit_nodes_are_checked() {
+        assert!(tailscale_cmd("exit", "1.2.3.4; calc").unwrap_err().contains("isn't a Tailscale device"));
+        assert!(tailscale_cmd("reboot", "").unwrap_err().contains("Unknown"));
     }
 
     /// `cargo test live_vpn_status -- --ignored --nocapture` prints what the Network tab would show.

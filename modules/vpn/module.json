@@ -1,0 +1,15 @@
+{
+  "id": "vpn",
+  "name": "VPN",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Tailscale and Radmin VPN at a glance: who's online, your addresses, exit nodes, and a switch in Controls.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "vpn-module.exe", "run": "on-demand", "idle": "90s" },
+  "ui": { "entry": "ui/vpn.js", "css": ["ui/vpn.css"], "eager": true },
+  "contributes": {
+    "sections": [{ "tab": "network", "id": "vpn", "order": 10 }]
+  },
+  "talksTo": [],
+  "keywords": ["vpn", "tailscale", "radmin", "tailnet", "exit node"]
+}

@@ -87,8 +87,6 @@
           <button class="tile" type="button" data-tile="sounds" title="Notification sounds (Audio → Sounds to choose them)"><span class="ti"><i data-ic="bellon"></i></span><span class="tt"><b>Sounds</b><small></small></span></button>
           <button class="tile" type="button" data-tile="night"><span class="ti"><i data-ic="moon"></i></span><span class="tt"><b>Night light</b><small>Opens Settings</small></span></button>
           <button class="tile" type="button" data-tile="dark"><span class="ti"><i data-ic="contrast"></i></span><span class="tt"><b>Dark mode</b><small></small></span></button>
-          <button class="tile" type="button" data-tile="tailscale" hidden><span class="ti"><i data-ic="dots9"></i></span><span class="tt"><b>Tailscale</b><small>Checking…</small></span></button>
-          <button class="tile" type="button" data-tile="radmin" hidden><span class="ti"><i data-ic="nodes"></i></span><span class="tt"><b>Radmin VPN</b><small>Checking…</small></span></button>
           <button class="tile" type="button" data-tile="taskbar"><span class="ti"><i data-ic="taskbar"></i></span><span class="tt"><b>Taskbar</b><small></small></span></button>
           <button class="tile" type="button" data-tile="eye" hidden><span class="ti"><i data-ic="eye"></i></span><span class="tt"><b>Eye tracking</b><small>Checking…</small></span></button>
           <div class="mod-tiles" id="modTiles" hidden></div>
@@ -260,28 +258,6 @@
 
       <section class="view" id="v-network" data-tab="network" role="tabpanel" aria-labelledby="tab-network">
         <div class="net-now" id="netNow"></div>
-        <div class="vpn-grid">
-          <div class="card vpn" id="tsCard">
-            <div class="vpn-head">
-              <span class="vpn-logo"><i data-ic="dots9"></i></span>
-              <div class="vpn-title"><b>Tailscale</b><small id="tsState">Checking…</small></div>
-              <button class="btn" type="button" id="tsToggle" hidden>Connect</button>
-            </div>
-            <button class="vpn-me" type="button" id="tsMe" hidden></button>
-            <label class="vpn-exit" id="tsExitRow" hidden><span>Exit node</span><select class="field" id="tsExit" aria-label="Exit node"></select></label>
-            <div class="vpn-list" id="tsPeers"></div>
-          </div>
-          <div class="card vpn" id="rvCard">
-            <div class="vpn-head">
-              <span class="vpn-logo"><i data-ic="nodes"></i></span>
-              <div class="vpn-title"><b>Radmin VPN</b><small id="rvState">Checking…</small></div>
-              <button class="btn" type="button" id="rvOpen" hidden>Open</button>
-            </div>
-            <button class="vpn-me" type="button" id="rvMe" hidden></button>
-            <div class="vpn-list" id="rvPeers"></div>
-          </div>
-        </div>
-        <p class="note" id="vpnNote" hidden></p>
       </section>
 
       <section class="view" id="v-discord" data-tab="discord" role="tabpanel" aria-labelledby="tab-discord">

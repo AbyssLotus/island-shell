@@ -20,7 +20,8 @@
 //   cubes.register({ id, stat(), sheet?: { mount(root), unmount(), key(e) } })
 //     (each root is an element in a shadow root of the module's own, with the kit and its CSS)
 //   tiles.set({ id, icon, title, sub, pressed, hidden, run }), tiles.remove(id)    Controls tiles
-//   chips.set({ id, icon, text, title, hidden, tone, avatars, run }), chips.remove(id)  top-bar chips
+//   chips.set({ id, icon, text, title, hidden, tone, avatars, side, run }), chips.remove(id)  top-bar chips
+//     (with in: 'net', an icon badge on the bar's network chip instead)
 //   search.register({ id, kind, label, icon, items() })        Command Center results
 //   commands.set([{ id, title, icon, sub, keys, run, stay }])  quick commands (replaces its own)
 //   activity.set({ id, kind, … }), activity.clear(id)         live things on the pill

@@ -147,10 +147,6 @@
   "enabled": false,
   "pause_when_away": false
  },
- "vpn_status": {
-  "tailscale": null,
-  "radmin": null
- },
  "discord_status": {
   "configured": false,
   "client_id": "",
@@ -450,5 +446,9 @@
   "recent": [
    "c:\\wallpapers\\1"
   ]
+ },
+ "mod:vpn.status": {
+  "tailscale": null,
+  "radmin": null
  }
 }

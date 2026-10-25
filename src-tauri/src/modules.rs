@@ -215,6 +215,11 @@ pub fn mod_list() -> Listing {
 #[tauri::command]
 pub async fn mod_call(id: String, method: String, params: Option<Value>) -> Result<Value, RpcError> {
     let s = sup().ok_or_else(|| RpcError::new(island_host::proto::code::STOPPED, "Modules aren't running"))?;
+    // UI calls follow a click in the island, which has the foreground: let the module bring a window
+    // forward if that's what was asked (Radmin's, a game launcher's).
+    unsafe {
+        let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(windows::Win32::UI::WindowsAndMessaging::ASFW_ANY);
+    }
     tauri::async_runtime::spawn_blocking(move || s.call(&id, &method, params.unwrap_or(Value::Null))).await.map_err(|e| RpcError::failed(e.to_string()))?
 }
 

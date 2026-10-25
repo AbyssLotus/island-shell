@@ -35,7 +35,6 @@ mod tray;
 mod updater;
 mod util;
 mod voicemeeter;
-mod vpn;
 mod wallpaper;
 mod winkey;
 
@@ -357,22 +356,6 @@ fn gaze_set(enabled: Option<bool>, pause_when_away: Option<bool>, app: AppHandle
     let st = gaze::status();
     let _ = app.emit("gaze:status", st.clone());
     st
-}
-
-#[tauri::command]
-async fn vpn_status() -> Result<vpn::Status, String> {
-    blocking(vpn::status).await
-}
-
-/// up | down | exit (arg = exit node IP, "" for none) | open
-#[tauri::command]
-async fn vpn_tailscale(action: String, arg: Option<String>) -> Result<(), String> {
-    blocking(move || vpn::tailscale_cmd(&action, arg.as_deref().unwrap_or(""))).await?
-}
-
-#[tauri::command]
-fn vpn_radmin_open() -> Result<(), String> {
-    vpn::radmin_open()
 }
 
 #[tauri::command]
@@ -1220,7 +1203,6 @@ fn main() {
             media_source,
             media_app_volume,
             media_lyrics,
-            vpn_status,
             audio_devices,
             vm_state,
             discord_status,
@@ -1282,8 +1264,6 @@ fn main() {
             game_action,
             gaze_status,
             gaze_set,
-            vpn_tailscale,
-            vpn_radmin_open,
             copy_text,
             set_volume,
             set_mute,
