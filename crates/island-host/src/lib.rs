@@ -7,6 +7,7 @@
 
 pub mod installed;
 mod job;
+pub mod ui;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader};

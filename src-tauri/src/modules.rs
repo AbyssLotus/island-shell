@@ -26,6 +26,8 @@ use tauri::{AppHandle, Emitter};
 use crate::util::{self, log_line};
 
 static SUP: OnceLock<Supervisor> = OnceLock::new();
+/// What http://mod.localhost/ serves: module UI files, hash-checked (island-host's ui.rs).
+static UI: std::sync::LazyLock<island_host::ui::UiFiles> = std::sync::LazyLock::new(island_host::ui::UiFiles::new);
 /// Installed modules that couldn't be loaded, with why (shown in the Modules sheet).
 static BROKEN: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 
@@ -173,6 +175,26 @@ fn save_installed(f: impl FnOnce(&mut Installed)) -> Result<(), String> {
     let mut set = Installed::load(&path);
     f(&mut set);
     set.save(&path).map_err(|e| format!("Couldn't save installed.json: {e}"))
+}
+
+/// The `mod` protocol: `http://mod.localhost/<id>/<path>` for module UI (handoff §4.10). Module
+/// scripts are imported cross-origin, so responses allow the island's origin.
+pub fn serve_ui(path: &str) -> tauri::http::Response<Vec<u8>> {
+    use island_host::ui::Served;
+    let served = match sup() {
+        Some(s) => UI.serve(&s.list(), &cache_root(), path),
+        None => Served::NotFound,
+    };
+    let b = tauri::http::Response::builder().header("Access-Control-Allow-Origin", "http://tauri.localhost").header("Cache-Control", "no-cache");
+    let r = match served {
+        Served::Ok { body, mime } => b.status(200).header("Content-Type", mime).body(body),
+        Served::NotFound => b.status(404).body(Vec::new()),
+        Served::Forbidden(why) => {
+            log_line(&format!("modules: refused {path}: {why}"));
+            b.status(403).body(Vec::new())
+        }
+    };
+    r.unwrap_or_default()
 }
 
 // ---------- commands ----------

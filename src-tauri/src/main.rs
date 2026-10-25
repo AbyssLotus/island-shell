@@ -1315,6 +1315,11 @@ fn main() {
                 .build(),
         )
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        // Module UI files (src/modhost.js imports them from http://mod.localhost/<id>/…).
+        .register_asynchronous_uri_scheme_protocol("mod", |_ctx, request, responder| {
+            let path = request.uri().path().to_string();
+            std::thread::spawn(move || responder.respond(modules::serve_ui(&path)));
+        })
         .manage(shared.clone())
         .invoke_handler(tauri::generate_handler![
             get_status,
