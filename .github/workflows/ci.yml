@@ -36,9 +36,10 @@ jobs:
           workspaces: src-tauri -> target
       - name: cargo check
         run: cargo check --locked --all-targets
-      # vd-vm-core is a path dependency, so it's tested from here until the workspace (M0.1).
+      # vd-vm-core's own tests join with the workspace (M0.1): Cargo ignores the dev-dependencies
+      # of a path dependency that isn't a workspace member, so they can't build from here.
       - name: cargo test
-        run: cargo test --locked -p island-shell -p vd-vm-core
+        run: cargo test --locked
 
   web:
     name: Front end (node --test)
