@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs the network: reverse DNS lookups"]
     fn reverse_dns() {
         unsafe {
             let mut d = WSADATA::default();
@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its live connections"]
     fn live() {
         let a = list();
         std::thread::sleep(std::time::Duration::from_secs(3));

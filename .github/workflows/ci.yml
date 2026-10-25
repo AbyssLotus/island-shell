@@ -1,0 +1,57 @@
+# Compiles and tests the app on Windows for every push and pull request, so a session
+# without Windows still gets real feedback (docs/design/modules-handoff.md, M0.0).
+# Tests that need hardware, the network or the owner's PC are #[ignore = "needs …"].
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  rust:
+    name: Rust (check, test)
+    # A pull request from this repo is already covered by the push run on the same commit.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: cargo check
+        run: cargo check --locked --all-targets
+      # vd-vm-core is a path dependency, so it's tested from here until the workspace (M0.1).
+      - name: cargo test
+        run: cargo test --locked -p island-shell -p vd-vm-core
+
+  web:
+    name: Front end (node --test)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Skipped until dev/tests exists (M0.2 and later).
+      - uses: actions/setup-node@v5
+        if: hashFiles('dev/tests/**/*.js') != ''
+        with:
+          node-version: 22
+      # Node 22 doesn't search a directory given to --test, so a glob names every .js file under dev/tests.
+      - name: node --test
+        if: hashFiles('dev/tests/**/*.js') != ''
+        run: node --test "dev/tests/**/*.js"

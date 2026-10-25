@@ -809,7 +809,7 @@ mod tests {
 
     /// `cargo test --release sysinfo::tests::live -- --ignored --nocapture`
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its hardware"]
     fn live() {
         let s = system();
         println!("{}", serde_json::to_string_pretty(&s).unwrap());

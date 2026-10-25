@@ -40,7 +40,7 @@ Island Shell only runs on Windows 10/11. A cloud session is usually Linux.
 | --- | --- | --- |
 | Platform-neutral Rust (protocol, SDK, manifest, catalog, pack tool) | Cloud | `cargo test -p <crate>`. Keep these crates free of `cfg(windows)` except their transport modules. |
 | The whole workspace compiles and its tests pass | GitHub Actions, `windows-latest` | `.github/workflows/ci.yml` (M0.0). Push the branch and read the run. Windows runners are free for public repos. |
-| Front-end logic (registries, cube layout, weather mapping) | Cloud | `node --test dev/tests/` on DOM-free modules. Keep logic out of DOM code so it can be imported in Node. |
+| Front-end logic (registries, cube layout, weather mapping) | Cloud | `node --test "dev/tests/**/*.js"` on DOM-free modules (Node 22 doesn't search a directory given to `--test`; CI runs the same glob). Keep logic out of DOM code so it can be imported in Node. |
 | How the UI looks | Cloud | The dev harness (M0.2) serves `src/` with a mocked Tauri bridge. Screenshot it with headless Chromium (Playwright, if it's available). |
 | Running the real app: Tobii, Apple Music, Discord, Steam, the installer, Defender | **The owner's PC only** | Each package ends with a **PC check** list the owner runs and ticks off in the PR. |
 
@@ -629,7 +629,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 
 | ID | Title | Depends on | Status | PR |
 | --- | --- | --- | --- | --- |
-| M0.0 | CI on Windows | — | todo | |
+| M0.0 | CI on Windows | — | in review | |
 | M0.1 | Cargo workspace | M0.0 | todo | |
 | M0.2 | Dev harness | M0.0 | todo | |
 | M0.3 | Front-end registries | M0.2 | todo | |

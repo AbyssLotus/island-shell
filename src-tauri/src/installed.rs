@@ -391,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its installed apps and sizes"]
     fn live() {
         let t = std::time::Instant::now();
         let l = list();

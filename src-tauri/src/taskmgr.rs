@@ -1430,7 +1430,7 @@ mod tests {
 
     /// TM_DUMP=<folder>: writes a few live samples and the startup list as JSON (for page tests).
     #[test]
-    #[ignore]
+    #[ignore = "needs TM_DUMP=<folder>: writes live samples"]
     fn dump_json() {
         util::com_mta();
         let Ok(dir) = std::env::var("TM_DUMP") else { return };
@@ -1481,7 +1481,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints a live sample"]
     fn print_sample() {
         util::com_mta();
         let mut st = State::default();

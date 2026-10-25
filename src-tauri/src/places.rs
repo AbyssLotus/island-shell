@@ -182,7 +182,7 @@ mod tests {
 
     /// Prints what this PC has (drives, folders, recent items).
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its drives, folders and recent items"]
     fn live_places() {
         crate::util::com_mta();
         for p in list() {

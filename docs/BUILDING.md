@@ -25,7 +25,7 @@ Release build: `cargo tauri build --no-bundle` (or drop `--no-bundle` for an NSI
 
 `cargo tauri build` makes the one-click installer at `src-tauri/target/release/bundle/nsis/`. It uses the NSIS template in `src-tauri/installer/` (Tauri's own, changed to install without wizard pages; `/WIZARD` brings them back) and hooks that quit a running Island Shell first so the taskbar always comes back. `src-tauri/installer/make_art.py` redraws the installer's images.
 
-Tests: `cargo test --release` in `src-tauri/`. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`).
+Tests: `cargo test --release` in `src-tauri/`. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`). Each one's `#[ignore = "needs …"]` says what it needs. CI (`.github/workflows/ci.yml`) runs `cargo check` and `cargo test` on Windows for every push and pull request, plus `node --test` over `dev/tests` once that folder exists.
 
 ## Layout
 

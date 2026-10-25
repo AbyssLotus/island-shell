@@ -330,7 +330,7 @@ mod tests {
 
     /// Real readings on this machine (prints them).
     #[test]
-    #[ignore]
+    #[ignore = "needs a GPU: prints its sensor readings"]
     fn live_sensors() {
         let cpu = "AMD Ryzen 7 8700G w/ Radeon 780M Graphics";
         let gpus = Gpus::new(cpu).read();

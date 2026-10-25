@@ -400,7 +400,7 @@ mod tests {
     /// `cargo test apps::tests::info_live -- --ignored --nocapture`: details and menu verbs for a few
     /// installed apps of each kind.
     #[test]
-    #[ignore]
+    #[ignore = "needs a real PC: prints its installed apps"]
     fn info_live() {
         let dir = std::env::temp_dir().join("island-apps-test");
         let _ = std::fs::create_dir_all(&dir);

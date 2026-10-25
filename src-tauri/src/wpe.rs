@@ -277,7 +277,7 @@ mod tests {
     /// `cargo test live_wpe -- --ignored --nocapture`: reads the real library and thumbnails a few
     /// previews (a GIF and a JPG at least) into a temp folder.
     #[test]
-    #[ignore]
+    #[ignore = "needs Wallpaper Engine installed"]
     fn live_wpe() {
         crate::util::com_mta();
         let tmp = std::env::temp_dir().join("island-wpe-test");

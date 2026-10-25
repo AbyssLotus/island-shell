@@ -648,7 +648,7 @@ mod tests {
     /// `cargo test small_copy_live -- --ignored --nocapture`: every cover or hero still shown at full
     /// size that decodes to 4 MB or more (the small copies are made in the background).
     #[test]
-    #[ignore]
+    #[ignore = "needs Steam with games installed"]
     fn small_copy_live() {
         crate::util::com_mta();
         for g in library().games {
@@ -664,7 +664,7 @@ mod tests {
 
     /// GAMES_DUMP=<file>: writes the live library as JSON (for page tests).
     #[test]
-    #[ignore]
+    #[ignore = "needs Steam and GAMES_DUMP=<file>"]
     fn dump_json() {
         let Ok(out) = std::env::var("GAMES_DUMP") else { return };
         std::fs::write(out, serde_json::to_string(&library()).unwrap()).unwrap();
@@ -672,7 +672,7 @@ mod tests {
 
     /// `cargo test live_library -- --ignored --nocapture`
     #[test]
-    #[ignore]
+    #[ignore = "needs Steam with games installed"]
     fn live_library() {
         let l = library();
         for g in &l.games {

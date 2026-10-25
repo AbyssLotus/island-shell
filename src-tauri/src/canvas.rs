@@ -778,7 +778,7 @@ mod tests {
     /// Against a school's real Canvas with a made-up token: refused with a readable message
     /// (checks the request plumbing and the Authorization header).
     #[test]
-    #[ignore]
+    #[ignore = "needs the network: calls a real Canvas server"]
     fn live_bad_token() {
         crate::util::com_mta();
         let api = Api { domain: "canvas.harvard.edu".into(), token: "not-a-real-token".into() };

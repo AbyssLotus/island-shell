@@ -359,7 +359,7 @@ pub fn set_app(pid: u32, level: Option<f32>, muted: Option<bool>) -> Result<(), 
 mod tests {
     /// Read-only: `cargo test live_audio -- --ignored --nocapture` lists devices and the mixer.
     #[test]
-    #[ignore]
+    #[ignore = "needs audio devices: prints them and the mixer"]
     fn live_audio() {
         crate::util::com_mta();
         let d = super::devices();
