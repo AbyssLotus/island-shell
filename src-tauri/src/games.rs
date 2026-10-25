@@ -304,7 +304,7 @@ fn make_small(todo: Vec<(PathBuf, PathBuf, u32)>) {
         let mut made = 0;
         for (src, dst, w) in &todo {
             let _ = std::fs::create_dir_all(dst.parent().unwrap_or(Path::new(".")));
-            if crate::wpe::scale_image(src, dst, *w).is_some() {
+            if island_win::image::scale_to_png(src, dst, *w).is_some() {
                 made += 1;
             }
         }

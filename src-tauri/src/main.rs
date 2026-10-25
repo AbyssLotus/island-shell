@@ -38,7 +38,6 @@ mod voicemeeter;
 mod vpn;
 mod wallpaper;
 mod winkey;
-mod wpe;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
@@ -379,32 +378,6 @@ fn vpn_radmin_open() -> Result<(), String> {
 #[tauri::command]
 async fn copy_text(text: String) -> Result<(), String> {
     blocking(move || arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string())).await?
-}
-
-/// Wallpaper Engine's wallpapers; missing thumbnails are made in the background (`we:thumb`).
-#[tauri::command]
-async fn we_library(app: AppHandle, shared: Shr<'_>) -> Result<wpe::Library, String> {
-    let dir = shared.dir.clone();
-    let lib = {
-        let dir = dir.clone();
-        blocking(move || wpe::library(&dir)).await?
-    };
-    for d in &lib.dirs {
-        let _ = app.asset_protocol_scope().allow_directory(d, true);
-    }
-    wpe::make_thumbs(app, &lib, dir);
-    Ok(lib)
-}
-
-#[tauri::command]
-async fn we_apply(dir: String) -> Result<(), String> {
-    blocking(move || wpe::apply(&dir)).await?
-}
-
-/// pause | play | mute | unmute | stop | next
-#[tauri::command]
-async fn we_control(cmd: String) -> Result<(), String> {
-    blocking(move || wpe::control(&cmd)).await?
 }
 
 /// Discord: voice call, notifications and Rich Presence (see discord.rs).
@@ -1250,9 +1223,6 @@ fn main() {
             vpn_status,
             audio_devices,
             vm_state,
-            we_library,
-            we_apply,
-            we_control,
             discord_status,
             discord_configure,
             discord_action,

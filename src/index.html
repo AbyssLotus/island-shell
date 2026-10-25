@@ -394,29 +394,11 @@
 
       <section class="view" id="v-wallpaper" data-tab="wallpaper" role="tabpanel" aria-labelledby="tab-wallpaper">
         <div class="v-head">
-          <div class="seg" id="wpMode" role="group" aria-label="Wallpapers" hidden>
-            <button type="button" data-mode="we">Wallpaper Engine</button>
-            <button type="button" data-mode="island">Island scenes</button>
-          </div>
+          <div class="seg" id="wpMode" role="group" aria-label="Wallpapers" hidden></div>
           <b id="wpTitle">Wallpapers</b><small id="wpSub">7 generated scenes</small>
           <span class="grow"></span><label class="switch" for="follow"><input type="checkbox" id="follow" checked><span>Accent follows wallpaper</span></label>
         </div>
-        <div id="weView" hidden>
-          <div class="we-bar">
-            <label class="search we-search"><i data-ic="search"></i><input id="weQ" type="search" placeholder="Search wallpapers" autocomplete="off" aria-label="Search wallpapers"></label>
-            <div class="we-kinds" id="weKinds" role="group" aria-label="Type">
-              <button type="button" class="chip" data-kind="" aria-pressed="true">All</button>
-              <button type="button" class="chip" data-kind="scene" aria-pressed="false">Scenes</button>
-              <button type="button" class="chip" data-kind="video" aria-pressed="false">Videos</button>
-              <button type="button" class="chip" data-kind="web" aria-pressed="false">Web</button>
-            </div>
-            <span class="grow"></span>
-            <button class="ib" type="button" id="wePlay" aria-label="Pause the wallpaper" title="Pause the wallpaper"></button>
-            <button class="ib" type="button" id="weMute" aria-label="Mute the wallpaper" title="Mute the wallpaper"></button>
-          </div>
-          <div class="we-grid" id="weGrid" role="list"></div>
-          <p class="empty" id="weEmpty" hidden></p>
-        </div>
+        <div class="mod-views" data-tab="wallpaper"></div>
         <div id="islandWalls">
         <div class="carousel" id="carousel" aria-label="Wallpapers"></div>
         <div class="wp-foot"><div class="wp-meta"><b id="wpName"></b><small><span class="sw" id="wpSw"></span><span id="wpHex"></span></small></div><span class="grow"></span><button class="btn" type="button" id="wpShuffle"><i data-ic="shuffle"></i>Shuffle</button><button class="btn primary" type="button" id="wpApply">Apply</button></div>

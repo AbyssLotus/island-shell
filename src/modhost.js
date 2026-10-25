@@ -27,7 +27,8 @@
 //   notify({ title, body, icon, img, round, urgent, action, sound, ms })
 //   open('tab:<id>' | 'cube:<id>')
 //   openWeb(url)                    a link in the default browser (never Edge)
-//   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn)
+//   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
+//                                   accentFrom(imageUrl)
 //   settings.mount(fn(root))        its page in the Modules sheet
 
 const BASE = () => window.__ISLAND_MOD_BASE__ || 'http://mod.localhost/';
@@ -81,7 +82,7 @@ export function createModuleHost(env) {
       if (R.tabs.has(t.id)) { log(`modules: ${id} wants tab ${t.id}, which is taken`); continue; }
       R.tabs.add({ id: t.id, title: t.title, icon: iconFor(id, t.icon), order: t.order, width: t.width || 760, module: id });
     }
-    for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name });
+    for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name, view: !!s.view });
     for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, module: id });
     for (const cube of c.cubes || []) {
       if (R.cubes.has(cube.id)) { log(`modules: ${id} wants cube ${cube.id}, which is taken`); continue; }

@@ -150,6 +150,14 @@ pub struct Section {
     pub tab: String,
     pub id: String,
     pub order: f64,
+    /// Its name where the tab shows one (default: the module's name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// An alternative to the tab's own content, picked in a switch in its header (Wallpaper Engine's
+    /// library beside the island's scenes), rather than a block under it. Only tabs with such a
+    /// switch take one: `wallpaper`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub view: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -172,6 +180,9 @@ pub struct Setup {
     #[serde(default)]
     pub preselect: bool,
 }
+
+/// Base tabs with a switch for module views (`sections[].view`).
+pub const VIEW_TABS: [&str; 1] = ["wallpaper"];
 
 /// Letters the base keeps for itself (§4.13).
 pub const BASE_HOTKEYS: [&str; 4] = ["A", "V", "N", "W"];
@@ -258,6 +269,9 @@ impl Manifest {
         for s in &c.sections {
             if !valid_id(&s.tab) || !valid_id(&s.id) || !s.order.is_finite() {
                 return Err(ctx(&format!("section {:?} needs a tab, an id and an order", s.id)));
+            }
+            if s.view && !VIEW_TABS.contains(&s.tab.as_str()) {
+                return Err(ctx(&format!("section {}: only {} can take a view", s.id, VIEW_TABS.join(", "))));
             }
         }
         for cal in &c.calendar {

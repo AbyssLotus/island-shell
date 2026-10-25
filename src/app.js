@@ -176,7 +176,6 @@ function releaseHidden() {
   clearTimeout(S.releaseT);
   S.releaseT = setTimeout(() => {
     if (!(S.mode === 'panel' && S.tab === 'games')) setHtml($('#gShelf'), '');
-    if (!(S.mode === 'panel' && S.tab === 'wallpaper')) clearWeGrid();
   }, 900);
 }
 function setMode(m) {
@@ -2089,98 +2088,37 @@ $('#appSearch').addEventListener('keydown', e => {
 });
 listen('tray:changed', loadTray);
 
-/* ---------- Wallpaper Engine ---------- */
-S.we = null; S.weAt = 0; S.weKind = ''; S.weQ = ''; S.weShown = 0; S.wePaused = false; S.weMuted = false;
+/* ---------- wallpaper views ----------
+   Module sections with `view` (Wallpaper Engine's library) are alternatives to the island's own
+   scenes, picked in the tab's header; the first one shows unless the island's scenes were picked. */
 S.wpMode = store.get('wpMode', 'we');
-const WE_PAGE = 48;
-/** Opens the tab: Wallpaper Engine's library (re-read at most once a minute) or the island's scenes. */
-function showWallpapers() {
-  renderWpMode();
-  if (S.wpMode !== 'we') return;
-  if (S.we && Date.now() - S.weAt < 60000) { renderWeGrid(); return; }
-  invoke('we_library').then(lib => {
-    S.we = lib; S.weAt = Date.now();
-    if (!lib.installed) { S.wpMode = 'island'; renderWpMode(); return; }
-    renderWpMode(); renderWeGrid();
-  }).catch(err => note('#wpNote', String(err)));
+const wpViews = () => R.sections.all().filter(s => s.tab === 'wallpaper' && s.view).sort((a, b) => a.order - b.order);
+function wpView() {
+  const v = wpViews();
+  if (S.wpMode === 'island' || !v.length) return 'island';
+  return v.some(x => x.id === S.wpMode) ? S.wpMode : v[0].id;
 }
+/** The tab's current view: a module section's id, or '' for the tab's own content. */
+const viewOf = tab => (tab === 'wallpaper' && wpView() !== 'island' ? wpView() : '');
+function showWallpapers() { renderWpMode(); }
 function renderWpMode() {
-  const has = !S.we || S.we.installed; // unknown until the first look: offer it
-  const we = has && S.wpMode === 'we';
+  const v = wpViews(), cur = wpView(), has = v.length > 0;
   $('#wpMode').hidden = !has;
-  $$('#wpMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === (we ? 'we' : 'island')));
-  $('#weView').hidden = !we; $('#islandWalls').hidden = we;
-  $('#wpTitle').hidden = has; $('#wpSub').hidden = has && !we;
-  if (we && S.we) txt($('#wpSub'), `${S.we.wallpapers.length} wallpapers`);
-  else if (!has) txt($('#wpSub'), `${WALLS.length} generated scenes`);
-  setHtml($('#wePlay'), icon(S.wePaused ? 'play' : 'pause'));
-  $('#wePlay').title = S.wePaused ? 'Resume the wallpaper' : 'Pause the wallpaper';
-  setHtml($('#weMute'), icon(S.weMuted ? 'mute' : 'speaker'));
-  $('#weMute').title = S.weMuted ? 'Unmute the wallpaper' : 'Mute the wallpaper';
+  if (has) setHtml($('#wpMode'), [...v.map(x => [x.id, x.title]), ['island', 'Island scenes']].map(([id, t]) => `<button type="button" data-mode="${esc(id)}" aria-pressed="${id === cur}">${esc(t)}</button>`).join(''));
+  $('#islandWalls').hidden = cur !== 'island';
+  $('#wpTitle').hidden = has; $('#wpSub').hidden = has;
+  syncSections();
   if (S.mode === 'panel' && S.tab === 'wallpaper') layout();
 }
-/** Current wallpaper first, then recently used, then newest; filtered by type and search. */
-function weList() {
-  const lib = S.we, q = S.weQ.trim().toLowerCase();
-  const rank = w => w.dir === lib.current ? 0 : lib.recent.includes(w.dir) ? 1 + lib.recent.indexOf(w.dir) : 1000;
-  return lib.wallpapers
-    .filter(w => (!S.weKind || w.kind === S.weKind) && (!q || w.title.toLowerCase().includes(q) || w.tags.some(t => t.toLowerCase().includes(q))))
-    .sort((a, b) => rank(a) - rank(b) || b.added - a.added);
-}
-const KIND_ICON = { scene: 'layers', video: 'film', web: 'globe' };
-function weTile(w) {
-  const cur = w.dir === S.we.current, mature = w.rating === 'Mature';
-  const img = w.thumb ? `<img src="${esc(assetUrl(w.thumb))}" alt="" loading="lazy" decoding="async">` : '';
-  return `<button type="button" role="listitem" class="we-tile${cur ? ' on' : ''}${mature ? ' mature' : ''}" data-dir="${esc(w.dir)}" title="${esc(w.title)}${w.tags.length ? ' · ' + esc(w.tags.join(', ')) : ''}"${w.thumb ? '' : ` style="background:${gradFor(w.title)}"`}>${img}${cur ? '<span class="we-badge">On</span>' : mature ? '<span class="we-badge r18">18+</span>' : ''}${KIND_ICON[w.kind] ? `<span class="we-kind">${icon(KIND_ICON[w.kind])}</span>` : ''}<span class="we-t">${esc(w.title)}</span></button>`;
-}
-/** Builds the grid a page at a time as you scroll, so a 600-wallpaper library stays light. */
-function renderWeGrid(more) {
-  if (!S.we || !S.we.installed) return;
-  const list = weList(), grid = $('#weGrid');
-  if (!more) { S.weShown = 0; grid.innerHTML = ''; grid.scrollTop = 0; }
-  const next = list.slice(S.weShown, S.weShown + WE_PAGE);
-  grid.querySelector('.we-more')?.remove();
-  grid.insertAdjacentHTML('beforeend', next.map(weTile).join('') + (S.weShown + next.length < list.length ? '<i class="we-more"></i>' : ''));
-  S.weShown += next.length;
-  const sentinel = grid.querySelector('.we-more');
-  if (sentinel) { S.weObs?.disconnect(); S.weObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) renderWeGrid(true); }, { root: grid, rootMargin: '200px' }); S.weObs.observe(sentinel); }
-  $('#weEmpty').hidden = list.length > 0; txt($('#weEmpty'), S.weQ ? `Nothing matches “${S.weQ}”.` : 'No wallpapers of that type.');
-  if (!more && S.mode === 'panel' && S.tab === 'wallpaper') layout();
-}
-function clearWeGrid() { S.weObs?.disconnect(); S.weObs = null; S.weShown = 0; $('#weGrid').innerHTML = ''; }
-const weOf = el => S.we && S.we.wallpapers.find(w => w.dir === el.dataset.dir);
-// Thumbnails arrive one by one the first time the library is opened.
-listen('we:thumb', e => {
-  const w = S.we && S.we.wallpapers.find(x => x.dir === e.payload.dir); if (!w) return;
-  w.thumb = e.payload.thumb;
-  const tile = $(`#weGrid .we-tile[data-dir="${CSS.escape(w.dir)}"]`);
-  if (tile && !tile.querySelector('img')) { tile.style.background = ''; tile.insertAdjacentHTML('afterbegin', `<img src="${esc(assetUrl(w.thumb))}" alt="" decoding="async">`); }
+$('#wpMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  S.wpMode = b.dataset.mode; store.set('wpMode', S.wpMode); renderWpMode();
 });
-// Hovering plays that one wallpaper's real (often animated) preview; only one at a time.
-$('#weGrid').addEventListener('pointerover', e => {
-  const tile = e.target.closest('.we-tile'); if (!tile || tile === S.weHover) return;
-  weUnhover(); const w = weOf(tile), img = tile.querySelector('img');
-  if (w && w.preview && img && /\.gif$/i.test(w.preview)) { S.weHover = tile; img.src = assetUrl(w.preview); }
-});
-function weUnhover() {
-  const t = S.weHover; S.weHover = null; if (!t) return;
-  const w = weOf(t), img = t.querySelector('img'); if (w && img && w.thumb) img.src = assetUrl(w.thumb);
-}
-$('#weGrid').addEventListener('pointerleave', weUnhover);
-$('#weGrid').addEventListener('click', e => {
-  const tile = e.target.closest('.we-tile'); const w = tile && weOf(tile); if (!w || tile.classList.contains('busy')) return;
-  note('#wpNote', ''); tile.classList.add('busy');
-  invoke('we_apply', { dir: w.dir }).then(() => {
-    S.we.current = w.dir; S.we.recent = [w.dir, ...S.we.recent.filter(d => d !== w.dir)].slice(0, 10);
-    S.wePaused = false; renderWpMode();
-    $$('#weGrid .we-tile.on').forEach(t => { t.classList.remove('on'); t.querySelector('.we-badge:not(.r18)')?.remove(); });
-    tile.classList.add('on'); if (!tile.querySelector('.we-badge')) tile.insertAdjacentHTML('beforeend', '<span class="we-badge">On</span>');
-    if (S.follow && w.thumb) accentFrom(assetUrl(w.thumb));
-  }).catch(err => note('#wpNote', String(err))).finally(() => tile.classList.remove('busy'));
-});
+R.sections.on(() => renderWpMode());
 /** A lively accent from the wallpaper's thumbnail (its most vivid colors, kept readable). */
 function accentFrom(url) {
   const img = new Image();
+  if (url.startsWith('http://mod.localhost/')) img.crossOrigin = 'anonymous'; // a module's image: its pixels are readable with CORS
   img.onload = () => {
     const c = document.createElement('canvas'); c.width = c.height = 24;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, 24, 24);
@@ -2203,25 +2141,6 @@ function accentFrom(url) {
   };
   img.src = url;
 }
-$('#wpMode').addEventListener('click', e => {
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  S.wpMode = b.dataset.mode; store.set('wpMode', S.wpMode);
-  if (S.wpMode === 'we') showWallpapers(); else { clearWeGrid(); renderWpMode(); }
-});
-$('#weKinds').addEventListener('click', e => {
-  const b = e.target.closest('[data-kind]'); if (!b) return;
-  S.weKind = b.dataset.kind; $$('#weKinds .chip').forEach(c => c.setAttribute('aria-pressed', c === b)); renderWeGrid();
-});
-$('#weQ').addEventListener('input', e => { S.weQ = e.target.value; clearTimeout(S.weQT); S.weQT = setTimeout(() => renderWeGrid(), 120); });
-$('#wePlay').addEventListener('click', () => {
-  S.wePaused = !S.wePaused; renderWpMode();
-  invoke('we_control', { cmd: S.wePaused ? 'pause' : 'play' }).catch(err => { S.wePaused = !S.wePaused; renderWpMode(); note('#wpNote', String(err)); });
-});
-$('#weMute').addEventListener('click', () => {
-  S.weMuted = !S.weMuted; renderWpMode();
-  invoke('we_control', { cmd: S.weMuted ? 'mute' : 'unmute' }).catch(err => { S.weMuted = !S.weMuted; renderWpMode(); note('#wpNote', String(err)); });
-});
-
 /* ---------- wallpaper ---------- */
 WALLS.forEach((wl, i) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'wcard'; b.dataset.i = i; b.setAttribute('aria-label', wl.name);
@@ -2576,6 +2495,8 @@ const modHost = createModuleHost({
   },
   island: {
     layout: () => layout(),
+    /** The accent from an image (a module's wallpaper), when the accent follows the wallpaper. */
+    accentFrom: url => { if (S.follow) accentFrom(url); },
     showing: tab => S.mode === 'panel' && S.tab === tab,
     closePanel: keep => closePanel(keep),
     releaseFocus: () => quiet(invoke('release_focus')),
@@ -2622,11 +2543,15 @@ function syncModViews() {
 function syncSections() {
   for (const s of R.sections.all()) {
     const view = views[s.tab]; if (!view) continue;
-    let box = view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
+    // A view goes in the tab's own .mod-views box and shows only while it's the one picked.
+    let box = s.view ? view.querySelector('.mod-views') : view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
+    if (!box && s.view) continue;
     if (!box) { box = Object.assign(document.createElement('div'), { className: 'mod-sections' }); box.dataset.tab = s.tab; view.append(box); }
     let host = box.querySelector(`[data-sec="${CSS.escape(s.id)}"]`);
     if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section' }); host.dataset.sec = s.id; box.append(host); }
-    modHost.showSection(s.id, host, S.mode === 'panel' && S.tab === s.tab);
+    const on = S.mode === 'panel' && S.tab === s.tab && (!s.view || viewOf(s.tab) === s.id);
+    host.hidden = !!s.view && viewOf(s.tab) !== s.id;
+    modHost.showSection(s.id, host, on);
   }
   $$('.mod-section').forEach(h => { if (!R.sections.has(h.dataset.sec)) h.remove(); });
 }

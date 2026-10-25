@@ -298,11 +298,6 @@
   "games": [],
   "running": 0
  },
- "we_library": {
-  "wallpapers": [],
-  "current": null,
-  "recent": []
- },
  "cc_places": [
   {
    "kind": "drive",
@@ -341,5 +336,119 @@
    "when": 1761300000000
   }
  ],
- "media_lyrics": null
+ "media_lyrics": null,
+ "mod:wallpaper-engine.library": {
+  "installed": true,
+  "wallpapers": [
+   {
+    "dir": "c:\\wallpapers\\1",
+    "title": "Northern Lights",
+    "kind": "scene",
+    "tags": [
+     "Nature"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1760000000,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\2",
+    "title": "Rain on Glass",
+    "kind": "video",
+    "tags": [
+     "Relaxing"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759913600,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\3",
+    "title": "Neon Alley",
+    "kind": "scene",
+    "tags": [
+     "Cyberpunk",
+     "City"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759827200,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\4",
+    "title": "Tide Pools",
+    "kind": "video",
+    "tags": [
+     "Nature"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759740800,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\5",
+    "title": "Orbit",
+    "kind": "web",
+    "tags": [
+     "Space"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759654400,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\6",
+    "title": "Paper Cranes",
+    "kind": "scene",
+    "tags": [
+     "Minimal"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759568000,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\7",
+    "title": "Night Drive",
+    "kind": "video",
+    "tags": [
+     "Car"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759481600,
+    "workshop": true
+   },
+   {
+    "dir": "c:\\wallpapers\\8",
+    "title": "Lanterns",
+    "kind": "scene",
+    "tags": [
+     "Festival"
+    ],
+    "rating": "Everyone",
+    "animated": false,
+    "thumb": null,
+    "added": 1759395200,
+    "workshop": true
+   }
+  ],
+  "current": "c:\\wallpapers\\3",
+  "recent": [
+   "c:\\wallpapers\\1"
+  ]
+ }
 }

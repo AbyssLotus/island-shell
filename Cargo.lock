@@ -1966,6 +1966,7 @@ dependencies = [
  "base64 0.22.1",
  "island-catalog",
  "island-host",
+ "island-win",
  "png 0.18.1",
  "serde",
  "serde_json",
@@ -1980,6 +1981,14 @@ dependencies = [
  "windows-core 0.61.2",
  "windows-core 0.62.2",
  "windows-future 0.2.1",
+]
+
+[[package]]
+name = "island-win"
+version = "0.1.0"
+dependencies = [
+ "png 0.18.1",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -4542,6 +4551,17 @@ checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
+]
+
+[[package]]
+name = "wallpaper-engine-module"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "island-module",
+ "island-win",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
