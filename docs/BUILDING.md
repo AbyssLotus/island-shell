@@ -11,7 +11,7 @@ Island Shell is a [Tauri 2](https://tauri.app) app: a Rust backend (`src-tauri/`
 ## Run and build
 
 ```
-src-tauri\target\release\island-shell.exe
+target\release\island-shell.exe
 ```
 
 Development (live reload of the page, rebuild on Rust changes):
@@ -23,9 +23,11 @@ cargo tauri dev
 
 Release build: `cargo tauri build --no-bundle` (or drop `--no-bundle` for an NSIS installer).
 
-`cargo tauri build` makes the one-click installer at `src-tauri/target/release/bundle/nsis/`. It uses the NSIS template in `src-tauri/installer/` (Tauri's own, changed to install without wizard pages; `/WIZARD` brings them back) and hooks that quit a running Island Shell first so the taskbar always comes back. `src-tauri/installer/make_art.py` redraws the installer's images.
+`cargo tauri build` makes the one-click installer at `target/release/bundle/nsis/`. It uses the NSIS template in `src-tauri/installer/` (Tauri's own, changed to install without wizard pages; `/WIZARD` brings them back) and hooks that quit a running Island Shell first so the taskbar always comes back. `src-tauri/installer/make_art.py` redraws the installer's images.
 
-Tests: `cargo test --release` in `src-tauri/`. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`). Each one's `#[ignore = "needs …"]` says what it needs. CI (`.github/workflows/ci.yml`) runs `cargo check` and `cargo test` on Windows for every push and pull request, plus `node --test` over `dev/tests` once that folder exists.
+The repo is one Cargo workspace (the root `Cargo.toml`): the app, its crates, the modules and the tools share one `Cargo.lock` and one `target/` folder, and the release profile lives in the root manifest.
+
+Tests: `cargo test --workspace` from the repo root. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`). Each one's `#[ignore = "needs …"]` says what it needs. CI (`.github/workflows/ci.yml`) runs `cargo check --workspace --all-targets` and `cargo test --workspace` on Windows for every push and pull request, plus `node --test` over `dev/tests` once that folder exists.
 
 ## Layout
 

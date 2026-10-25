@@ -4306,6 +4306,7 @@ dependencies = [
  "libloading 0.8.9",
  "parking_lot",
  "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tracing",
  "winreg",

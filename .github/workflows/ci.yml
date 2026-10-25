@@ -25,21 +25,14 @@ jobs:
     # A pull request from this repo is already covered by the push run on the same commit.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: src-tauri
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
       - name: cargo check
-        run: cargo check --locked --all-targets
-      # vd-vm-core's own tests join with the workspace (M0.1): Cargo ignores the dev-dependencies
-      # of a path dependency that isn't a workspace member, so they can't build from here.
+        run: cargo check --locked --workspace --all-targets
       - name: cargo test
-        run: cargo test --locked
+        run: cargo test --locked --workspace
 
   web:
     name: Front end (node --test)
