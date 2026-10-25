@@ -1,6 +1,8 @@
 import { WALLS, drawWall } from './engine.js';
 import { createCommandCenter } from './cc.js';
 import { createSounds } from './sounds.js';
+import { createRegistry } from './registry.js';
+import { createModuleHost } from './modhost.js';
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI.core.invoke;
@@ -106,9 +108,20 @@ const IC = {
 const icon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 
+/* ---------- tabs (src/registry.js) ---------- */
+const R = createRegistry();
+// The base's own tabs, [id, title, icon, panel width], in strip order (order 10, 20, …). Modules add
+// theirs from their manifests (src/modhost.js).
+[['controls', 'Controls', 'gear', 600], ['music', 'Music', 'note', 700], ['audio', 'Audio', 'speaker', 680], ['today', 'Today', 'calendar', 760],
+  ['canvas', 'Canvas', 'cap', 760], ['network', 'Network', 'wifi', 680], ['discord', 'Discord', 'chat', 700], ['games', 'Games', 'gamepad', 760],
+  ['destiny', 'Destiny', 'orbit', 760], ['stats', 'Stats', 'pulse', 720], ['clipboard', 'Clipboard', 'clip', 760], ['apps', 'Apps', 'grid', 640],
+  ['wallpaper', 'Wallpaper', 'image', 660], ['power', 'Power', 'power', 600]]
+  .forEach(([id, title, ic, width], i) => R.tabs.add({ id, title, icon: ic, width, order: (i + 1) * 10 }));
+/** Tab ids in strip order, kept current as modules come and go. */
+let TABS = R.tabs.ids();
+const tabW = t => (R.tabs.get(t) || {}).width || 700;
+
 /* ---------- state ---------- */
-const TABS = ['controls', 'music', 'audio', 'today', 'canvas', 'network', 'discord', 'games', 'destiny', 'stats', 'clipboard', 'apps', 'wallpaper', 'power'];
-const TAB_W = { controls: 600, music: 700, audio: 680, today: 760, canvas: 760, network: 680, discord: 700, games: 760, destiny: 760, stats: 720, clipboard: 760, apps: 640, wallpaper: 660, power: 600 };
 const TOP = 8;
 let BAR_H = 40; // 48 for the tall bar
 /** Either top-bar layout: the regular bar or the taller one. */
@@ -146,6 +159,14 @@ function syncAccentMode() { document.documentElement.classList.toggle('accent-ta
 const island = $('#island');
 const L = { pill: $('#L-pill'), peek: $('#L-peek'), toast: $('#L-toast'), panel: $('#L-panel') };
 const views = Object.fromEntries(TABS.map(t => [t, $(`.view[data-tab="${t}"]`)]));
+/** The tab strip, built from the registry (an icon name, or a module's own .svg). */
+function tabIcon(t) { return /\.svg$/.test(t.icon) ? `<img class="i" src="${esc(t.icon)}" alt="">` : icon(t.icon); }
+function renderTabs() {
+  const nav = $('.tabs'), ink = $('.tab-ink');
+  nav.replaceChildren(ink);
+  nav.insertAdjacentHTML('beforeend', R.tabs.all().map(t => `<button class="tab" type="button" role="tab" id="tab-${esc(t.id)}" data-tab="${esc(t.id)}" aria-controls="v-${esc(t.id)}">${tabIcon(t)}<span>${esc(t.title)}</span></button>`).join(''));
+  TABS = R.tabs.ids(); tabLabelW = null;
+}
 const pillW = () => (S.timer.running ? 236 : 200) + callW();
 const maxW = () => Math.max(240, innerWidth - 24);
 
@@ -166,18 +187,18 @@ function setMode(m) {
   syncVmLevels();
   for (const [k, el] of Object.entries(L)) el.classList.toggle('on', k === m);
   L.pill.setAttribute('aria-expanded', m === 'panel');
-  layout(); mediaTick();
+  layout(); mediaTick(); syncModViews();
 }
 let lastRect = '';
 function layout() {
   const mw = maxW(); let w = 36, h = 36, r = 18;
   L.pill.style.width = pillW() + 'px';
   L.peek.style.width = Math.min(400, mw) + 'px';
-  for (const t of TABS) views[t].style.width = Math.min(TAB_W[t], mw) + 'px';
+  for (const t of TABS) if (views[t]) views[t].style.width = Math.min(tabW(t), mw) + 'px';
   if (S.mode === 'pill') { w = pillW(); h = 38; r = 19; }
   else if (S.mode === 'peek') { w = Math.min(400, mw); h = 84; r = 30; }
   else if (S.mode === 'toast') { w = Math.min($('#toast').offsetWidth, mw); h = 52; r = 26; }
-  else if (S.mode === 'panel') { w = Math.min(TAB_W[S.tab], mw); h = 54 + views[S.tab].offsetHeight; r = 30; }
+  else if (S.mode === 'panel') { w = Math.min(tabW(S.tab), mw); h = 54 + views[S.tab].offsetHeight; r = 30; }
   island.style.width = w + 'px'; island.style.height = h + 'px'; island.style.borderRadius = r + 'px';
   // Bar style: the island is only the dropdown under the chip that opened it (or a notification).
   const bar = isBar();
@@ -203,9 +224,10 @@ function layout() {
    fact, so the strip, the highlight and the island all move together on the same spring. */
 const TAB_MIN = 9.5 + 15 + 9.5, TAB_LABEL_GAP = 6, TABS_GAP = 2, TABS_PAD = 3;
 let tabLabelW = null; // each label's natural width (re-measured once the fonts are in)
+renderTabs();
 function tabWidths(active) {
   if (!tabLabelW) tabLabelW = Object.fromEntries(TABS.map(t => [t, $(`#tab-${t} span`).offsetWidth]));
-  const room = Math.min(TAB_W[active], maxW()) - 20 - TABS_PAD * 2 - TABS_GAP * (TABS.length - 1);
+  const room = Math.min(tabW(active), maxW()) - 20 - TABS_PAD * 2 - TABS_GAP * (TABS.length - 1);
   const w = Object.fromEntries(TABS.map(t => [t, TAB_MIN]));
   let used = TAB_MIN * TABS.length;
   const i0 = TABS.indexOf(active), order = [i0];
@@ -227,7 +249,7 @@ function moveInk() {
     if (t === S.tab) at = x;
     x += w[t] + TABS_GAP;
   }
-  const ink = $('.tab-ink'), nav = $('.tabs'), total = x - TABS_GAP + TABS_PAD, fits = total <= Math.min(TAB_W[S.tab], maxW()) - 20;
+  const ink = $('.tab-ink'), nav = $('.tabs'), total = x - TABS_GAP + TABS_PAD, fits = total <= Math.min(tabW(S.tab), maxW()) - 20;
   ink.style.width = w[S.tab] + 'px'; ink.style.transform = `translateX(${at}px)`;
   nav.classList.toggle('over', !fits);
   if (!fits) nav.scrollTo({ left: at - nav.clientWidth / 2 + w[S.tab] / 2, behavior: reduced ? 'auto' : 'smooth' });
@@ -253,7 +275,7 @@ function switchView(t, instant) {
   nv.style.setProperty('--dx', '0px'); nv.classList.add('on');
   S.tab = t; store.set('tab', t); syncTabs();
   if (from === 'games' || from === 'wallpaper') releaseHidden();
-  syncVmLevels();
+  syncVmLevels(); syncModViews();
 }
 function setTab(t) {
   if (S.mode !== 'panel') { openPanel(t); return; }
@@ -364,7 +386,7 @@ document.addEventListener('pointerdown', e => {
   const inCc = e.target.closest && e.target.closest('#cc');
   if (S.mode === 'panel' && !island.contains(e.target) && !inMenu && !inBar && !inCc) closePanel();
 });
-$$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+$('.tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab); });
 
 /* toast */
 let toastT;
@@ -2751,6 +2773,120 @@ listen('apps:ready', loadApps);
 appWin.onFocusChanged(({ payload: focused }) => { if (!focused && S.mode === 'panel' && !S.ccOpen) closePanel(true); });
 TABS.forEach(t => new ResizeObserver(() => { if (S.mode === 'panel' && S.tab === t) layout(); }).observe(views[t]));
 
+/* ---------- modules (src/modhost.js) ---------- */
+// Module tabs get a view as soon as they're registered (their UI mounts in it on first show);
+// sections, Controls tiles and bar chips render from the registry; module notifications and
+// activities arrive here from the backend (modules.rs) or the module's own UI.
+const modHost = createModuleHost({
+  R, invoke, listen, log,
+  ui: {
+    icon, esc, setHtml, txt, clip: clipTxt, grad: gradFor, glyph: glyphOf, ago,
+    /** An error line inside a module's view: shown with text, hidden without. */
+    note(el, msg) { if (!el) return; el.textContent = msg || ''; el.hidden = !msg; layout(); }
+  },
+  island: {
+    layout: () => layout(),
+    showing: tab => S.mode === 'panel' && S.tab === tab,
+    closePanel: keep => closePanel(keep),
+    releaseFocus: () => quiet(invoke('release_focus')),
+    menu: (x, y, items) => showCtx(x, y, items),
+    state: () => ({ mode: S.mode, tab: S.tab, dark: S.dark, style: S.style, cc: !!S.ccOpen, fullscreen: !!S.fullscreen }),
+    on: (name, fn) => { const h = e => fn(e.detail); islandEvents.addEventListener(name, h); return () => islandEvents.removeEventListener(name, h); }
+  },
+  addView: () => syncViews(), removeView: () => syncViews(),
+  notify: (module, n) => modToast(module, n),
+  open: target => openTarget(target),
+  setTiles: () => renderModTiles(), setChips: () => renderModChips(),
+  activitiesChanged: () => islandEvents.dispatchEvent(new CustomEvent('activities')),
+  sectionsChanged: () => syncSections(),
+  tabFailed: (tab, name, e) => { const v = views[tab]; if (v) v.querySelector('.mod-fail').textContent = `${name} couldn't load: ${e && e.message || e}`; layout(); }
+});
+/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities'. */
+const islandEvents = new EventTarget();
+/** Views for module tabs come and go with the registry. */
+function syncViews() {
+  const box = $('.views');
+  for (const t of R.tabs.all()) {
+    if (views[t.id]) continue;
+    const v = document.createElement('section');
+    v.className = 'view mod-view'; v.id = `v-${t.id}`; v.dataset.tab = t.id; v.setAttribute('role', 'tabpanel'); v.setAttribute('aria-labelledby', `tab-${t.id}`);
+    v.innerHTML = '<div class="mod-host"></div><p class="note mod-fail"></p>';
+    box.append(v); views[t.id] = v;
+  }
+  for (const id of Object.keys(views)) if (!R.tabs.has(id)) { views[id].remove(); delete views[id]; if (S.tab === id) { S.tab = 'controls'; views.controls.classList.add('on'); } }
+}
+R.tabs.on(() => { syncViews(); renderTabs(); syncTabs(); if (S.mode === 'panel') { moveInk(); layout(); } });
+/** Which module tab (and sections) are on screen; the module hears show() and hide(). */
+let modShown = null;
+function syncModViews() {
+  const now = S.mode === 'panel' ? S.tab : null;
+  if (now !== modShown) {
+    if (modShown) modHost.hideTab(modShown);
+    modShown = now;
+    if (now && R.tabs.get(now) && R.tabs.get(now).module) modHost.showTab(now, views[now].querySelector('.mod-host'));
+    islandEvents.dispatchEvent(new CustomEvent('tab', { detail: now }));
+  }
+  syncSections();
+}
+/** Module sections inside base tabs: a host per section, in order, shown while their tab is. */
+function syncSections() {
+  for (const s of R.sections.all()) {
+    const view = views[s.tab]; if (!view) continue;
+    let box = view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
+    if (!box) { box = Object.assign(document.createElement('div'), { className: 'mod-sections' }); box.dataset.tab = s.tab; view.append(box); }
+    let host = box.querySelector(`[data-sec="${CSS.escape(s.id)}"]`);
+    if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section' }); host.dataset.sec = s.id; box.append(host); }
+    modHost.showSection(s.id, host, S.mode === 'panel' && S.tab === s.tab);
+  }
+  $$('.mod-section').forEach(h => { if (!R.sections.has(h.dataset.sec)) h.remove(); });
+}
+function modToast(module, n) {
+  const tab = n.action && n.action.startsWith('tab:') ? n.action.slice(4) : '';
+  toast(clipTxt(n.title || module, 48), clipTxt(n.body || '', 72), n.icon && !/\./.test(n.icon) ? n.icon : 'bellon',
+    { img: n.img || '', round: !!n.round, urgent: !!n.urgent, top: !!(n.urgent || n.top), ms: n.ms || (n.urgent ? 8000 : 5500), tab, sound: n.sound || '' });
+}
+listen('mod:notify', e => modToast(e.payload.module, e.payload));
+/** Activities a module's backend sets (host.activity) sit in the same registry as the UI's own. */
+listen('island:activities', e => {
+  for (const a of R.activities.all()) if (a.backend) R.activities.remove(a.id);
+  for (const a of e.payload || []) R.activities.set({ ...a, id: `${a.module}:${a.id}`, aid: a.id, backend: true });
+  islandEvents.dispatchEvent(new CustomEvent('activities'));
+});
+function openTarget(target) {
+  const [kind, id] = String(target || '').split(':');
+  if (kind === 'tab' && R.tabs.has(id)) { if (cmdCenter.isOpen()) cmdCenter.close(() => openPanel(id, true), true); else openPanel(id); }
+  else if (kind === 'cube') { if (!cmdCenter.isOpen()) cmdCenter.open().then(() => cmdCenter.openSheet(id)); else cmdCenter.openSheet(id); }
+}
+/** Controls tiles from modules, after the base's own. */
+function renderModTiles() {
+  const box = $('#modTiles'); if (!box) return;
+  const list = R.tiles.all().filter(t => t.module && !t.hidden);
+  setHtml(box, list.map(t => `<button class="tile" type="button" data-mtile="${esc(t.id)}" aria-pressed="${!!t.pressed}"><span class="ti">${icon(t.icon || 'grid')}</span><span class="tt"><b>${esc(t.title || '')}</b><small>${esc(t.sub || '')}</small></span></button>`).join(''));
+  box.hidden = !list.length;
+}
+$('#modTiles').addEventListener('click', e => {
+  const b = e.target.closest('[data-mtile]'); const t = b && R.tiles.get(b.dataset.mtile); if (!t || !t.run) return;
+  note('#ctlNote', '');
+  Promise.resolve().then(() => t.run()).catch(err => note('#ctlNote', String(err)));
+});
+/** Top-bar chips from modules (left: after the Games button; right: before the volume). */
+function renderModChips() {
+  for (const side of ['left', 'right']) {
+    const box = $(side === 'left' ? '#barModsL' : '#barModsR'); if (!box) continue;
+    const list = R.chips.all().filter(c => c.module && !c.hidden && (c.side || 'right') === side);
+    setHtml(box, list.map(c => {
+      const av = (c.avatars || []).map(a => `<img src="${esc(a.src || '')}" alt="" data-id="${esc(a.id || '')}"${a.talk ? ' class="talk"' : ''} referrerpolicy="no-referrer">`).join('');
+      return `<button class="bchip${c.icon && !c.text && !av ? ' icon' : ''}${c.tone ? ' ' + esc(c.tone) : ''}" type="button" data-mchip="${esc(c.id)}" title="${esc(c.title || '')}" aria-label="${esc(c.title || c.text || '')}">${av ? `<span class="dc-stack">${av}</span>` : ''}${c.icon ? icon(c.icon) : ''}${c.text ? `<span>${esc(c.text)}</span>` : ''}</button>`;
+    }).join(''));
+  }
+}
+barEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-mchip]'); const c = b && R.chips.get(b.dataset.mchip); if (!c) return;
+  e.stopPropagation();
+  if (c.opens) { const [kind, id] = c.opens.split(':'); if (kind === 'tab') openFromBar(id, b); else openTarget(c.opens); }
+  else if (c.run) Promise.resolve().then(() => c.run()).catch(err => toast(c.title || 'Couldn\'t do that', String(err), 'x', { sound: 'problem' }));
+}, true);
+
 /* ---------- boot ---------- */
 setAccent(store.get('accent', TAKEN)); syncAccentMode();
 applySkin();
@@ -2798,6 +2934,8 @@ const cmdCenter = createCommandCenter({
 });
 $('#openTm').addEventListener('click', () => cmdCenter.openTaskManager());
 if (FIRST_RUN) setTimeout(() => cmdCenter.openSetup(), 1800);
+modHost.start();
+
 pollStatus(); loadClips(); loadApps(); loadWeather(); vpnLoop(); loadDc();
 setInterval(() => loadWeather(), 20 * 60e3);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { tabLabelW = null; moveInk(); layout(); });

@@ -48,7 +48,8 @@ for (const name of names) {
   await page.goto(`http://127.0.0.1:${port}/?${q}`);
   await page.waitForTimeout(big ? 3000 : 2600);
   const file = path.join(out, `${name.replace(/[^a-z0-9-]+/gi, '_')}.png`);
-  await page.screenshot({ path: file });
+  // CSS animations are finished and the caret hidden, so screenshots compare run to run.
+  await page.screenshot({ path: file, animations: 'disabled', caret: 'hide' });
   const missing = await page.evaluate(() => [...window.harness.missing]);
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${name.padEnd(14)} ${path.relative(process.cwd(), file)}${missing.length ? `  (no fixture: ${missing.join(', ')})` : ''}`);
   for (const p of problems) console.log(`       ${p}`);
