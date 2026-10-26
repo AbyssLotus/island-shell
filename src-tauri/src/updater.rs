@@ -10,6 +10,9 @@
 //!   same way, and swapped in by modules.rs with the old version kept until the new one is in place.
 //!   With daily checks on, the ones set to update by themselves do so in the background.
 //! - New modules: `install_module` puts one from the catalog in place (the Modules sheet's Install).
+//!   `queue` asks for some in the background (picked in the setup guide or search, or in use before
+//!   the upgrade from 0.1.x): kept in modules/queue.json and installed one at a time; offline, they
+//!   wait for the next start or check.
 //!
 //! The public key is `src-tauri/catalog.pub`, built in. Without one, the updater stays off.
 
@@ -57,6 +60,8 @@ pub struct Status {
     pub modules: Vec<ModuleUpdate>,
     /// The module being updated or installed right now ("" when none).
     pub module_busy: String,
+    /// Modules waiting to be installed (ids), in order.
+    pub queued: Vec<String>,
 }
 
 #[derive(Serialize, Clone, Default, Debug, PartialEq)]
@@ -94,7 +99,7 @@ static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| {
     let saved = load(&util::data_dir());
     let state = if island_catalog::public_key(KEY).is_ok() { "idle" } else { "off" };
     Mutex::new(State {
-        status: Status { current: CURRENT.into(), state: state.into(), checked: saved.checked, auto: saved.auto, ..Default::default() },
+        status: Status { current: CURRENT.into(), state: state.into(), checked: saved.checked, auto: saved.auto, queued: queue_load(), ..Default::default() },
         base: None,
         catalog: None,
     })
@@ -144,7 +149,14 @@ pub fn spawn(app: AppHandle) {
     }
     std::thread::spawn(move || {
         util::com_mta();
-        std::thread::sleep(Duration::from_secs(60));
+        // Modules waiting to be installed go first, soon after start.
+        if !status().queued.is_empty() {
+            std::thread::sleep(Duration::from_secs(8));
+            drain(&app);
+            std::thread::sleep(Duration::from_secs(52));
+        } else {
+            std::thread::sleep(Duration::from_secs(60));
+        }
         loop {
             let st = status();
             if st.auto && util::now_ms().saturating_sub(st.checked) > DAY_MS && matches!(st.state.as_str(), "idle" | "error") {
@@ -208,6 +220,11 @@ pub fn check(app: &AppHandle) -> Result<Status, String> {
                 if base.is_some() { format!("{} is available", st.latest) } else { "up to date".into() },
                 if modules.is_empty() { String::new() } else { format!("; module updates: {}", modules.iter().map(|m| format!("{} {}", m.id, m.to)).collect::<Vec<_>>().join(", ")) }
             ));
+            // Modules waiting to be installed get their turn now the catalog is fresh.
+            if !st.queued.is_empty() {
+                let app = app.clone();
+                std::thread::spawn(move || drain(&app));
+            }
             // Modules set to update by themselves do, in the background, while daily checks are on.
             if st.auto && !modules.is_empty() {
                 let app = app.clone();
@@ -275,6 +292,83 @@ pub fn install_module(app: &AppHandle, id: &str) -> Result<(), String> {
         check(app)?;
     }
     fetch_and_install(app, id)
+}
+
+/// modules/queue.json: modules waiting to be installed.
+fn queue_path() -> PathBuf {
+    crate::modules::code_root().join("queue.json")
+}
+
+fn queue_load() -> Vec<String> {
+    std::fs::read(queue_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+fn queue_save(ids: &[String]) {
+    let _ = std::fs::create_dir_all(crate::modules::code_root());
+    if let Ok(b) = serde_json::to_vec_pretty(ids) {
+        let _ = std::fs::write(queue_path(), b);
+    }
+}
+
+/// Asks for modules to be installed in the background (the ones not installed or waiting yet), and
+/// starts on them. Returns the status, with what's waiting.
+pub fn queue(app: &AppHandle, ids: &[String]) -> Status {
+    let installed = crate::modules::installed_entries();
+    let mut q = queue_load();
+    for id in ids {
+        if !installed.contains_key(id) && !q.contains(id) {
+            q.push(id.clone());
+        }
+    }
+    queue_save(&q);
+    let st = set(app, |s| s.queued = q.clone());
+    if !q.is_empty() && st.state != "off" {
+        let app = app.clone();
+        std::thread::spawn(move || drain(&app));
+    }
+    st
+}
+
+/// Installs what's waiting, one at a time; each says how it went (`update:module`, with
+/// `installed`). A module the catalog doesn't have (any more) is dropped; a failed download stays
+/// for next time, and nothing after it is tried now.
+fn drain(app: &AppHandle) {
+    static DRAINING: AtomicBool = AtomicBool::new(false);
+    if status().state == "off" || DRAINING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    util::com_mta();
+    loop {
+        let installed = crate::modules::installed_entries();
+        let mut q = queue_load();
+        q.retain(|id| !installed.contains_key(id));
+        queue_save(&q);
+        set(app, |s| s.queued = q.clone());
+        let Some(id) = q.first().cloned() else { break };
+        if STATE.lock().unwrap().catalog.is_none() && check(app).is_err() {
+            break;
+        }
+        let entry = STATE.lock().unwrap().catalog.as_ref().and_then(|c| c.modules.iter().find(|m| m.id == id).cloned());
+        let Some(m) = entry else {
+            log_line(&format!("updater: {id} was waiting to be installed but isn't in the catalog; dropped"));
+            let mut q = queue_load();
+            q.retain(|x| *x != id);
+            queue_save(&q);
+            continue;
+        };
+        match fetch_and_install(app, &id) {
+            Ok(()) => {
+                log_line(&format!("updater: installed {id} {}", m.version));
+                let _ = app.emit("update:module", serde_json::json!({ "id": id, "name": m.name, "version": m.version, "ok": true, "installed": true }));
+            }
+            Err(e) => {
+                log_line(&format!("updater: installing {id} failed, it waits for next time: {e}"));
+                let _ = app.emit("update:module", serde_json::json!({ "id": id, "name": m.name, "version": m.version, "ok": false, "installed": true, "error": e }));
+                break;
+            }
+        }
+    }
+    DRAINING.store(false, Ordering::SeqCst);
 }
 
 /// The modules the last catalog offers (empty until it's been read).

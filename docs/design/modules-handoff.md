@@ -632,6 +632,7 @@ Extra conditions:
 | D12 | Until the Music module exists, the base publishes `media.state` from its status loop (when the song, play state or position jumps), so Discord's status keeps working. A docked site can be `split` (its module's island view stays beside it), a notification can carry an `img` (`round` for a person), and a module's setup card can report its state (`ctx.setup.card(() => ({ state }))`) | implementation, 2026-10-26 |
 | D13 | The island keeps the now-playing chrome (pill, peek, Controls card, bar chip) and draws it from a `media` activity; the Music module owns the players, lyrics, the Music tab and sheet. Modules get island services for what the island must do itself: `ctx.island.focusApp` (bring an app forward), `ctx.island.audio.appVolume/setAppVolume`, the equalizer meter (the activity's `exe`) and the `level` event. "Pause when I step away" is the Music module's setting; eye tracking only publishes `presence`. With nothing playing, Controls shows no now-playing card | implementation, 2026-10-26 |
 | D14 | The base hears the topics modules publish (the host's `Sink::topic`; the page gets `topic:<name>`, and `topic_last` for the latest), so the island follows `presence` itself. The base publishes `island.geometry` (`{ rect, monitor, scale, visible }`, physical pixels) from its cursor thread when it changes | implementation, 2026-10-26 |
+| D15 | Installs the guide, search and migration ask for go through one background queue (`mod_queue`, modules/queue.json): one at a time, kept until each is in place, retried at the next start or check when offline. Migration runs when the page has `setupDone` from 0.1.x but not `modulesMigrated` (settings.json can't tell, the base writes it every start): it queues Music, plus each module whose 0.1.x file is there or whose app is on the PC. The catalog carries each module's `keywords` and `preselect` | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -671,8 +672,8 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.2 | Install, update, remove | M3.1 | in review (no Modules sheet yet) | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.3 | Release workflow | M3.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M3.4 | Picking modules | M3.2 | todo | |
-| M3.5 | Migration from 0.1.x | M3.2, M2.8 | todo | |
+| M3.4 | Picking modules | M3.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.5 | Migration from 0.1.x | M3.2, M2.8 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.6 | Docs | M3.4 | todo | |
 
 ## Starting a session

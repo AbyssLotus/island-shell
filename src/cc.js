@@ -222,6 +222,8 @@ export function createCommandCenter(ctx) {
     add('Take a screenshot', 'image', 'Snipping Tool · region', 'snip capture screen', () => invoke('cc_tool', { name: 'snip' }));
     add('Open Control Panel', 'gear', 'Windows', 'control panel classic', () => invoke('cc_tool', { name: 'control' }));
     add('Lock this PC', 'lock', 'Power · Win + L', 'lock screen away', () => invoke('power', { action: 'lock' }));
+    // Modules not installed yet, from the catalog: "Install Music", found by its keywords too ("lyrics").
+    for (const c of mds.missing()) add(`Install ${c.name}`, 'download', `Module · ${c.description}`, `install add module ${c.name} ${(c.keywords || []).join(' ')}`, () => invoke('mod_queue', { ids: [c.id] }).then(() => flash(`Installing ${c.name} in the background…`)).catch(err => flash(String(err))), 'quiet');
     // Modules' own commands (src/modhost.js), and their search sources' items.
     for (const c of REG.commands.all()) list.push({ kind: 'command', name: c.title, icon: c.icon || 'bolt', sub: c.sub || '', keys: c.keys || '', run: c.run, stay: c.stay });
     return list;

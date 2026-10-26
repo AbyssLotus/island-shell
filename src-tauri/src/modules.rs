@@ -261,6 +261,49 @@ pub fn mod_logs(id: String) -> Vec<String> {
     sup().map(|s| s.logs(&id)).unwrap_or_default()
 }
 
+/// Installs modules in the background (the setup guide's picks, search's "Install …"): see
+/// updater::queue. Returns the updater's status, with what's waiting.
+#[tauri::command]
+pub fn mod_queue(ids: Vec<String>, app: AppHandle) -> crate::updater::Status {
+    crate::updater::queue(&app, &ids)
+}
+
+/// 0.1.x had every integration built in. The first start after the upgrade (the page asks once,
+/// when the setup guide was done before) queues the modules that were in use, so nothing that was
+/// set up goes away: the ones whose 0.1.x files are there, and the ones whose app is on this PC.
+/// Returns the ids it asked for.
+#[tauri::command]
+pub fn mod_migrate(app: AppHandle) -> Vec<String> {
+    let ids = migration(&util::data_dir());
+    log_line(&format!("modules: upgrade from 0.1.x, asking for {}", if ids.is_empty() { "nothing".into() } else { ids.join(", ") }));
+    crate::updater::queue(&app, &ids);
+    ids
+}
+
+/// The modules a 0.1.x install was using (`legacy`: its data folder).
+fn migration(legacy: &Path) -> Vec<String> {
+    let has = |f: &str| legacy.join(f).is_file();
+    let file = |p: &str| Path::new(p).is_file();
+    let old: Value = std::fs::read(legacy.join("settings.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let steam = island_win::steam::dir();
+    let wallpaper_engine = steam.as_ref().is_some_and(|s| {
+        island_win::steam::libraries(s).iter().any(|l| l.join("steamapps").join("common").join("wallpaper_engine").join("wallpaper64.exe").is_file())
+    });
+    let mut ids = vec!["music"];
+    let rules: [(&str, bool); 8] = [
+        ("discord", has("discord.json")),
+        ("canvas", has("canvas.json")),
+        ("destiny", has("destiny.json")),
+        ("gaze", old["gaze"].as_bool() != Some(false) && file(r"C:\Program Files\Tobii\Tobii EyeX\tobii_stream_engine.dll")),
+        ("voicemeeter", has("voicedeck_path.txt") || file(r"C:\Program Files (x86)\VB\Voicemeeter\VoicemeeterRemote64.dll")),
+        ("games", steam.is_some()),
+        ("wallpaper-engine", wallpaper_engine),
+        ("vpn", file(r"C:\Program Files\Tailscale\tailscale.exe") || Path::new(r"C:\Program Files (x86)\Radmin VPN").is_dir()),
+    ];
+    ids.extend(rules.iter().filter(|(_, yes)| *yes).map(|(id, _)| *id));
+    ids.into_iter().map(String::from).collect()
+}
+
 /// What each running module's process uses, for the Modules sheet: memory (private bytes, MB) and
 /// CPU (% of the whole PC since the sheet last asked).
 #[tauri::command]
@@ -444,5 +487,21 @@ fn pick_folder() -> Option<PathBuf> {
         let item = dialog.GetResult().ok()?;
         let p = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
         Some(PathBuf::from(util::take_pwstr(p)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn migration_follows_the_0_1_files() {
+        let dir = std::env::temp_dir().join(format!("island-migrate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(super::migration(&dir)[0], "music");
+        assert!(!super::migration(&dir).contains(&"discord".to_string()));
+        std::fs::write(dir.join("discord.json"), "{}").unwrap();
+        std::fs::write(dir.join("canvas.json"), "{}").unwrap();
+        let ids = super::migration(&dir);
+        assert!(ids.contains(&"discord".to_string()) && ids.contains(&"canvas".to_string()) && !ids.contains(&"destiny".to_string()));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

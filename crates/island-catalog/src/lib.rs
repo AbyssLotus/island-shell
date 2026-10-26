@@ -65,6 +65,12 @@ pub struct Module {
     pub url: String,
     /// Lowercase hex, of the zip.
     pub sha256: String,
+    /// What a search for it can say before it's installed ("lyrics" finds Music).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    /// Ticked to start with in the setup guide's module step (Music).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preselect: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -248,6 +254,7 @@ mod tests {
                 size: 3,
                 url: "https://github.com/AbyssLotus/island-shell/releases/download/v0.2.0/destiny-1.0.0.zip".into(),
                 sha256: sha256_hex(b"zip"),
+                ..Default::default()
             }],
         }
     }

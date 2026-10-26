@@ -193,6 +193,8 @@ function hide() {
 
 export function activate(c) {
   ctx = c;
+  // Inputs or outputs, kept from 0.1.x's island.vmSide the first time.
+  try { const v = localStorage.getItem('island.vmSide'); if (v != null && localStorage.getItem('mod.voicemeeter.side') == null) localStorage.setItem('mod.voicemeeter.side', v); } catch (e) {}
   side = ctx.store.get('side', 'in');
   ctx.sections.register({ id: 'mixer', mount, show, hide });
   ctx.on('state', setState);

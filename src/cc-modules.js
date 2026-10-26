@@ -19,6 +19,8 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
   const available = () => catalog.filter(c => !installed(c.id));
   const updates = () => (upd && upd.modules) || [];
   const updateOf = id => updates().find(u => u.id === id);
+  const queued = () => ((upd && upd.queued) || []).filter(id => !installed(id));
+  const nameOf = id => (catalog.find(c => c.id === id) || {}).name || id;
 
   function build() {
     el.innerHTML = `<section class="mds-main">
@@ -64,6 +66,8 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
     if (view === 'installed') {
       const items = list.map(m => ({ id: m.id, name: m.manifest.name, man: m.manifest, sub: stateLine(m), tone: m.state, dev: m.dev }));
       for (const [id, err] of broken) items.push({ id, name: id, man: null, sub: `Couldn't load: ${err}`, tone: 'failed' });
+      // Asked for (the setup guide, search, the upgrade from 0.1.x) and on their way.
+      for (const id of queued()) items.push({ id, name: nameOf(id), man: null, sub: upd.module_busy === nameOf(id) ? 'Installing…' : upd.state === 'off' ? 'Waiting: this build can’t download modules' : 'Waiting to install', tone: 'starting' });
       return items;
     }
     if (view === 'available') return available().map(c => ({ id: c.id, name: c.name, man: null, sub: `Version ${c.version} · ${size(c.size)}`, tone: '' }));
@@ -121,8 +125,8 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
         </div>
         <p class="mds-err" hidden></p>`;
     } else if (c) {
-      const doing = busy && busy === c.name;
-      body = `<div class="mds-acts"><button class="cc-btn primary" type="button" data-a="install"${busy ? ' disabled' : ''}>${ic('download')}${doing ? 'Installing…' : 'Install'}</button></div>`;
+      const doing = busy && busy === c.name, waiting = queued().includes(c.id);
+      body = `<div class="mds-acts"><button class="cc-btn primary" type="button" data-a="install"${busy || waiting ? ' disabled' : ''}>${ic('download')}${doing ? 'Installing…' : waiting ? 'Waiting to install' : 'Install'}</button></div>`;
     }
     const talk = `<h4>Talks to</h4>${talks.length ? `<ul class="mds-talks">${talks.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="mds-quiet">Nothing outside this PC.</p>'}`;
     const settings = m && settingsOf(sel) ? '<h4>Settings</h4><div class="mds-settings"></div>' : '';
@@ -196,7 +200,9 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
   }
 
   return {
-    stat: () => `${list.length} installed${updates().length ? ` · ${updates().length} update${updates().length === 1 ? '' : 's'}` : ''}`,
+    stat: () => `${list.length} installed${queued().length ? ` · ${queued().length} coming` : ''}${updates().length ? ` · ${updates().length} update${updates().length === 1 ? '' : 's'}` : ''}`,
+    /** Catalog modules not installed or on their way (search offers to install them). */
+    missing: () => available().filter(c => !queued().includes(c.id)),
     /** Shows the sheet on one module or list (from search: "install canvas"). */
     show(id, v) { if (v) view = v; if (id) sel = id; render(); },
     async mount(host) {

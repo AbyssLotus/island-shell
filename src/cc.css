@@ -581,6 +581,10 @@ textarea.cal-in { height: auto; padding: 10px 12px; line-height: 1.45; resize: v
 .su-btn.su-link { background: none; color: var(--muted); padding: 0 12px; }
 .su-btn.su-link:hover { color: #eef6ff; }
 .su-card .su-btn { height: 32px; padding: 0 14px; font-size: 12.5px; border-radius: 10px; }
+/* The module step: what each talks to and its size under its description; a ticked card glows. */
+.su-card .su-mt { display: block; margin-top: 3px; color: var(--faint); font: 400 11px/1.35 var(--f-mono); }
+.su-card.su-picked { box-shadow: inset 0 0 0 1px rgba(var(--glow), .45), 0 0 22px -8px rgba(var(--glow), .6); }
+.su-card .su-pick { min-width: 74px; }
 .su-btn:focus-visible { outline: 2px solid #c9e9ff; outline-offset: 2px; }
 /* illustrations */
 .su-eclipse { position: relative; width: 210px; height: 210px; }

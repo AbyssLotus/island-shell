@@ -1640,11 +1640,11 @@ $('#updBtn').addEventListener('click', () => {
   const u = S.upd || {};
   quiet(invoke(updReady(u) ? 'update_install' : (u.modules || []).length ? 'update_modules' : 'update_check'));
 });
-// A module updated (by itself, or from the button) says so once.
+// A module updated (by itself, or from the button), or installed from the queue, says so once.
 listen('update:module', e => {
   const m = e.payload || {};
-  if (m.ok) toast(`${m.name} updated`, `Version ${m.version}`, 'download', { ms: 4000, sound: 'small' });
-  else toast(`${m.name} didn't update`, m.error || '', 'x', { ms: 6000, sound: 'problem' });
+  if (m.ok) toast(m.installed ? `${m.name} is installed` : `${m.name} updated`, `Version ${m.version}`, 'download', { ms: 4000, sound: 'small' });
+  else toast(m.installed ? `${m.name} didn't install` : `${m.name} didn't update`, m.installed ? `It'll try again later · ${m.error || ''}` : m.error || '', 'x', { ms: 6000, sound: 'problem' });
 });
 $('#updAuto').addEventListener('change', e => invoke('update_auto', { on: e.target.checked }).then(renderUpdate).catch(() => {}));
 invoke('update_status').then(renderUpdate).catch(() => {});
@@ -2094,7 +2094,7 @@ const cmdCenter = createCommandCenter({
     const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);
     let state = '';
     try { state = String(((card && card.render && card.render()) || {}).state || ''); } catch (e) {}
-    return { icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
+    return { id: m.man.id, icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
   }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
@@ -2109,6 +2109,9 @@ const cmdCenter = createCommandCenter({
 });
 $('#openTm').addEventListener('click', () => cmdCenter.openTaskManager());
 if (FIRST_RUN) setTimeout(() => cmdCenter.openSetup(), 1800);
+// 0.1.x had every integration built in: the first start after the upgrade asks for the modules it
+// was using (modules.rs, mod_migrate); they install in the background.
+else if (!store.get('modulesMigrated', false)) invoke('mod_migrate').then(() => store.set('modulesMigrated', true)).catch(() => {});
 modHost.start();
 
 pollStatus(); loadClips(); loadApps(); loadWeather();

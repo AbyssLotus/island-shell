@@ -121,7 +121,8 @@ fn pack(o: &Opts) -> Result<String, String> {
         let entry = match kept {
             Some(m) if m.sha256 == sha => {
                 summary.push(format!("{name}: unchanged, kept from the last release"));
-                m.clone()
+                // The package is the same; what the guide and search say about it comes from the manifest.
+                island_catalog::Module { keywords: manifest.keywords.clone(), preselect: preselect(&manifest), ..m.clone() }
             }
             Some(_) => return Err(format!("{} changed since the last release but is still version {}: bump its version", manifest.id, manifest.version)),
             None => {
@@ -137,6 +138,8 @@ fn pack(o: &Opts) -> Result<String, String> {
                     size: zip.len() as u64,
                     url: format!("{url}/{name}"),
                     sha256: sha,
+                    keywords: manifest.keywords.clone(),
+                    preselect: preselect(&manifest),
                 }
             }
         };
@@ -202,6 +205,11 @@ fn collect(dir: &Path, bins: &Path) -> Result<(Manifest, Vec<u8>, BTreeMap<Strin
 }
 
 /// Not packed: the manifest itself (written separately), Rust sources and build output, dotfiles.
+/// The setup guide ticks it to start with (the manifest's `contributes.setup.preselect`).
+fn preselect(m: &Manifest) -> bool {
+    m.contributes.setup.as_ref().is_some_and(|s| s.preselect)
+}
+
 fn skip(rel: &str) -> bool {
     rel == "module.json" || rel == "Cargo.toml" || rel.starts_with("src/") || rel.starts_with("target/") || rel.split('/').any(|p| p.starts_with('.'))
 }

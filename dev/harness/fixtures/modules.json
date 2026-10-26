@@ -13,7 +13,12 @@
    "talksTo": [],
    "size": 812345,
    "url": "",
-   "sha256": ""
+   "sha256": "",
+   "preselect": true,
+   "keywords": [
+    "lyrics",
+    "apple music"
+   ]
   },
   {
    "id": "weather-radar",
@@ -26,7 +31,26 @@
    ],
    "size": 402112,
    "url": "",
-   "sha256": ""
+   "sha256": "",
+   "keywords": [
+    "radar",
+    "rain"
+   ]
+  },
+  {
+   "id": "sample-clock",
+   "name": "World clock",
+   "version": "1.0.0",
+   "api": 1,
+   "description": "A made-up module: clocks for the cities you pick.",
+   "talksTo": [],
+   "size": 120000,
+   "url": "",
+   "sha256": "",
+   "keywords": [
+    "time zone"
+   ],
+   "preselect": true
   }
  ],
  "mod_usage": [
@@ -66,5 +90,29 @@
    }
   ],
   "module_busy": ""
- }
+ },
+ "mod_queue": {
+  "current": "0.2.0",
+  "state": "idle",
+  "latest": "0.2.0",
+  "notes": "",
+  "size": 0,
+  "progress": 0,
+  "checked": 1793000000000,
+  "error": "",
+  "auto": true,
+  "modules": [
+   {
+    "id": "destiny",
+    "name": "Destiny 2",
+    "from": "1.0.0",
+    "to": "1.0.1"
+   }
+  ],
+  "module_busy": "",
+  "queued": [
+   "sample-clock"
+  ]
+ },
+ "mod_migrate": []
 }

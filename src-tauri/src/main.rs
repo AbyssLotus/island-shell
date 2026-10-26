@@ -1154,6 +1154,8 @@ fn main() {
             modules::mod_list,
             modules::topic_last,
             modules::mod_usage,
+            modules::mod_queue,
+            modules::mod_migrate,
             modules::mod_call,
             modules::mod_set_enabled,
             modules::mod_restart,
