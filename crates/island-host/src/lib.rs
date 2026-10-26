@@ -394,7 +394,7 @@ impl Supervisor {
         if !method::is_ui_call(method_name) {
             return Err(RpcError::unknown_method(method_name));
         }
-        let proc = ensure_running(&self.inner, id, true)?;
+        let proc = ensure_running(&self.inner, id)?;
         proc.busy.fetch_add(1, Ordering::Relaxed);
         touch(&self.inner, id);
         let r = proc.request(method_name, params, self.inner.timing.call);
@@ -493,25 +493,22 @@ fn log(inner: &Inner, id: &str, level: &str, msg: &str) {
     inner.sink.log(id, level, msg);
 }
 
-/// The running process, starting it if allowed. `for_call` is a UI call, which may start any
-/// module but an `always` one (that runs on its own terms). A `while-process` module started by a
-/// call (its app isn't running: the UI wants to open it, or set it up) stays for its idle time.
-fn ensure_running(inner: &Arc<Inner>, id: &str, for_call: bool) -> Result<Arc<Proc>, RpcError> {
+/// The running process, starting it if allowed (any enabled module that isn't crashing). A
+/// `while-process` module a UI call starts (its app isn't running: the UI wants to open it, or set
+/// it up) stays for its idle time (see `step`).
+fn ensure_running(inner: &Arc<Inner>, id: &str) -> Result<Arc<Proc>, RpcError> {
     let stopped = |why: String| RpcError::new(code::STOPPED, why);
     let proc = {
         let mut slots = inner.slots.lock().unwrap();
         let slot = slots.get_mut(id).ok_or_else(|| stopped("That module isn't installed".into()))?;
         let name = slot.manifest.name.clone();
-        let mode = slot.mode().ok_or_else(|| stopped(format!("{name} has no backend")))?;
+        slot.mode().ok_or_else(|| stopped(format!("{name} has no backend")))?;
         match slot.state {
             State::Disabled => return Err(stopped(format!("{name} is turned off"))),
             State::Failed => return Err(stopped(format!("{name} stopped after crashing; restart it in Modules"))),
             State::Backoff if slot.retry_at.is_some_and(|t| t > Instant::now()) => return Err(stopped(format!("{name} is restarting"))),
             State::Running | State::Starting => slot.proc.clone().expect("a running slot has a process"),
             _ => {
-                if for_call && mode == RunMode::Always {
-                    return Err(stopped(format!("{name} isn't running")));
-                }
                 spawn(inner, slot).map_err(|e| {
                     slot.state = State::Failed;
                     slot.error = e.clone();
@@ -935,7 +932,7 @@ fn step(inner: &Arc<Inner>) {
             Action::Start(id) => {
                 let i = inner.clone();
                 std::thread::spawn(move || {
-                    let _ = ensure_running(&i, &id, false);
+                    let _ = ensure_running(&i, &id);
                 });
             }
             Action::Stop(id) => {
@@ -947,7 +944,7 @@ fn step(inner: &Arc<Inner>) {
             Action::Tick(id) => {
                 let i = inner.clone();
                 std::thread::spawn(move || {
-                    let r = ensure_running(&i, &id, false).and_then(|p| {
+                    let r = ensure_running(&i, &id).and_then(|p| {
                         p.busy.fetch_add(1, Ordering::Relaxed);
                         let r = p.request(method::TICK, json!({}), i.timing.tick);
                         p.busy.fetch_sub(1, Ordering::Relaxed);
