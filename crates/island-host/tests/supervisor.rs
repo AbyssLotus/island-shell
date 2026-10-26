@@ -55,8 +55,10 @@ fn timing() -> Timing {
     }
 }
 
+/// A scratch folder under target/tmp (not the system temp folder), so one antivirus exclusion of the
+/// build folder covers the echo backend's copies too.
 fn root(name: &str) -> PathBuf {
-    let r = std::env::temp_dir().join(format!("island-host-test-{name}-{}", std::process::id()));
+    let r = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("island-host-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&r);
     std::fs::create_dir_all(&r).unwrap();
     r
