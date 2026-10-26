@@ -560,6 +560,7 @@ fn notices(dir: &Path, o: &Overview, api: Option<&Api>, t: i64) -> Vec<Notify> {
         top: true,
         action: Some("tab:canvas".into()),
         sound: Some(if urgent { "urgent" } else { "canvas" }.into()),
+        ..Default::default()
     };
     let mut out = vec![];
     for a in &o.announcements {

@@ -136,7 +136,7 @@ pub fn open_settings(uri: &str) -> Result<(), String> {
 }
 
 /// Encrypts a secret (API key, token) for this Windows account only (DPAPI), as base64.
-/// Used by discord.rs and destiny.rs for what they store in the data folder.
+/// Used for what the base stores in its data folder (calendar feed links); modules have the SDK's.
 pub fn protect(plain: &str) -> String {
     if plain.is_empty() {
         return String::new();

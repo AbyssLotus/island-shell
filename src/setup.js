@@ -27,11 +27,9 @@ export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab,
   };
 
   function connectCards() {
-    const dc = S.dc || {};
     const card = (icn, title, sub, state, tab) => `<div class="su-card${state ? ' su-ok' : ''}"><span class="su-cic">${ic(icn)}</span><span class="su-ctx"><b>${title}</b><small>${sub}</small></span>${state ? `<span class="su-cst">${state}</span>` : `<button class="su-btn su-ghost" type="button" data-su-tab="${tab}">Set up</button>`}</div>`;
     return card('note', 'Music', 'Apple Music, Spotify, your browser: anything Windows knows is playing. Lyrics come along.', S.media ? 'Playing now' : 'Automatic')
-      + card('chat', 'Discord', 'Your call (mute, deafen, who’s talking) and notifications on the island. Needs the Discord app and a free Discord application, about two minutes.', dc.authorized ? 'Connected' : '', 'discord')
-      + moduleCards().map(m => card(m.icon, esc(m.title), esc(m.sub), '', m.tab)).join('')
+      + moduleCards().map(m => card(m.icon, esc(m.title), esc(m.sub), esc(m.state || ''), m.tab)).join('')
       + card('calendar', 'Calendars', 'Add any calendar’s iCal link (Google, Outlook, school) in the Today cube.', '', 'today');
   }
 

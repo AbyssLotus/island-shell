@@ -876,6 +876,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "discord-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "island-win",
+ "serde",
+ "serde_json",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "dispatch2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

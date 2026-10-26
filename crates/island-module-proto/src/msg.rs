@@ -191,6 +191,12 @@ pub struct Notify {
     /// An icon name from the island's set, or a file in the module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    /// A picture in place of the icon (an https image the island's CSP allows, like a sender's avatar).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub img: Option<String>,
+    /// The picture is a person: draw it round.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub round: bool,
     /// Shows over fullscreen apps too.
     #[serde(default)]
     pub urgent: bool,

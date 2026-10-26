@@ -147,21 +147,6 @@
   "enabled": false,
   "pause_when_away": false
  },
- "discord_status": {
-  "configured": false,
-  "client_id": "",
-  "has_secret": false,
-  "connected": false,
-  "authorized": false,
-  "user": null,
-  "voice": null,
-  "mute": false,
-  "deaf": false,
-  "presence": false,
-  "notify": false,
-  "presence_now": "",
-  "error": ""
- },
  "clip_list": [
   {
    "id": 3,

@@ -201,9 +201,10 @@ Late subscribers get the last value immediately. Topics are only state, never co
 
 ### 4.8 Activities
 
-`{ id, kind: "media" | "call" | "timer" | "custom", priority, icon?, art?, text, sub?, progress?: 0..1, action?: "tab:<id>" }`
+`{ id, kind: "media" | "call" | "timer" | "custom", priority, icon?, art?, text, sub?, progress?: 0..1, action?: "tab:<id>", avatars?: [{ id, src, talk }] }`
 
 - Priority defaults by kind: call 30, timer 20, media 10, custom 5.
+- A `call` activity with `avatars` draws on the pill beside the clock: up to three faces, a green ring on each `talk`, and `icon` (your own mute or deafen). Only the rings change while the faces stay the same, so talking doesn't redraw anything. Bar chips take the same `avatars`.
 - The pill shows the highest priority, and on a tie the most recent. The base's own Pomodoro timer becomes a base activity.
 
 ### 4.9 Calendar events
@@ -627,6 +628,7 @@ Extra conditions:
 | D9 | One branch for the whole modularization instead of one PR per package; the built-in "M0.5" steps are skipped, each integration goes straight to its module | owner, 2026-10-25 |
 | D10 | Backends speak JSON-RPC over their stdin/stdout (anonymous pipes, made non-inheritable) rather than a named pipe: nothing else on the PC can reach them, with no DACL or PID check needed | implementation, 2026-10-25 |
 | D11 | A `while-process` module also starts for a UI call, so it can open its app or be set up while the app isn't running; started that way it stops after its idle time. The Audio tab takes module views like Wallpaper (Voicemeeter's mixer) | implementation, 2026-10-26 |
+| D12 | Until the Music module exists, the base publishes `media.state` from its status loop (when the song, play state or position jumps), so Discord's status keeps working. A docked site can be `split` (its module's island view stays beside it), a notification can carry an `img` (`round` for a person), and a module's setup card can report its state (`ctx.setup.card(() => ({ state }))`) | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -645,7 +647,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M0.5d | Built-in: vpn | M0.5c | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5e | Built-in: games | M0.5d | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5f | Built-in: voicemeeter | M0.5e | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M0.5g | Built-in: discord | M0.5f | todo | |
+| M0.5g | Built-in: discord | M0.5f | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5h | Built-in: music | M0.5g | todo | |
 | M0.5i | Built-in: gaze | M0.5h | todo | |
 | M0.6 | Backend event bus | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
@@ -660,7 +662,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M2.3 | Module: vpn | M2.2, M0.5d | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.4 | Module: games | M2.3, M0.5e | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.5 | Module: voicemeeter | M2.4, M0.5f | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M2.6 | Module: discord | M2.5, M0.5g | todo | |
+| M2.6 | Module: discord | M2.5, M0.5g | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.7 | Module: music | M2.6, M0.5h | todo | |
 | M2.8 | Module: gaze | M2.7, M0.5i | todo | |
 | M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |

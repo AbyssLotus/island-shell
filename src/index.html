@@ -26,7 +26,6 @@
   <div class="bar-c"><div class="ws" id="barWs" aria-label="Desktops"></div></div>
   <div class="bar-r">
     <button class="bchip media-chip" type="button" id="barMedia" data-open="music" hidden></button>
-    <button class="bchip dc-chip" type="button" id="barDc" data-open="discord" hidden></button>
     <span class="bar-mods" id="barModsR"></span>
     <button class="bchip" type="button" id="barVol" data-open="audio" title="Volume (scroll to change)"></button>
     <button class="bchip" type="button" id="barBt" title="Bluetooth"></button>
@@ -245,45 +244,6 @@
 
       <section class="view" id="v-network" data-tab="network" role="tabpanel" aria-labelledby="tab-network">
         <div class="net-now" id="netNow"></div>
-      </section>
-
-      <section class="view" id="v-discord" data-tab="discord" role="tabpanel" aria-labelledby="tab-discord">
-        <div id="dcSetup" hidden>
-          <div class="card dc-setup">
-            <div class="vpn-head">
-              <span class="vpn-logo"><i data-ic="chat"></i></span>
-              <div class="vpn-title"><b>Connect Discord</b><small>Calls, notifications and “Listening to Apple Music”</small></div>
-              <button class="btn" type="button" id="dcBack" hidden>Cancel</button>
-            </div>
-            <ol class="dc-steps">
-              <li>Open the <button class="dc-link" type="button" id="dcPortal">Discord Developer Portal</button> and click <b>New Application</b>. Name it <b>Apple Music</b>: your status will read “Listening to Apple Music”.</li>
-              <li>In the app’s <b>OAuth2</b> page, add the redirect <code>http://localhost</code> and save.</li>
-              <li>Copy the <b>Client ID</b> and <b>Client Secret</b> from that page into here.</li>
-            </ol>
-            <form class="dc-form" id="dcForm" autocomplete="off">
-              <input class="field" id="dcId" placeholder="Client ID" inputmode="numeric" spellcheck="false" aria-label="Client ID">
-              <input class="field" id="dcSecret" type="password" placeholder="Client Secret" spellcheck="false" aria-label="Client Secret">
-              <button class="btn primary" type="submit" id="dcSave">Connect</button>
-            </form>
-            <div class="dc-fine"><span>The secret and Discord’s sign-in are stored encrypted for your Windows account only.</span><span class="grow"></span><button class="dc-link" type="button" id="dcForget" hidden>Forget this app</button></div>
-          </div>
-        </div>
-        <div class="dc-grid" id="dcMain" hidden>
-          <div class="card dc-voice" id="dcVoice"></div>
-          <div class="card dc-side">
-            <div class="vpn-head" id="dcMe"></div>
-            <div class="dc-ctl" id="dcCtl">
-              <button class="dc-b" type="button" id="dcMute"><i data-ic="mic"></i><span>Mute</span></button>
-              <button class="dc-b" type="button" id="dcDeaf"><i data-ic="headphones"></i><span>Deafen</span></button>
-              <button class="dc-b bad" type="button" id="dcLeave"><i data-ic="phoneoff"></i><span>Leave</span></button>
-            </div>
-            <label class="switch" for="dcPresence"><input type="checkbox" id="dcPresence"><span>Show what I’m listening to</span></label>
-            <small class="dc-now" id="dcNow"></small>
-            <label class="switch" for="dcNotify"><input type="checkbox" id="dcNotify"><span>Show when someone @mentions me</span></label>
-            <div class="dc-foot"><button class="dc-link" type="button" id="dcOpen">Open Discord</button><span class="grow"></span><button class="dc-link" type="button" id="dcEdit">App settings</button></div>
-          </div>
-        </div>
-        <p class="note" id="dcNote" hidden></p>
       </section>
 
       <section class="view" id="v-stats" data-tab="stats" role="tabpanel" aria-labelledby="tab-stats">

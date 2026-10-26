@@ -1,0 +1,75 @@
+{
+ "mod_states": {
+  "discord": "running"
+ },
+ "mod:discord.status": {
+  "configured": true,
+  "client_id": "123456789012345678",
+  "has_secret": true,
+  "connected": true,
+  "authorized": true,
+  "user": {
+   "id": "100",
+   "name": "You",
+   "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
+   "mute": false,
+   "deaf": false,
+   "speaking": false
+  },
+  "voice": {
+   "channel_id": "900",
+   "name": "Study hall",
+   "guild": "Signals class",
+   "members": [
+    {
+     "id": "100",
+     "name": "You",
+     "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
+     "mute": false,
+     "deaf": false,
+     "speaking": false
+    },
+    {
+     "id": "101",
+     "name": "Kiwi",
+     "avatar": "https://cdn.discordapp.com/embed/avatars/1.png",
+     "mute": false,
+     "deaf": false,
+     "speaking": true
+    },
+    {
+     "id": "102",
+     "name": "Owl",
+     "avatar": "https://cdn.discordapp.com/embed/avatars/2.png",
+     "mute": true,
+     "deaf": false,
+     "speaking": false
+    },
+    {
+     "id": "103",
+     "name": "Fern",
+     "avatar": "https://cdn.discordapp.com/embed/avatars/3.png",
+     "mute": false,
+     "deaf": false,
+     "speaking": false
+    },
+    {
+     "id": "104",
+     "name": "Moss",
+     "avatar": "https://cdn.discordapp.com/embed/avatars/4.png",
+     "mute": false,
+     "deaf": true,
+     "speaking": false
+    }
+   ]
+  },
+  "mute": false,
+  "deaf": false,
+  "presence": true,
+  "notify": true,
+  "presence_now": "Night Drive \u00b7 The Example Band",
+  "error": ""
+ },
+ "mod:discord.action": null,
+ "mod:discord.options": null
+}

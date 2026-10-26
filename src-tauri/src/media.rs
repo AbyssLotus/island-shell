@@ -397,3 +397,14 @@ fn friendly_app(id: &str) -> String {
         None => String::new(),
     }
 }
+
+/// `media.state` for modules (§4.7): what's playing, or null when nothing is.
+pub fn topic(m: Option<&MediaInfo>) -> serde_json::Value {
+    match m {
+        Some(m) => serde_json::json!({
+            "playing": m.playing, "app": m.app, "source": m.source, "title": m.title, "artist": m.artist, "album": m.album,
+            "duration": m.duration, "position": m.position, "sampled_at": m.sampled_at, "key": m.key,
+        }),
+        None => serde_json::Value::Null,
+    }
+}

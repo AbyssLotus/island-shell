@@ -1,0 +1,30 @@
+/* The Discord tab (ui/discord.js), inside its shadow root; the kit (kit.css) brings the setup card
+   (.k-setup, .k-steps, .k-link, .k-form, .k-fine), the service header (.k-head, .k-logo, .k-title),
+   buttons, fields, switches, the empty state and the note. Moved from the island's style.css. The
+   call on the pill and the top bar is drawn by the island itself (a `call` activity and chip). */
+.dc-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+@container (max-width: 560px) { .dc-grid { grid-template-columns: 1fr; } }
+.dc-voice { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 196px; }
+.dc-voice .empty { flex: 1; display: grid; place-content: center; gap: 10px; justify-items: center; }
+.dc-voice .empty .i { width: 26px; height: 26px; color: var(--faint); }
+.dc-members { display: grid; gap: 2px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; margin: 0 -4px; }
+.dc-m { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px; border-radius: 11px; }
+.dc-m b { flex: 1; min-width: 0; font: 500 12.5px/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-m .i { width: 14px; height: 14px; flex: none; color: var(--bad); }
+/* Taken: the row under the pointer catches a thin edge of light. */
+.dc-m:hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
+.dc-av { width: 30px; height: 30px; flex: none; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 2px transparent; transition: box-shadow .12s; }
+.dc-av.talk { box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 4px var(--good); }
+.dc-side { display: flex; flex-direction: column; gap: 11px; padding: 14px; }
+.dc-side .k-head .dc-av { width: 38px; height: 38px; }
+.dc-ctl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dc-ctl[hidden] { display: none; }
+.dc-b { display: grid; justify-items: center; gap: 5px; padding: 9px 4px 8px; border: 0; border-radius: 13px; background: var(--ink-3); color: var(--fg); font: 600 11px/1 var(--f-body); cursor: pointer; transition: background .2s, color .2s, transform .15s, opacity .2s; }
+.dc-b .i { width: 17px; height: 17px; }
+.dc-b:active { transform: scale(.95); }
+.dc-b[aria-pressed="true"] { background: var(--bad); color: #fff; }
+.dc-b.bad:not(:disabled) { color: var(--bad); }
+.dc-b:disabled { opacity: .4; cursor: default; transform: none; }
+.dc-now { margin: -6px 0 0 38px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-now:empty { display: none; }
+.dc-foot { display: flex; align-items: center; padding-top: 2px; }

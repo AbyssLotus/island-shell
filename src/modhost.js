@@ -36,6 +36,7 @@
 //                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
 //                                   apps.list() / .open(id) / .menu(id, x, y): the Start menu's apps
 //   settings.mount(fn(root))        its page in the Modules sheet
+//   setup.card(fn() → { state })    its card in the setup guide, and how it's doing ('Connected')
 
 const BASE = () => window.__ISLAND_MOD_BASE__ || 'http://mod.localhost/';
 /** A file of a module, under its version (`<id>@<version>`), so an update's files are fetched fresh
@@ -91,7 +92,7 @@ export function createModuleHost(env) {
       R.tabs.add({ id: t.id, title: t.title, icon: iconFor(id, t.icon, man.version), order: t.order, width: t.width || 760, module: id });
     }
     for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name, view: !!s.view });
-    for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, module: id });
+    for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, split: !!s.split, module: id });
     for (const cube of c.cubes || []) {
       if (R.cubes.has(cube.id)) { log(`modules: ${id} wants cube ${cube.id}, which is taken`); continue; }
       R.cubes.add({ id: cube.id, title: cube.title, icon: iconFor(id, cube.icon, man.version), size: cube.size, slot: cube.slot, module: id, site: cube.site ? `${id}:${cube.site}` : null, stat: () => (m.cubes.get(cube.id) || {}).stat?.() || '' });

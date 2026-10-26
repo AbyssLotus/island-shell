@@ -119,10 +119,9 @@ export function createCommandCenter(ctx) {
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
-  [['apps', 'Apps', 'grid'], ['discord', 'Discord', 'chat'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
+  [['apps', 'Apps', 'grid'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
     ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
-    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id), site: id === 'discord' ? 'discord' : null }));
-  REG.sites.add({ id: 'discord', site: 'discord', label: 'Discord app', default: true });
+    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
   for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
@@ -204,12 +203,9 @@ export function createCommandCenter(ctx) {
   const exeName = p => (p || '').split('\\').pop();
   function appForWin(w) { return (S.apps || []).find(a => (a.exe && a.exe === w.exe) || (w.aumid && a.id === w.aumid)); }
   function commands() {
-    const st = S.status || {}, dc = S.dc || {}, list = [];
+    const st = S.status || {}, list = [];
     // stay: keep the Command Center open afterwards ('quiet': and say nothing).
     const add = (name, icn, sub, keys, run, stay) => list.push({ kind: 'command', name, icon: icn, sub, keys, run, stay });
-    if (dc.authorized) add(dc.mute ? 'Unmute in Discord' : 'Mute in Discord', dc.mute ? 'mic' : 'micoff', 'Discord · your mic', 'discord mic voice', () => invoke('discord_action', { action: dc.mute ? 'unmute' : 'mute' }));
-    if (dc.authorized) add(dc.deaf ? 'Undeafen in Discord' : 'Deafen in Discord', 'headphones', 'Discord · your sound', 'discord deafen', () => invoke('discord_action', { action: dc.deaf ? 'undeafen' : 'deafen' }));
-    if (dc.voice) add('Leave the Discord call', 'phoneoff', `Discord · ${dc.voice.name}`, 'discord hang up disconnect voice', () => invoke('discord_action', { action: 'leave' }));
     if (S.media) {
       add(S.media.playing ? 'Pause the music' : 'Play the music', S.media.playing ? 'pause' : 'play', `${S.media.app || 'Music'} · ${S.media.title}`, 'apple music media play pause song', () => invoke('media_cmd', { action: 'toggle' }));
       add('Next track', 'next', `${S.media.app || 'Music'}`, 'skip song music', () => invoke('media_cmd', { action: 'next' }));
@@ -341,10 +337,9 @@ export function createCommandCenter(ctx) {
 
   /* ---------- cubes ---------- */
   function cubeStat(k) {
-    const st = S.status || {}, dc = S.dc;
+    const st = S.status || {};
     switch (k) {
       case 'apps': return `${(S.apps || []).length} apps · ${wins.length} open`;
-      case 'discord': return dc && dc.voice ? `${dc.voice.members.length} in ${dc.voice.name}` : dc && dc.connected ? 'Connected' : 'Not connected';
       case 'audio': return S.audio ? `${S.audio.device} · ${S.audio.muted ? 'muted' : Math.round(S.audio.level * 100) + '%'}` : 'Sound';
       case 'today': { if (nextEv) { const d = new Date(nextEv.start), sameDay = d.toDateString() === new Date().toDateString(); return `${nextEv.all_day ? (sameDay ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })) : (sameDay ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${nextEv.title}`; } const w = store.get('weather', null); return w ? `${Math.round(S.unit === 'C' ? w.temp : w.temp * 9 / 5 + 32)}° · ${w.name || ''}` : 'Weather & to-dos'; }
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
@@ -594,8 +589,9 @@ export function createCommandCenter(ctx) {
     if (site) store.set('ccMode:' + tab, mode);
     $$('.cc-modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
     const body = $('.cc-sbody'), web = mode === 'web';
-    // Discord keeps the island's call controls beside its app; the other sites take the whole sheet.
-    body.classList.toggle('web', web); body.classList.toggle('split', web && tab === 'discord');
+    // A `split` site keeps its island view beside it (Discord's call controls); the others take the whole sheet.
+    const split = web && !!site.split;
+    body.classList.toggle('web', web); body.classList.toggle('split', split);
     $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site.label}…` : '';
     $('.cc-skin').hidden = !web; $('.cc-skin').setAttribute('aria-pressed', !!(site && store.get(skinKey(tab), true)));
     if (site) { const n = site.label.replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
@@ -603,7 +599,7 @@ export function createCommandCenter(ctx) {
     body.classList.toggle('native', !!app);
     if (nativeOn && nativeOn !== tab) unmountNative();
     if (app) { ctx.unhost(); if (nativeOn !== tab) { app.mount($('.cc-host')); nativeOn = tab; } }
-    else if (!web || tab === 'discord') ctx.hostTab(tab, $('.cc-host')); else ctx.unhost();
+    else if (!web || split) ctx.hostTab(tab, $('.cc-host')); else ctx.unhost();
     clearTimeout(embedT);
     if (web) embedT = setTimeout(placeEmbed, delay); else invoke('cc_embed_hide').catch(() => {});
   }

@@ -1,86 +1,85 @@
-//! Discord, through the Discord desktop app's local RPC pipe (`\\.\pipe\discord-ipc-N`).
+//! Discord, an Island Shell module backend (docs/design/modules.md), through the Discord desktop
+//! app's local RPC pipe (`\\.\pipe\discord-ipc-N`); its UI is ui/discord.js.
 //!
 //! - Voice: the call you're in, who's in it and who's talking; mute, deafen, leave.
-//! - Notifications: Discord's message notifications, shown by the island.
-//! - Rich Presence: "Listening to Apple Music" with the song, artist, album art and a time bar.
+//! - Notifications: Discord's message notifications that @mention you, shown by the island.
+//! - Rich Presence: "Listening to Apple Music" with the song, artist, album art and a time bar,
+//!   from the `media.state` topic (whatever publishes it: the Music module, or the base before it).
 //!
 //! Discord only lets an app its owner made and authorized read voice state or notifications, so
 //! this runs as the user's own Discord application (Client ID + Secret from the developer portal).
-//! The first time, Discord shows its own "authorize" prompt; after that the island signs in by
+//! The first time, Discord shows its own "authorize" prompt; after that the module signs in by
 //! itself. The secret and tokens are stored encrypted with Windows' DPAPI (only this Windows
 //! account can read them). Presence needs only the Client ID, no authorization.
 //!
-//! One thread owns the pipe. Windows serializes reads and writes on a synchronous pipe handle,
-//! so instead of a blocking reader on its own thread, the loop peeks for data and writes in turn.
+//! The module runs while Discord does (and briefly when the UI asks for something without it, like
+//! setting up the app). One thread owns the pipe. Windows serializes reads and writes on a
+//! synchronous pipe handle, so instead of a blocking reader on its own thread, the loop peeks for
+//! data and writes in turn.
+//!
+//! The UI gets `status` (the whole state, when it changes) and `speaking` ({ id, speaking }, the
+//! one thing that flips many times a second).
+//!
+//! RPC methods: `status`, `configure { client_id, secret }`, `action { action }` (authorize | mute |
+//! unmute | deafen | undeafen | leave | forget), `options { presence?, notify? }`, `open_app`.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use island_module::http::Request;
+use island_module::secrets::{protect, unprotect};
+use island_module::{json, CallResult, Host, Init, Module, Notify, RpcError, Value};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
-use windows::core::HSTRING;
-use windows::Foundation::Uri;
-use windows::Storage::Streams::UnicodeEncoding;
-use windows::Web::Http::{HttpClient, HttpStringContent};
-use windows::Win32::Foundation::HANDLE;
-use windows::Win32::System::Pipes::PeekNamedPipe;
-
-use crate::util::{log_line, protect, unprotect};
-use crate::Shared;
 
 const SCOPES: [&str; 5] = ["rpc", "rpc.voice.read", "rpc.voice.write", "rpc.notifications.read", "identify"];
 /// Must be listed under OAuth2 → Redirects in the user's Discord application.
-pub const REDIRECT: &str = "http://localhost";
-const UA: &str = "IslandShell/0.1 (personal Windows desktop shell)";
+const REDIRECT: &str = "http://localhost";
 
-// ---------- what the page sees ----------
+// ---------- what the UI sees ----------
 
 #[derive(Serialize, Clone, Default, PartialEq)]
-pub struct Member {
-    pub id: String,
-    pub name: String,
-    pub avatar: String,
-    pub mute: bool,
-    pub deaf: bool,
-    pub speaking: bool,
+struct Member {
+    id: String,
+    name: String,
+    avatar: String,
+    mute: bool,
+    deaf: bool,
+    speaking: bool,
 }
 
 #[derive(Serialize, Clone, Default, PartialEq)]
-pub struct Voice {
-    pub channel_id: String,
-    pub name: String,
-    pub guild: String,
-    pub members: Vec<Member>,
+struct Voice {
+    channel_id: String,
+    name: String,
+    guild: String,
+    members: Vec<Member>,
 }
 
 #[derive(Serialize, Clone, Default, PartialEq)]
-pub struct Status {
+struct Status {
     /// A Client ID has been entered.
-    pub configured: bool,
-    pub client_id: String,
+    configured: bool,
+    client_id: String,
     /// A Client Secret is saved (needed for voice and notifications).
-    pub has_secret: bool,
+    has_secret: bool,
     /// Talking to the Discord app right now.
-    pub connected: bool,
+    connected: bool,
     /// Signed in with voice/notification access.
-    pub authorized: bool,
-    pub user: Option<Member>,
-    pub voice: Option<Voice>,
+    authorized: bool,
+    user: Option<Member>,
+    voice: Option<Voice>,
     /// Your own mic mute and deafen.
-    pub mute: bool,
-    pub deaf: bool,
-    pub presence: bool,
-    pub notify: bool,
+    mute: bool,
+    deaf: bool,
+    presence: bool,
+    notify: bool,
     /// What's on the status right now ("" when nothing).
-    pub presence_now: String,
-    pub error: String,
+    presence_now: String,
+    error: String,
 }
 
 // ---------- saved settings ----------
@@ -114,23 +113,49 @@ impl Default for Saved {
     }
 }
 
-fn saved_path() -> PathBuf {
-    crate::util::data_dir().join("discord.json")
+fn load(path: &PathBuf) -> Saved {
+    std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
-fn load() -> Saved {
-    std::fs::read(saved_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
-}
-
-fn save(s: &Saved) {
+fn save(path: &PathBuf, s: &Saved) {
     if let Ok(b) = serde_json::to_vec_pretty(s) {
-        let _ = std::fs::write(saved_path(), b);
+        let _ = std::fs::write(path, b);
     }
 }
 
-// ---------- commands from the page ----------
+fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
 
-pub enum Cmd {
+/// What's playing, from the `media.state` topic.
+#[derive(Deserialize, Clone, Default)]
+struct Media {
+    #[serde(default)]
+    playing: bool,
+    /// "apple", "spotify" or "other".
+    #[serde(default)]
+    source: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    artist: String,
+    #[serde(default)]
+    album: String,
+    #[serde(default)]
+    duration: f64,
+    #[serde(default)]
+    position: f64,
+    /// When `position` was measured (Unix ms).
+    #[serde(default)]
+    sampled_at: u64,
+    /// The song, so a new one is told apart from the same one going on.
+    #[serde(default)]
+    key: String,
+}
+
+// ---------- commands from the UI ----------
+
+enum Cmd {
     Configure { client_id: String, secret: String },
     Authorize,
     Mute(bool),
@@ -140,37 +165,26 @@ pub enum Cmd {
     Forget,
 }
 
-static TX: OnceLock<Mutex<Sender<Cmd>>> = OnceLock::new();
-static STATUS: Mutex<Option<Status>> = Mutex::new(None);
-
-pub fn status() -> Status {
-    STATUS.lock().unwrap().clone().unwrap_or_default()
-}
-
-pub fn send(cmd: Cmd) -> Result<(), String> {
-    TX.get().ok_or("Discord integration isn't running")?.lock().unwrap().send(cmd).map_err(|_| "Discord integration stopped".to_string())
-}
-
-pub fn spawn(app: AppHandle, shared: Arc<Shared>) {
-    let (tx, rx) = channel();
-    if TX.set(Mutex::new(tx)).is_ok() {
-        std::thread::spawn(move || {
-            crate::util::com_mta();
-            run(app, shared, rx)
-        });
-    }
+/// What the module and its pipe thread share.
+#[derive(Default)]
+struct Shared {
+    status: Mutex<Option<Status>>,
+    media: Mutex<Option<Media>>,
 }
 
 // ---------- the pipe ----------
 
-struct Pipe(File);
+#[cfg(windows)]
+struct Pipe(std::fs::File);
 
+#[cfg(windows)]
 impl Pipe {
     fn open() -> Option<Pipe> {
         (0..10).find_map(|i| std::fs::OpenOptions::new().read(true).write(true).open(format!(r"\\.\pipe\discord-ipc-{i}")).ok()).map(Pipe)
     }
 
     fn write(&mut self, op: u32, body: &Value) -> std::io::Result<()> {
+        use std::io::Write;
         let data = serde_json::to_vec(body).unwrap_or_default();
         let mut frame = Vec::with_capacity(8 + data.len());
         frame.extend_from_slice(&op.to_le_bytes());
@@ -181,6 +195,10 @@ impl Pipe {
 
     /// One frame if one has arrived; never blocks waiting for Discord to say something.
     fn read(&mut self) -> std::io::Result<Option<(u32, Value)>> {
+        use std::io::Read;
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::System::Pipes::PeekNamedPipe;
         let mut avail = 0u32;
         let h = HANDLE(self.0.as_raw_handle());
         if unsafe { PeekNamedPipe(h, None, 0, None, Some(&mut avail), None) }.is_err() {
@@ -199,26 +217,31 @@ impl Pipe {
     }
 }
 
+/// Discord's pipe is Windows-only; elsewhere (tests) there's never one to open.
+#[cfg(not(windows))]
+struct Pipe;
+
+#[cfg(not(windows))]
+impl Pipe {
+    fn open() -> Option<Pipe> {
+        None
+    }
+    fn write(&mut self, _op: u32, _body: &Value) -> std::io::Result<()> {
+        Ok(())
+    }
+    fn read(&mut self) -> std::io::Result<Option<(u32, Value)>> {
+        Ok(None)
+    }
+}
+
 // ---------- HTTP (OAuth token exchange, album art lookup) ----------
 
-fn http(url: &str, form: Option<&str>) -> Result<Value, String> {
-    let e = |e: windows::core::Error| e.message().to_string();
-    let client = HttpClient::new().map_err(e)?;
-    let _ = client.DefaultRequestHeaders().and_then(|h| h.UserAgent()).and_then(|ua| ua.TryParseAdd(&HSTRING::from(UA)));
-    let uri = Uri::CreateUri(&HSTRING::from(url)).map_err(e)?;
-    let resp = match form {
-        Some(body) => {
-            let content = HttpStringContent::CreateFromStringWithEncodingAndMediaType(&HSTRING::from(body), UnicodeEncoding::Utf8, &HSTRING::from("application/x-www-form-urlencoded")).map_err(e)?;
-            client.PostAsync(&uri, &content).and_then(|op| op.get()).map_err(e)?
-        }
-        None => client.GetAsync(&uri).and_then(|op| op.get()).map_err(e)?,
-    };
-    let status = resp.StatusCode().map_err(e)?.0;
-    let text = resp.Content().and_then(|c| c.ReadAsStringAsync()).and_then(|op| op.get()).map_err(e)?.to_string();
-    let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    if !(200..300).contains(&status) {
+fn http(r: Request) -> Result<Value, String> {
+    let resp = r.send()?;
+    let v = resp.json();
+    if !resp.ok() {
         let why = v["error_description"].as_str().or(v["error"].as_str()).unwrap_or("").to_string();
-        return Err(format!("HTTP {status}{}", if why.is_empty() { String::new() } else { format!(": {why}") }));
+        return Err(format!("HTTP {}{}", resp.status, if why.is_empty() { String::new() } else { format!(": {why}") }));
     }
     Ok(v)
 }
@@ -246,8 +269,9 @@ enum Pending {
 }
 
 struct Client {
-    app: AppHandle,
+    host: Host,
     shared: Arc<Shared>,
+    path: PathBuf,
     saved: Saved,
     st: Status,
     pipe: Option<Pipe>,
@@ -261,11 +285,12 @@ struct Client {
     last_presence: Instant,
 }
 
-fn run(app: AppHandle, shared: Arc<Shared>, rx: Receiver<Cmd>) {
-    let saved = load();
+fn run(host: Host, shared: Arc<Shared>, path: PathBuf, rx: Receiver<Cmd>) {
+    let saved = load(&path);
     let mut c = Client {
-        app,
+        host,
         shared,
+        path,
         st: Status { presence: saved.presence, notify: saved.notify, ..Default::default() },
         saved,
         pipe: None,
@@ -282,8 +307,12 @@ fn run(app: AppHandle, shared: Arc<Shared>, rx: Receiver<Cmd>) {
     let mut next_try = Instant::now();
     loop {
         // Commands work whether or not Discord is open (setup, options).
-        while let Ok(cmd) = rx.try_recv() {
-            c.command(cmd);
+        loop {
+            match rx.try_recv() {
+                Ok(cmd) => c.command(cmd),
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
+            }
         }
         if c.pipe.is_none() && !c.saved.client_id.is_empty() && Instant::now() >= next_try {
             c.connect();
@@ -320,10 +349,10 @@ impl Client {
     }
 
     fn publish(&mut self) {
-        let mut cur = STATUS.lock().unwrap();
+        let mut cur = self.shared.status.lock().unwrap();
         if cur.as_ref() != Some(&self.st) {
             *cur = Some(self.st.clone());
-            let _ = self.app.emit("discord:status", &self.st);
+            self.host.emit("status", &self.st);
         }
     }
 
@@ -363,7 +392,7 @@ impl Client {
 
     fn disconnected(&mut self, why: &str) {
         if self.pipe.take().is_some() {
-            log_line(&format!("discord: disconnected ({why})"));
+            self.host.info(format!("disconnected ({why})"));
         }
         self.pending.clear();
         self.channel_subs = None;
@@ -387,7 +416,7 @@ impl Client {
                 if !secret.trim().is_empty() {
                     self.saved.secret = protect(secret.trim());
                 }
-                save(&self.saved);
+                save(&self.path, &self.saved);
                 self.st.error.clear();
                 self.refresh_flags();
                 self.publish();
@@ -424,14 +453,14 @@ impl Client {
                         self.send("UNSUBSCRIBE", json!({}), Some("NOTIFICATION_CREATE"), Pending::Other);
                     }
                 }
-                save(&self.saved);
+                save(&self.path, &self.saved);
                 self.refresh_flags();
                 self.publish();
             }
             Cmd::Forget => {
                 self.clear_activity();
                 self.saved = Saved::default();
-                save(&self.saved);
+                save(&self.path, &self.saved);
                 self.disconnected("forgotten");
                 self.st = Status::default();
                 self.refresh_flags();
@@ -470,12 +499,12 @@ impl Client {
                     if !self.try_refresh() {
                         self.saved.access.clear();
                         self.saved.refresh.clear();
-                        save(&self.saved);
+                        save(&self.path, &self.saved);
                         self.st.authorized = false;
                         self.st.error = "Discord signed the island out; authorize again.".into();
                     }
                 }
-                _ => log_line(&format!("discord: {} failed: {msg}", v["cmd"].as_str().unwrap_or("?"))),
+                _ => self.host.warn(format!("{} failed: {msg}", v["cmd"].as_str().unwrap_or("?"))),
             }
             self.publish();
             return;
@@ -485,7 +514,7 @@ impl Client {
                 self.st.connected = true;
                 self.st.error.clear();
                 self.st.user = Some(member_of(&data["user"], None));
-                log_line("discord: connected");
+                self.host.info("connected");
                 self.authenticate();
             }
             ("DISPATCH", "VOICE_CHANNEL_SELECT") => match data["channel_id"].as_str() {
@@ -514,23 +543,30 @@ impl Client {
                     m.speaking = on;
                 }
                 // Speaking flips many times a second; send just that, not the whole status.
-                let _ = self.app.emit("discord:speaking", json!({ "id": id, "speaking": on }));
-                if let Some(s) = STATUS.lock().unwrap().as_mut() {
-                    *s = self.st.clone();
-                }
+                self.host.emit("speaking", json!({ "id": id, "speaking": on }));
+                *self.shared.status.lock().unwrap() = Some(self.st.clone());
                 return;
             }
             ("DISPATCH", "VOICE_SETTINGS_UPDATE") => self.voice_settings(data),
             ("DISPATCH", "NOTIFICATION_CREATE") => {
                 // Only messages that @mention you yourself (not @everyone, @here or a role).
                 let me = self.st.user.as_ref().map(|u| u.id.as_str()).unwrap_or("");
-                if !mentions(&data["message"], me) {
+                if !self.saved.notify || !mentions(&data["message"], me) {
                     return;
                 }
-                let _ = self.app.emit(
-                    "discord:notify",
-                    json!({ "title": data["title"], "body": data["body"], "icon": data["icon_url"], "channel": data["channel_id"] }),
-                );
+                let icon = data["icon_url"].as_str().filter(|u| u.starts_with("https://cdn.discordapp.com/") || u.starts_with("https://media.discordapp.net/"));
+                // On top of everything (fullscreen games too): it's someone asking for you.
+                self.host.notify(Notify {
+                    title: data["title"].as_str().unwrap_or("Discord").to_string(),
+                    body: data["body"].as_str().unwrap_or("").to_string(),
+                    icon: Some("chat".into()),
+                    img: icon.map(String::from),
+                    round: icon.is_some(),
+                    urgent: true,
+                    top: true,
+                    action: Some("tab:discord".into()),
+                    sound: Some("mention".into()),
+                });
                 return;
             }
             ("AUTHORIZE", _) => {
@@ -547,7 +583,7 @@ impl Client {
                 if data["user"].is_object() {
                     self.st.user = Some(member_of(&data["user"], None));
                 }
-                log_line("discord: signed in");
+                self.host.info("signed in");
                 self.subscribe("VOICE_CHANNEL_SELECT", json!({}));
                 self.subscribe("VOICE_SETTINGS_UPDATE", json!({}));
                 if self.saved.notify {
@@ -584,7 +620,7 @@ impl Client {
         if self.saved.access.is_empty() {
             return;
         }
-        if crate::util::now_ms() + 60_000 > self.saved.expires_at && !self.try_refresh() {
+        if now_ms() + 60_000 > self.saved.expires_at && !self.try_refresh() {
             return;
         }
         let token = unprotect(&self.saved.access);
@@ -599,7 +635,7 @@ impl Client {
         match self.exchange(&format!("grant_type=refresh_token&refresh_token={}", enc(&refresh))) {
             Ok(()) => true,
             Err(e) => {
-                log_line(&format!("discord: token refresh failed: {e}"));
+                self.host.warn(format!("token refresh failed: {e}"));
                 false
             }
         }
@@ -609,14 +645,14 @@ impl Client {
     fn exchange(&mut self, grant: &str) -> Result<(), String> {
         let secret = unprotect(&self.saved.secret);
         let body = format!("client_id={}&client_secret={}&{grant}", enc(&self.saved.client_id), enc(&secret));
-        let v = http("https://discord.com/api/oauth2/token", Some(&body))?;
+        let v = http(Request::post("https://discord.com/api/oauth2/token", "application/x-www-form-urlencoded", body))?;
         let access = v["access_token"].as_str().ok_or("no access token in Discord's reply")?;
         self.saved.access = protect(access);
         if let Some(r) = v["refresh_token"].as_str() {
             self.saved.refresh = protect(r);
         }
-        self.saved.expires_at = crate::util::now_ms() + v["expires_in"].as_u64().unwrap_or(604_800) * 1000;
-        save(&self.saved);
+        self.saved.expires_at = now_ms() + v["expires_in"].as_u64().unwrap_or(604_800) * 1000;
+        save(&self.path, &self.saved);
         Ok(())
     }
 
@@ -665,7 +701,7 @@ impl Client {
         if !self.st.connected || !self.saved.presence {
             return;
         }
-        let media = self.shared.status.lock().unwrap().media.clone();
+        let media = self.shared.media.lock().unwrap().clone();
         let playing = media.filter(|m| m.source == "apple" && m.playing && !m.title.is_empty());
         let Some(m) = playing else {
             if !self.activity_key.is_empty() {
@@ -714,7 +750,7 @@ impl Client {
             return v.clone();
         }
         let url = format!("https://itunes.apple.com/search?media=music&entity=song&limit=1&term={}", enc(&format!("{artist} {title}")));
-        let found = http(&url, None)
+        let found = http(Request::get(&url))
             .ok()
             .and_then(|v| {
                 let r = v["results"].get(0)?.clone();
@@ -724,16 +760,6 @@ impl Client {
             .unwrap_or_default();
         self.art.insert(key, found.clone());
         found
-    }
-}
-
-/// "portal" opens Discord's developer portal in the default browser (never Edge, see
-/// util::open_web); "app" brings up the Discord app.
-pub fn open(what: &str) -> Result<(), String> {
-    match what {
-        "portal" => crate::util::open_web("https://discord.com/developers/applications"),
-        "app" => crate::util::shell_open("discord://-/channels/@me"),
-        _ => Err("unknown target".into()),
     }
 }
 
@@ -790,6 +816,77 @@ fn member_of(user: &Value, vs: Option<&Value>) -> Member {
     }
 }
 
+// ---------- the module ----------
+
+#[derive(Default)]
+struct Discord {
+    tx: Mutex<Option<Sender<Cmd>>>,
+    shared: Arc<Shared>,
+    started: OnceLock<()>,
+}
+
+impl Discord {
+    fn send(&self, cmd: Cmd) -> CallResult {
+        let tx = self.tx.lock().unwrap();
+        tx.as_ref().ok_or_else(|| RpcError::failed("Discord isn't ready yet"))?.send(cmd).map_err(|_| RpcError::failed("Discord stopped"))?;
+        Ok(Value::Null)
+    }
+}
+
+impl Module for Discord {
+    fn init(&self, host: &Host, _init: &Init) -> Result<(), RpcError> {
+        let path = host.data_dir().join("discord.json");
+        if let Err(e) = host.take_legacy("discord.json", &path) {
+            host.warn(format!("couldn't take over discord.json: {e}"));
+        }
+        if self.started.set(()).is_ok() {
+            let (tx, rx) = channel();
+            *self.tx.lock().unwrap() = Some(tx);
+            let (host, shared) = (host.clone(), self.shared.clone());
+            std::thread::spawn(move || run(host, shared, path, rx));
+        }
+        Ok(())
+    }
+
+    fn call(&self, _host: &Host, method: &str, params: Value) -> CallResult {
+        match method {
+            "status" => Ok(serde_json::to_value(self.shared.status.lock().unwrap().clone().unwrap_or_default()).unwrap_or(Value::Null)),
+            // Saves the user's Discord application (the secret is kept only if one is given).
+            "configure" => {
+                let client_id = params["client_id"].as_str().unwrap_or("").trim().to_string();
+                if client_id.is_empty() || !client_id.chars().all(|c| c.is_ascii_digit()) {
+                    return Err(RpcError::bad_params("The Client ID is a long number (the Application ID in the developer portal)"));
+                }
+                self.send(Cmd::Configure { client_id, secret: params["secret"].as_str().unwrap_or("").to_string() })
+            }
+            "action" => self.send(match params["action"].as_str().unwrap_or("") {
+                "authorize" => Cmd::Authorize,
+                "mute" => Cmd::Mute(true),
+                "unmute" => Cmd::Mute(false),
+                "deafen" => Cmd::Deaf(true),
+                "undeafen" => Cmd::Deaf(false),
+                "leave" => Cmd::Leave,
+                "forget" => Cmd::Forget,
+                other => return Err(RpcError::bad_params(format!("unknown Discord action {other}"))),
+            }),
+            "options" => self.send(Cmd::Options { presence: params["presence"].as_bool(), notify: params["notify"].as_bool() }),
+            // Brings up the Discord app (or starts it).
+            "open_app" => island_win::shell::open("discord://-/channels/@me").map(|_| Value::Null).map_err(RpcError::failed),
+            _ => Err(RpcError::unknown_method(method)),
+        }
+    }
+
+    fn event(&self, _host: &Host, topic: &str, data: Value) {
+        if topic == "media.state" {
+            *self.shared.media.lock().unwrap() = if data.is_null() { None } else { serde_json::from_value(data).ok() };
+        }
+    }
+}
+
+fn main() {
+    island_module::run(Discord::default());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -806,7 +903,36 @@ mod tests {
         assert!(plain.avatar.starts_with("https://cdn.discordapp.com/embed/avatars/"));
     }
 
+    #[test]
+    fn only_direct_mentions() {
+        let me = "80351110224678912";
+        assert!(mentions(&json!({ "content": "hey <@80351110224678912> you on?", "mentions": [{ "id": me }] }), me));
+        assert!(mentions(&json!({ "content": "replying", "mentions": [{ "id": me }] }), me));
+        assert!(mentions(&json!({ "content": "old style <@!80351110224678912>" }), me));
+        assert!(!mentions(&json!({ "content": "@everyone raid at 9", "mention_everyone": true, "mentions": [] }), me));
+        assert!(!mentions(&json!({ "content": "<@&123> role ping", "mention_roles": ["123"], "mentions": [] }), me));
+        assert!(!mentions(&json!({ "content": "hi <@1>", "mentions": [{ "id": "1" }] }), me));
+        assert!(!mentions(&json!({ "content": "<@80351110224678912>" }), ""));
+    }
+
+    #[test]
+    fn media_from_the_topic() {
+        let m: Media = serde_json::from_value(json!({ "playing": true, "source": "apple", "title": "Song", "artist": "Band", "album": "", "duration": 200.5, "position": 12.0, "sampled_at": 1000, "key": "k", "app": "Apple Music" })).unwrap();
+        assert!(m.playing && m.source == "apple" && m.key == "k");
+        // A topic from an older publisher, with less in it, still reads.
+        let old: Media = serde_json::from_value(json!({ "playing": false, "title": "x" })).unwrap();
+        assert_eq!(old.duration, 0.0);
+    }
+
+    #[test]
+    fn manifest_is_valid() {
+        let m: island_module::proto::manifest::Manifest = serde_json::from_str(include_str!("../module.json")).unwrap();
+        m.validate().unwrap();
+        assert_eq!(m.id, "discord");
+    }
+
     /// Against the running Discord app: a made-up Client ID is refused with a CLOSE frame.
+    #[cfg(windows)]
     #[test]
     #[ignore = "needs Discord running"]
     fn live_pipe_framing() {
@@ -825,25 +951,5 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-    }
-
-    #[test]
-    fn only_direct_mentions() {
-        let me = "80351110224678912";
-        assert!(mentions(&json!({ "content": "hey <@80351110224678912> you on?", "mentions": [{ "id": me }] }), me));
-        assert!(mentions(&json!({ "content": "replying", "mentions": [{ "id": me }] }), me));
-        assert!(mentions(&json!({ "content": "old style <@!80351110224678912>" }), me));
-        assert!(!mentions(&json!({ "content": "@everyone raid at 9", "mention_everyone": true, "mentions": [] }), me));
-        assert!(!mentions(&json!({ "content": "<@&123> role ping", "mention_roles": ["123"], "mentions": [] }), me));
-        assert!(!mentions(&json!({ "content": "hi <@1>", "mentions": [{ "id": "1" }] }), me));
-        assert!(!mentions(&json!({ "content": "<@80351110224678912>" }), ""));
-    }
-
-    #[test]
-    fn dpapi_round_trip() {
-        let enc = protect("s3cret value");
-        assert!(!enc.is_empty() && !enc.contains("s3cret"));
-        assert_eq!(unprotect(&enc), "s3cret value");
-        assert_eq!(unprotect(""), "");
     }
 }

@@ -143,6 +143,9 @@ pub struct Site {
     pub skin: Option<String>,
     #[serde(default)]
     pub default: bool,
+    /// Docked, the site keeps the module's island view beside it (Discord's call controls).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub split: bool,
 }
 
 /// A section inside a base tab (Voicemeeter in Audio, VPN in Network, Wallpaper Engine in Wallpaper).

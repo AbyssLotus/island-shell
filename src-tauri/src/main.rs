@@ -9,7 +9,6 @@ mod calendar;
 mod clipboard;
 mod conns;
 mod diskscan;
-mod discord;
 mod embed;
 mod ics;
 mod gaze;
@@ -342,48 +341,6 @@ async fn copy_text(text: String) -> Result<(), String> {
     blocking(move || arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string())).await?
 }
 
-/// Discord: voice call, notifications and Rich Presence (see discord.rs).
-#[tauri::command]
-fn discord_status() -> discord::Status {
-    discord::status()
-}
-
-/// Saves the user's Discord application (the secret is kept only if one is given).
-#[tauri::command]
-fn discord_configure(client_id: String, secret: String) -> Result<(), String> {
-    if !client_id.trim().chars().all(|c| c.is_ascii_digit()) {
-        return Err("The Client ID is a long number (the Application ID in the developer portal)".into());
-    }
-    discord::send(discord::Cmd::Configure { client_id, secret })
-}
-
-/// authorize | mute | unmute | deafen | undeafen | leave | forget
-#[tauri::command]
-fn discord_action(action: String) -> Result<(), String> {
-    use discord::Cmd;
-    discord::send(match action.as_str() {
-        "authorize" => Cmd::Authorize,
-        "mute" => Cmd::Mute(true),
-        "unmute" => Cmd::Mute(false),
-        "deafen" => Cmd::Deaf(true),
-        "undeafen" => Cmd::Deaf(false),
-        "leave" => Cmd::Leave,
-        "forget" => Cmd::Forget,
-        _ => return Err(format!("unknown Discord action {action}")),
-    })
-}
-
-#[tauri::command]
-fn discord_options(presence: Option<bool>, notify: Option<bool>) -> Result<(), String> {
-    discord::send(discord::Cmd::Options { presence, notify })
-}
-
-/// portal | app
-#[tauri::command]
-fn discord_open(what: String) -> Result<(), String> {
-    discord::open(&what)
-}
-
 /// The full-screen Command Center: the island's window covers the whole monitor while it's open,
 /// then goes back to its usual place. (Staying on top and catching clicks come from island_rect.)
 #[tauri::command]
@@ -418,8 +375,8 @@ fn cc_web(query: String) -> Result<(), String> {
     util::open_web(&format!("https://www.google.com/search?q={}", util::url_encode(query.trim())))
 }
 
-/// Docks a website (discord, or a module's site such as canvas/web) over the given CSS-pixel rectangle of the Command Center.
-/// `skin` (Discord only, default on) dresses Discord in the island skin.
+/// Docks a module's website (`<module>/<site>`, such as discord/app or canvas/web) over the given CSS-pixel
+/// rectangle of the Command Center. `skin` (default on) dresses it in the island skin.
 #[tauri::command]
 async fn cc_embed(site: String, x: f64, y: f64, w: f64, h: f64, skin: Option<bool>, app: AppHandle, shared: Shr<'_>) -> Result<(), String> {
     let p = *shared.place.lock().unwrap();
@@ -910,6 +867,7 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
         let mut tick: u64 = 0;
         let (mut wifi, mut bt, mut net) = Default::default();
         let mut battery = bar::Battery::default();
+        let mut media_sig = None;
         loop {
             if tick % 10 == 0 {
                 battery = bar::battery();
@@ -923,6 +881,13 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
                 m.app_volume = audio::app_volume(&m.exe);
             }
             *shared.media_exe.lock().unwrap() = media.as_ref().map(|m| m.exe.clone()).unwrap_or_default();
+            // What's playing, for modules (the Discord module's status), when the song, play state or
+            // position jumps (a seek). The Music module publishes it itself once it takes over.
+            let sig = media.as_ref().map(|m| (m.key.clone(), m.playing, if m.playing { (m.sampled_at as i64 - (m.position * 1000.0) as i64) / 3000 } else { 0 }));
+            if sig != media_sig {
+                media_sig = sig;
+                modules::publish(island_host::proto::topic::MEDIA_STATE, media::topic(media.as_ref()));
+            }
             shared.media_playing.store(media.as_ref().is_some_and(|m| m.playing), Ordering::Relaxed);
             let audio = audio::info();
             if tick % 3 == 0 {
@@ -1162,11 +1127,6 @@ fn main() {
             media_app_volume,
             media_lyrics,
             audio_devices,
-            discord_status,
-            discord_configure,
-            discord_action,
-            discord_options,
-            discord_open,
             cc_mode,
             cc_places,
             cc_open,
@@ -1304,7 +1264,6 @@ fn main() {
 
             island::spawn_cursor(win.clone(), shared.clone());
             applemusic::spawn();
-            discord::spawn(app.handle().clone(), shared.clone());
             embed::spawn_reaper(app.handle().clone());
             gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze, settings.gaze_pause);
             spawn_meter(win.clone(), shared.clone());

@@ -1,7 +1,7 @@
 import { WALLS, drawWall } from './engine.js';
 import { createCommandCenter } from './cc.js';
 import { createSounds } from './sounds.js';
-import { createRegistry } from './registry.js';
+import { createRegistry, topActivity } from './registry.js';
 import { createModuleHost } from './modhost.js';
 
 const TAURI = window.__TAURI__;
@@ -112,9 +112,9 @@ $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 /* ---------- tabs (src/registry.js) ---------- */
 const R = createRegistry();
 // The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
-// (src/modhost.js), slotting in by order: Canvas's 50, Games' 80 and Destiny's 90 keep their old places.
+// (src/modhost.js), slotting in by order: Canvas's 50, Discord's 70, Games' 80 and Destiny's 90 keep their old places.
 [['controls', 'Controls', 'gear', 600, 10], ['music', 'Music', 'note', 700, 20], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
-  ['network', 'Network', 'wifi', 680, 60], ['discord', 'Discord', 'chat', 700, 70],
+  ['network', 'Network', 'wifi', 680, 60],
   ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
   ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
   .forEach(([id, title, ic, width, order]) => R.tabs.add({ id, title, icon: ic, width, order }));
@@ -275,7 +275,6 @@ function onTabShown(t) {
   if (t === 'music' || t === 'controls') { S.ly.idx = -2; syncLyric(curPos(), true); mediaTick(); }
   if (t === 'stats') statsLoop();
   if (t === 'network') { renderNetNow(); layout(); }
-  if (t === 'discord') loadDc();
   if (t === 'wallpaper') showWallpapers();
   if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } }
   if (t === 'clipboard') renderClip();
@@ -287,8 +286,8 @@ function onTabShown(t) {
 }
 /** In bar style, where a panel opened by hotkey drops down from. */
 function anchorFor(tab) {
-  const sel = { apps: '#barApps', controls: '#barGear', audio: '#barVol', music: '#barMedia', network: '#barNet', discord: '#barDc', games: '#barGames', today: '#barClock', stats: '#barCpu', power: '#barPower' }[tab];
-  const el = sel && $(sel);
+  const sel = { apps: '#barApps', controls: '#barGear', audio: '#barVol', music: '#barMedia', network: '#barNet', games: '#barGames', today: '#barClock', stats: '#barCpu', power: '#barPower' }[tab];
+  const el = sel ? $(sel) : $(`[data-mchip][data-opens="tab:${CSS.escape(tab)}"]`);
   if (!el || el.hidden) return innerWidth / 2;
   const r = el.getBoundingClientRect();
   return r.left + r.width / 2;
@@ -941,146 +940,8 @@ function renderNetNow() {
 }
 
 /* ---------- controls ---------- */
-/* ---------- Discord (voice call, notifications, Rich Presence; see discord.rs) ---------- */
-S.dc = null; S.dcEdit = false; S.dcAutoAuth = false; S.dcOrder = []; S.callW = 0;
-const DC_CDN = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
-const dcImg = (m, cls) => `<img${cls ? ` class="${cls}"` : ''} src="${esc(DC_CDN.test(m.avatar) ? m.avatar : '')}" alt="" data-id="${esc(m.id)}" referrerpolicy="no-referrer">`;
+/** A line of text at most n characters long (for notifications and the like). */
 const clipTxt = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-async function loadDc() {
-  try { S.dc = await invoke('discord_status'); } catch (e) { return; }
-  renderDc(); renderDcCall();
-}
-function dcState(d) {
-  if (!d.connected) return 'Discord isn’t open';
-  if (!d.authorized) return d.has_secret ? 'Connected · not authorized yet' : 'Connected · status only';
-  return 'Signed in';
-}
-function renderDc() {
-  const d = S.dc || {}, setup = !d.configured || S.dcEdit;
-  $('#dcSetup').hidden = !setup; $('#dcMain').hidden = setup;
-  const n = $('#dcNote'); n.textContent = d.error || ''; n.hidden = !d.error;
-  if (setup) {
-    const id = $('#dcId');
-    if (!id.value && d.client_id) id.value = d.client_id;
-    $('#dcSecret').placeholder = d.has_secret ? 'Client Secret (saved; blank keeps it)' : 'Client Secret';
-    $('#dcBack').hidden = !d.configured; $('#dcForget').hidden = !d.configured;
-  } else {
-    const me = d.user, v = d.voice;
-    setHtml($('#dcMe'), `${me ? dcImg(me, 'dc-av') : `<span class="vpn-logo">${icon('chat')}</span>`}<div class="vpn-title"><b>${esc(me ? me.name : 'Discord')}</b><small>${esc(dcState(d))}</small></div>`);
-    $('.dc-side').classList.toggle('on', !!d.authorized);
-    let html;
-    if (!d.connected) html = `<div class="empty">${icon('chat')}<span>Open Discord to see your calls here</span><button class="btn" type="button" data-dc="open">Open Discord</button></div>`;
-    else if (!d.authorized) html = d.has_secret
-      ? `<div class="empty">${icon('headphones')}<span>Let the island see your calls and notifications.<br>Discord will ask you to confirm.</span><button class="btn primary" type="button" data-dc="authorize">Authorize</button></div>`
-      : `<div class="empty">${icon('headphones')}<span>Add your app’s Client Secret to see calls and notifications</span><button class="btn" type="button" data-dc="edit">Add the secret</button></div>`;
-    else if (!v) html = `<div class="empty">${icon('headphones')}<span>You’re not in a voice channel</span></div>`;
-    else html = `<div class="dc-vh"><span class="vpn-logo">${icon('headphones')}</span><div class="vpn-title"><b>${esc(v.name)}</b><small>${esc(v.guild || 'Voice')} · ${v.members.length} ${v.members.length === 1 ? 'person' : 'people'}</small></div></div>`
-      + `<div class="dc-members">${v.members.map(m => `<div class="dc-m">${dcImg(m, 'dc-av')}<b>${esc(m.name)}</b>${m.deaf ? icon('headoff') : m.mute ? icon('micoff') : ''}</div>`).join('')}</div>`;
-    setHtml($('#dcVoice'), html);
-    $('#dcCtl').hidden = !d.authorized;
-    const mute = $('#dcMute'), deaf = $('#dcDeaf');
-    mute.setAttribute('aria-pressed', !!d.mute); deaf.setAttribute('aria-pressed', !!d.deaf);
-    setHtml(mute, `${icon(d.mute ? 'micoff' : 'mic')}<span>${d.mute ? 'Unmute' : 'Mute'}</span>`);
-    setHtml(deaf, `${icon(d.deaf ? 'headoff' : 'headphones')}<span>${d.deaf ? 'Undeafen' : 'Deafen'}</span>`);
-    $('#dcLeave').disabled = !v;
-    $('#dcPresence').checked = !!d.presence; $('#dcNotify').checked = !!d.notify;
-    txt($('#dcNow'), !d.presence || !d.connected ? '' : d.presence_now ? `Showing ${d.presence_now}` : 'Shows while Apple Music plays');
-    dcTalk();
-  }
-  if (S.mode === 'panel' && S.tab === 'discord') layout();
-}
-/** Extra pill width for the call avatars (and the muted mic). */
-function callW() { return S.callW || 0; }
-/** Up to three people for the pill: the order sticks, except someone out of sight who starts talking moves up. */
-function dcVisible(v) {
-  const ids = v.members.map(m => m.id);
-  S.dcOrder = S.dcOrder.filter(id => ids.includes(id));
-  for (const id of ids) if (!S.dcOrder.includes(id)) S.dcOrder.push(id);
-  return S.dcOrder.slice(0, 3).map(id => v.members.find(m => m.id === id));
-}
-function renderDcCall() {
-  const d = S.dc, v = d && d.voice, on = !!(v && v.members.length);
-  island.classList.toggle('in-call', on);
-  const pill = $('#pillCall'), chip = $('#barDc');
-  pill.hidden = !on; chip.hidden = !on;
-  let w = 0;
-  if (on) {
-    const ms = dcVisible(v), self = d.deaf ? icon('headoff') : d.mute ? icon('micoff') : '';
-    const html = `<span class="dc-stack">${ms.map(m => dcImg(m)).join('')}</span>${self}`;
-    setHtml(pill, html); setHtml(chip, html);
-    chip.title = `${v.name}${v.guild ? ' · ' + v.guild : ''} (Discord)`;
-    w = 9 + 18 + (ms.length - 1) * 12 + (self ? 17 : 0);
-    dcTalk();
-  }
-  if (w !== S.callW) { S.callW = w; layout(); }
-}
-/** Green rings on whoever is talking (changes many times a second, so only classes flip). */
-function dcTalk() {
-  const v = S.dc && S.dc.voice; if (!v) return;
-  const talking = new Set(v.members.filter(m => m.speaking).map(m => m.id));
-  for (const img of $$('#pillCall img, #barDc img, #dcVoice .dc-av')) img.classList.toggle('talk', talking.has(img.dataset.id));
-}
-listen('discord:status', e => {
-  const prev = S.dc, was = prev && prev.voice;
-  S.dc = e.payload;
-  const now = S.dc.voice;
-  if (prev && now && (!was || was.channel_id !== now.channel_id)) toast(clipTxt(now.name, 40), 'Joined voice', 'headphones', { sound: 'voice' });
-  else if (prev && was && !now && S.dc.connected) toast(clipTxt(was.name, 40), 'Left voice', 'phoneoff', { sound: 'voice' });
-  if (S.dcAutoAuth && S.dc.connected && !S.dc.authorized && S.dc.has_secret && !S.dc.error) { S.dcAutoAuth = false; dcAction('authorize'); }
-  renderDc(); renderDcCall();
-});
-listen('discord:speaking', e => {
-  const { id, speaking } = e.payload, v = S.dc && S.dc.voice; if (!v) return;
-  const m = v.members.find(x => x.id === id); if (!m) return;
-  m.speaking = speaking;
-  const i = S.dcOrder.indexOf(id);
-  if (speaking && i >= 3) { S.dcOrder.splice(i, 1); S.dcOrder.unshift(id); renderDcCall(); } else dcTalk();
-});
-listen('discord:notify', e => {
-  const n = e.payload || {};
-  if (!S.dc || !S.dc.notify) return;
-  const img = DC_CDN.test(n.icon || '') ? n.icon : '';
-  // Only @mentions of you get here (discord.rs filters), so they're shown on top of everything.
-  toast(clipTxt(n.title || "Discord", 48), clipTxt(n.body, 72), 'chat', { img, round: !!img, ms: 6000, urgent: true, tab: 'discord', sound: 'mention' });
-});
-function dcAction(action) {
-  note('#dcNote', '');
-  return invoke('discord_action', { action }).catch(err => note('#dcNote', String(err)));
-}
-$('#dcPortal').addEventListener('click', () => invoke('discord_open', { what: 'portal' }).catch(err => note('#dcNote', String(err))));
-$('#dcForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const clientId = $('#dcId').value.trim(), secret = $('#dcSecret').value.trim();
-  if (!clientId) { note('#dcNote', 'Paste the Client ID first.'); return; }
-  note('#dcNote', '');
-  invoke('discord_configure', { clientId, secret }).then(() => {
-    $('#dcSecret').value = '';
-    S.dcEdit = false; S.dcAutoAuth = !!secret || !!(S.dc && S.dc.has_secret);
-    loadDc();
-  }).catch(err => note('#dcNote', String(err)));
-});
-$('#dcBack').addEventListener('click', () => { S.dcEdit = false; $('#dcSecret').value = ''; renderDc(); });
-$('#dcEdit').addEventListener('click', () => { S.dcEdit = true; renderDc(); });
-$('#dcOpen').addEventListener('click', () => invoke('discord_open', { what: 'app' }).then(() => closePanel(true)).catch(err => note('#dcNote', String(err))));
-$('#dcForget').addEventListener('click', () => {
-  // Second click within 3 s confirms.
-  const b = $('#dcForget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget this app'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget this app';
-  $('#dcId').value = ''; $('#dcSecret').value = ''; S.dcEdit = false;
-  dcAction('forget').then(loadDc);
-});
-$('#dcVoice').addEventListener('click', e => {
-  const b = e.target.closest('[data-dc]'); if (!b) return;
-  if (b.dataset.dc === 'open') $('#dcOpen').click();
-  else if (b.dataset.dc === 'edit') { S.dcEdit = true; renderDc(); }
-  else dcAction(b.dataset.dc);
-});
-$('#dcMute').addEventListener('click', () => { if (S.dc) { S.dc.mute = !S.dc.mute; renderDc(); renderDcCall(); dcAction(S.dc.mute ? 'mute' : 'unmute'); } });
-$('#dcDeaf').addEventListener('click', () => { if (S.dc) { S.dc.deaf = !S.dc.deaf; renderDc(); renderDcCall(); dcAction(S.dc.deaf ? 'deafen' : 'undeafen'); } });
-$('#dcLeave').addEventListener('click', () => dcAction('leave'));
-$('#dcPresence').addEventListener('change', e => invoke('discord_options', { presence: e.target.checked }).catch(err => note('#dcNote', String(err))));
-$('#dcNotify').addEventListener('change', e => invoke('discord_options', { notify: e.target.checked }).catch(err => note('#dcNote', String(err))));
 
 function note(id, msg) { const n = $(id); n.textContent = msg || ''; n.hidden = !msg; layout(); }
 function renderControls() {
@@ -2233,6 +2094,32 @@ const modHost = createModuleHost({
 });
 /** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities'. */
 const islandEvents = new EventTarget();
+/* ---------- a call on the pill and the top bar (a module's `call` activity, like Discord's) ----------
+   Who's in it (up to three faces, a green ring on whoever's talking) and your own mute or deafen,
+   beside the clock. Talking flips many times a second, so while the faces stay the same only their
+   rings change, here and on the bar's chips. */
+S.callW = 0;
+/** Extra pill width for the faces (and the muted mic). */
+function callW() { return S.callW || 0; }
+const faces = list => list.map(a => `<img src="${esc(/^https:\/\//.test(a.src || '') ? a.src : '')}" alt="" data-id="${esc(a.id || '')}" referrerpolicy="no-referrer">`).join('');
+function talkRings(box, list) {
+  const t = new Set(list.filter(a => a.talk).map(a => a.id));
+  for (const img of box.querySelectorAll('img[data-id]')) img.classList.toggle('talk', t.has(img.dataset.id));
+}
+function renderPillCall() {
+  const a = topActivity(R.activities.all().filter(x => x.kind === 'call')), av = ((a && a.avatars) || []).slice(0, 3);
+  const pill = $('#pillCall'), on = av.length > 0;
+  island.classList.toggle('in-call', on);
+  pill.hidden = !on;
+  let w = 0;
+  if (on) {
+    setHtml(pill, `<span class="call-stack">${faces(av)}</span>${a.icon ? icon(a.icon) : ''}`);
+    talkRings(pill, av);
+    w = 9 + 18 + (av.length - 1) * 12 + (a.icon ? 17 : 0);
+  }
+  if (w !== S.callW) { S.callW = w; layout(); }
+}
+islandEvents.addEventListener('activities', renderPillCall);
 /** Views for module tabs come and go with the registry. */
 function syncViews() {
   const box = $('.views');
@@ -2313,9 +2200,10 @@ function renderModChips() {
     const box = $(side === 'left' ? '#barModsL' : '#barModsR'); if (!box) continue;
     const list = R.chips.all().filter(c => c.module && !c.hidden && !c.in && (c.side || 'right') === side);
     setHtml(box, list.map(c => {
-      const av = (c.avatars || []).map(a => `<img src="${esc(a.src || '')}" alt="" data-id="${esc(a.id || '')}"${a.talk ? ' class="talk"' : ''} referrerpolicy="no-referrer">`).join('');
-      return `<button class="bchip${c.icon && !c.text && !av ? ' icon' : ''}${c.tone ? ' ' + esc(c.tone) : ''}" type="button" data-mchip="${esc(c.id)}" title="${esc(c.title || '')}" aria-label="${esc(c.title || c.text || '')}">${av ? `<span class="dc-stack">${av}</span>` : ''}${c.icon ? icon(c.icon) : ''}${c.text ? `<span>${esc(c.text)}</span>` : ''}</button>`;
+      const av = faces(c.avatars || []);
+      return `<button class="bchip${c.icon && !c.text && !av ? ' icon' : ''}${c.tone ? ' ' + esc(c.tone) : ''}" type="button" data-mchip="${esc(c.id)}"${c.opens ? ` data-opens="${esc(c.opens)}"` : ''} title="${esc(c.title || '')}" aria-label="${esc(c.title || c.text || '')}">${av ? `<span class="call-stack">${av}</span>` : ''}${c.icon ? icon(c.icon) : ''}${c.text ? `<span>${esc(c.text)}</span>` : ''}</button>`;
     }).join(''));
+    for (const c of list) if (c.avatars && c.avatars.length) { const b = box.querySelector(`[data-mchip="${CSS.escape(c.id)}"]`); if (b) talkRings(b, c.avatars); }
   }
 }
 barEl.addEventListener('click', e => {
@@ -2359,8 +2247,10 @@ const cmdCenter = createCommandCenter({
   S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
   // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
   moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
-    const t = m.man.contributes.tabs[0];
-    return { icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id };
+    const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);
+    let state = '';
+    try { state = String(((card && card.render && card.render()) || {}).state || ''); } catch (e) {}
+    return { icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
   }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
@@ -2378,7 +2268,7 @@ $('#openTm').addEventListener('click', () => cmdCenter.openTaskManager());
 if (FIRST_RUN) setTimeout(() => cmdCenter.openSetup(), 1800);
 modHost.start();
 
-pollStatus(); loadClips(); loadApps(); loadWeather(); loadDc();
+pollStatus(); loadClips(); loadApps(); loadWeather();
 setInterval(() => loadWeather(), 20 * 60e3);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { tabLabelW = null; moveInk(); layout(); });
 setTimeout(() => log(`ready: apps=${S.apps.length} clips=${S.clips.length} media=${S.media ? S.media.app + ' / ' + S.media.title : 'none'} audio=${S.audio ? S.audio.device + ' ' + Math.round(S.audio.level * 100) + '%' : 'none'} wifi=${JSON.stringify(S.status && S.status.wifi)} net=${JSON.stringify(S.status && S.status.net)}`), 6000);

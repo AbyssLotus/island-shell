@@ -545,16 +545,10 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
   .mu-art { width: 120px; height: 120px; }
 }
 
-/* ---------- network: Tailscale + Radmin VPN ---------- */
+/* ---------- network: what you're on, and module badges on the bar's network chip (VPN's shield) ---------- */
 .net-now { display: flex; align-items: center; gap: 8px; margin: 2px 4px 10px; font-size: 12px; color: var(--muted); }
 .net-now .i { width: 15px; height: 15px; color: var(--fg); }
 .net-now b { color: var(--fg); font-weight: 600; }
-.vpn-head { display: flex; align-items: center; gap: 10px; }
-.vpn-head .btn { height: 30px; padding: 0 12px; font-size: 12px; }
-.vpn-logo { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; flex: none; background: var(--ink-3); transition: background .4s, color .4s; }
-.vpn-title { flex: 1; min-width: 0; }
-.vpn-title b { display: block; font: 600 14px/1.2 var(--f-display); }
-.vpn-title small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bchip .net-badge { display: inline-grid; margin-left: -2px; color: var(--good); }
 .bchip .net-badge .i { width: 13px; height: 13px; }
 
@@ -603,54 +597,18 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 /* A module's mic chip on the top bar (Voicemeeter's strip 1), while muted. */
 .bchip.mic-off { color: var(--bad); }
 
-/* ---------- Discord ---------- */
-.dc-setup { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
-.dc-steps { margin: 0; padding-left: 20px; display: grid; gap: 7px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.dc-steps b { color: var(--fg); font-weight: 600; }
-.dc-steps code { font: 500 11.5px var(--f-mono); padding: 1px 6px; border-radius: 6px; background: var(--ink-3); color: var(--fg); }
-.dc-link { border: 0; padding: 0; background: none; color: var(--accent-text); font: 600 12px var(--f-body); cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 2px; }
-.dc-steps .dc-link { font-size: 12.5px; }
-.dc-form { display: flex; gap: 8px; margin: 0; }
-.dc-form .field { background: var(--ink-3); }
-.dc-fine { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--faint); }
-.dc-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; align-items: start; }
-@container (max-width: 560px) { .dc-grid { grid-template-columns: 1fr; } }
-.dc-voice { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 196px; }
-.dc-voice .empty { flex: 1; display: grid; place-content: center; gap: 10px; justify-items: center; }
-.dc-voice .empty .i { width: 26px; height: 26px; color: var(--faint); }
-.dc-vh { display: flex; align-items: center; gap: 10px; }
-.dc-vh .vpn-logo { background: var(--accent); color: var(--on-accent); }
-.dc-members { display: grid; gap: 2px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; margin: 0 -4px; }
-.dc-m { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px; border-radius: 11px; }
-.dc-m b { flex: 1; min-width: 0; font: 500 12.5px/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dc-m .i { width: 14px; height: 14px; flex: none; color: var(--bad); }
-.dc-av { width: 30px; height: 30px; flex: none; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 2px transparent; transition: box-shadow .12s; }
-.talk > .dc-av, .dc-av.talk { box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 4px var(--good); }
-.dc-side { display: flex; flex-direction: column; gap: 11px; padding: 14px; }
-.dc-side .vpn-head .dc-av { width: 38px; height: 38px; }
-.dc-side.on .vpn-title small { color: var(--good); }
-.dc-ctl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.dc-ctl[hidden] { display: none; }
-.dc-b { display: grid; justify-items: center; gap: 5px; padding: 9px 4px 8px; border: 0; border-radius: 13px; background: var(--ink-3); color: var(--fg); font: 600 11px/1 var(--f-body); cursor: pointer; transition: background .2s, color .2s, transform .15s, opacity .2s; }
-.dc-b .i { width: 17px; height: 17px; }
-.dc-b:active { transform: scale(.95); }
-.dc-b[aria-pressed="true"] { background: var(--bad); color: #fff; }
-.dc-b.bad:not(:disabled) { color: var(--bad); }
-.dc-b:disabled { opacity: .4; cursor: default; transform: none; }
-.dc-now { margin: -6px 0 0 38px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dc-now:empty { display: none; }
-.dc-foot { display: flex; align-items: center; padding-top: 2px; }
-/* In a call: who's in it, on the pill and the top bar; whoever's talking gets a green ring. */
-.dc-stack { display: inline-flex; align-items: center; }
-.dc-stack img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 2px var(--ink); transition: box-shadow .12s; }
-.dc-stack img + img { margin-left: -6px; }
-.dc-stack img.talk { box-shadow: 0 0 0 2px var(--ink), 0 0 0 3.5px var(--good); position: relative; }
+/* In a call (a module's `call` activity and chip): who's in it, on the pill and the top bar;
+   whoever's talking gets a green ring. */
+.call-stack { display: inline-flex; align-items: center; }
+.call-stack img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 2px var(--ink); transition: box-shadow .12s; }
+.call-stack img + img { margin-left: -6px; }
+.call-stack img.talk { box-shadow: 0 0 0 2px var(--ink), 0 0 0 3.5px var(--good); position: relative; }
 .pill-call { display: inline-flex; align-items: center; gap: 4px; }
 .pill-call[hidden] { display: none; }
-.pill-call .i, .dc-chip .i { width: 13px; height: 13px; color: var(--bad); }
+.pill-call .i, .call-chip .i { width: 13px; height: 13px; color: var(--bad); }
 #island.in-call .pill-dot { display: none; }
-.dc-chip .dc-stack img { box-shadow: 0 0 0 2px var(--chip-bg); }
-.dc-chip .dc-stack img.talk { box-shadow: 0 0 0 2px var(--chip-bg), 0 0 0 3.5px var(--good); }
+.call-chip .call-stack img { box-shadow: 0 0 0 2px var(--chip-bg); }
+.call-chip .call-stack img.talk { box-shadow: 0 0 0 2px var(--chip-bg), 0 0 0 3.5px var(--good); }
 
 /* notification sounds (Audio → Sounds) */
 .snd-head { display: flex; align-items: center; gap: 10px; margin: 0 2px 10px; flex-wrap: wrap; }
@@ -721,7 +679,7 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 /* Section titles get Destiny's small diamond marker; the resting pill's dot is a diamond too. */
 .pill-dot { border-radius: 1.5px; transform: rotate(45deg); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px var(--accent); }
 /* Lists: the row under the pointer catches a thin edge of light; the chosen one glows. */
-:is(.cb-item, .au-dv, .au-app, .todo li, .snd-row, .dc-m):hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
+:is(.cb-item, .au-dv, .au-app, .todo li, .snd-row):hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
 .cb-item[aria-selected="true"] { box-shadow: inset 2px 0 0 var(--accent), 0 0 18px -8px color-mix(in oklab, var(--accent) 70%, transparent); }
 /* Today: the clock in a thin luminous mono, like the Command Center's; light on today and the ring. */
 .clock .big { font: 200 48px/1 var(--f-mono); letter-spacing: -.04em; text-shadow: 0 0 22px rgba(var(--glow), .45); }
@@ -744,7 +702,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .wcard.sel::before { content: ""; position: absolute; inset: 8px; z-index: 2; color: #f4fbff; background: var(--brackets); pointer-events: none; filter: drop-shadow(0 0 4px rgba(var(--glow), .9)); }
 .pw:hover .pi { box-shadow: 0 0 0 1px rgba(var(--glow), .2), 0 0 18px -4px rgba(var(--glow), .5); }
 .pw .fill { background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 8%, transparent), color-mix(in oklab, var(--accent) 30%, transparent)); box-shadow: inset -2px 0 0 var(--accent); }
-.dc-vh .vpn-logo { box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 55%, transparent); }
 /* Keyboard focus on a tile or button: the reticle. */
 :is(.tile, .pw, .app):focus-visible { outline: none; color: var(--fg); }
 :is(.tile, .pw, .app) { position: relative; }
