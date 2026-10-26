@@ -195,7 +195,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | `power` | base | `{ state: "suspend" \| "resume" }` |
 | `theme` | base | `{ dark, accent }` |
 | `media.state` | music | `{ playing, app, source, title, artist, album, duration, position }` |
-| `presence` | gaze | `{ state: "looking" \| "present" \| "away" }`: "away" once nobody has been in front of the tracker for 10 s |
+| `presence` | gaze | `{ state: "looking" \| "present" \| "away" \| "off" }`: "away" once nobody has been in front of the tracker for 10 s, "off" without a tracker (or with it turned off). The island follows it too (looking opens the peek; while someone's there, notifications wait to be seen) |
 
 Late subscribers get the last value immediately. Topics are only state, never commands. For example, Music reacts to `presence: away` by pausing itself, if its "pause when I step away" setting is on. That setting moves from the Tobii settings into Music's.
 
@@ -631,6 +631,7 @@ Extra conditions:
 | D11 | A `while-process` module also starts for a UI call, so it can open its app or be set up while the app isn't running; started that way it stops after its idle time. The Audio tab takes module views like Wallpaper (Voicemeeter's mixer) | implementation, 2026-10-26 |
 | D12 | Until the Music module exists, the base publishes `media.state` from its status loop (when the song, play state or position jumps), so Discord's status keeps working. A docked site can be `split` (its module's island view stays beside it), a notification can carry an `img` (`round` for a person), and a module's setup card can report its state (`ctx.setup.card(() => ({ state }))`) | implementation, 2026-10-26 |
 | D13 | The island keeps the now-playing chrome (pill, peek, Controls card, bar chip) and draws it from a `media` activity; the Music module owns the players, lyrics, the Music tab and sheet. Modules get island services for what the island must do itself: `ctx.island.focusApp` (bring an app forward), `ctx.island.audio.appVolume/setAppVolume`, the equalizer meter (the activity's `exe`) and the `level` event. "Pause when I step away" is the Music module's setting; eye tracking only publishes `presence`. With nothing playing, Controls shows no now-playing card | implementation, 2026-10-26 |
+| D14 | The base hears the topics modules publish (the host's `Sink::topic`; the page gets `topic:<name>`, and `topic_last` for the latest), so the island follows `presence` itself. The base publishes `island.geometry` (`{ rect, monitor, scale, visible }`, physical pixels) from its cursor thread when it changes | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -651,7 +652,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M0.5f | Built-in: voicemeeter | M0.5e | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5g | Built-in: discord | M0.5f | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5h | Built-in: music | M0.5g | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M0.5i | Built-in: gaze | M0.5h | todo | |
+| M0.5i | Built-in: gaze | M0.5h | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.6 | Backend event bus | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.7 | Rest state | M0.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.1 | Protocol and SDK crates | M0.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
@@ -666,7 +667,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M2.5 | Module: voicemeeter | M2.4, M0.5f | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.6 | Module: discord | M2.5, M0.5g | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.7 | Module: music | M2.6, M0.5h | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M2.8 | Module: gaze | M2.7, M0.5i | todo | |
+| M2.8 | Module: gaze | M2.7, M0.5i | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.2 | Install, update, remove | M3.1 | in review (no Modules sheet yet) | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.3 | Release workflow | M3.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |

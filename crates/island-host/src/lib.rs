@@ -39,6 +39,8 @@ pub trait Sink: Send + Sync + 'static {
     fn log(&self, module: &str, level: &str, msg: &str);
     /// A module's state changed (for the Modules sheet).
     fn changed(&self, info: &ModuleInfo);
+    /// A module published a topic (the island follows some itself: the eye tracker's `presence`).
+    fn topic(&self, _module: &str, _topic: &str, _data: &Value) {}
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -414,6 +416,11 @@ impl Supervisor {
     }
 
     /// Process names `while-process` modules wait for (so the base only watches when it must).
+    /// A topic's last value (null before anything published it).
+    pub fn topic(&self, name: &str) -> Value {
+        self.inner.topics.lock().unwrap().get(name).cloned().unwrap_or(Value::Null)
+    }
+
     pub fn watched_processes(&self) -> Vec<String> {
         let slots = self.inner.slots.lock().unwrap();
         slots.values().filter(|s| s.enabled && s.mode() == Some(RunMode::WhileProcess)).flat_map(|s| s.manifest.backend.as_ref().map(|b| b.process.clone()).unwrap_or_default()).collect()
@@ -806,6 +813,9 @@ fn valid_event_name(name: &str) -> bool {
 /// Stores the topic's last value and sends it to every running subscriber but the publisher.
 fn deliver(inner: &Inner, from: Option<&str>, topic: &str, data: Value) {
     inner.topics.lock().unwrap().insert(topic.into(), data.clone());
+    if let Some(m) = from {
+        inner.sink.topic(m, topic, &data);
+    }
     let targets: Vec<Arc<Proc>> = {
         let slots = inner.slots.lock().unwrap();
         slots

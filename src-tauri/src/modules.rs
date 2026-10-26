@@ -84,6 +84,9 @@ impl Sink for IslandSink {
     fn changed(&self, info: &ModuleInfo) {
         let _ = self.app.emit("mod:changed", info);
     }
+    fn topic(&self, _module: &str, topic: &str, data: &Value) {
+        let _ = self.app.emit(&format!("topic:{topic}"), data);
+    }
 }
 
 pub fn sup() -> Option<&'static Supervisor> {
@@ -256,6 +259,12 @@ pub fn mod_restart(id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn mod_logs(id: String) -> Vec<String> {
     sup().map(|s| s.logs(&id)).unwrap_or_default()
+}
+
+/// A topic's last value, for the page (it hears later ones as `topic:<name>`).
+#[tauri::command]
+pub fn topic_last(topic: String) -> Value {
+    sup().map(|s| s.topic(&topic)).unwrap_or(Value::Null)
 }
 
 /// The page's theme, for modules (`theme` topic and the next `island.init`).

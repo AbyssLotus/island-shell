@@ -733,12 +733,16 @@ $('#sndFs').addEventListener('click', () => { sounds.set({ fsMute: !sounds.fsMut
 $('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; });
 $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('mention') !== 'none' ? sounds.choice('mention') : 'glass', 'mention'); renderControls(); });
 
-/* ---------- eye tracking (Tobii) ---------- */
-// The backend only reports whether your eyes are on the island (gaze:island) and tracker status.
-S.gaze = false; S.gazeSt = null; S.toastWait = null;
-const gazeLive = () => !!(S.gazeSt && S.gazeSt.enabled && S.gazeSt.connected && S.gazeSt.present);
-listen('gaze:island', e => {
-  S.gaze = !!e.payload;
+/* ---------- eye tracking: a module's `presence` (the eye tracking module's) ----------
+   Eyes on the island count like hovering it (the pill opens its peek), and while someone is in
+   front of the tracker a notification waits until it has been seen. */
+S.gaze = false; S.presence = ''; S.toastWait = null;
+const gazeLive = () => S.presence === 'present' || S.presence === 'looking';
+function onPresence(p) {
+  S.presence = (p && p.state) || '';
+  const looking = S.presence === 'looking';
+  if (looking === S.gaze) return;
+  S.gaze = looking;
   if (S.gaze) {
     if (S.mode === 'toast' && S.toastWait) S.toastWait();
     else if (S.mode === 'pill' && !isBar()) setMode('peek');
@@ -746,23 +750,9 @@ listen('gaze:island', e => {
     clearTimeout(hoverT);
     hoverT = setTimeout(() => { if (S.mode === 'peek' && !S.hover && !S.gaze) setMode('pill'); }, 120);
   }
-});
-listen('gaze:status', e => { S.gazeSt = e.payload; if (!gazeLive()) S.gaze = false; renderControls(); });
-invoke('gaze_status').then(st => { S.gazeSt = st; renderControls(); }).catch(() => {});
-function renderGaze() {
-  const g = S.gazeSt, tile = $('.tile[data-tile="eye"]');
-  tile.hidden = !(g && g.available);
-  $('#gazeRow').hidden = !(g && g.available && g.enabled);
-  if (!g || !g.available) return;
-  tile.setAttribute('aria-pressed', g.enabled && g.connected);
-  txt(tile.querySelector('small'), !g.enabled ? 'Off' : !g.connected ? 'Looking for the tracker…' : g.present ? 'On' : 'On · you’re away');
-  $('#gazePause').setAttribute('aria-pressed', !!g.pause_when_away);
 }
-$('#gazePause').addEventListener('click', async () => {
-  if (!S.gazeSt) return;
-  S.gazeSt = await invoke('gaze_set', { pauseWhenAway: !S.gazeSt.pause_when_away });
-  renderControls();
-});
+listen('topic:presence', e => onPresence(e.payload));
+invoke('topic_last', { topic: 'presence' }).then(onPresence).catch(() => {});
 
 /* ---------- network ---------- */
 function ago(iso) {
@@ -808,7 +798,7 @@ function renderControls() {
   set('taskbar', st.taskbar_hidden, st.taskbar_hidden ? 'Hidden' : 'Visible');
   set('night', false, 'Opens Settings');
   set('sounds', sounds.on, sounds.on ? `On · ${Math.round(sounds.vol * 100)}%` : 'Off');
-  renderGaze(); renderAudioMaster();
+  renderAudioMaster();
   if (a) {
     const v = Math.round(a.level * 100), input = $('#vol');
     if (document.activeElement !== input || performance.now() - S.volSetAt > 1500) input.value = v;
@@ -833,7 +823,6 @@ $$('.tile').forEach(b => b.addEventListener('click', async () => {
     else if (k === 'night') openSettings('ms-settings:nightlight');
     else if (k === 'sounds') { sounds.set({ on: !sounds.on }); if (sounds.on) sounds.sound('glass'); renderControls(); renderSounds(); }
     else if (k === 'dark') { S.dark = !S.dark; store.set('dark', S.dark); applySkin(); renderControls(); }
-    else if (k === 'eye' && S.gazeSt) { S.gazeSt = await invoke('gaze_set', { enabled: !S.gazeSt.enabled }); renderControls(); }
     else if (k === 'taskbar' && st) { st.taskbar_hidden = !st.taskbar_hidden; renderControls(); await invoke('set_taskbar', { hidden: st.taskbar_hidden }); }
   } catch (err) { note('#ctlNote', String(err)); }
 }));

@@ -1,0 +1,20 @@
+{
+ "mod_states": {
+  "gaze": "running"
+ },
+ "mod:gaze.status": {
+  "available": true,
+  "connected": true,
+  "present": true,
+  "enabled": true
+ },
+ "mod:gaze.set": {
+  "available": true,
+  "connected": true,
+  "present": true,
+  "enabled": false
+ },
+ "topic_last": {
+  "state": "present"
+ }
+}

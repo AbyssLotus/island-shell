@@ -10,7 +10,6 @@ mod conns;
 mod diskscan;
 mod embed;
 mod ics;
-mod gaze;
 mod icons;
 mod installed;
 mod island;
@@ -105,7 +104,7 @@ struct Settings {
     /// 0.1.x's choice of media session; kept for the Music module to read once, then unused.
     #[serde(default)]
     media_source: String,
-    /// Eye-tracking features (only does anything with a Tobii tracker).
+    /// 0.1.x's eye-tracking switch; the eye tracking module reads it once (it's its setting now).
     #[serde(default = "default_true")]
     gaze: bool,
     /// 0.1.x's "pause the music when I step away"; the Music module reads it once (it's its setting now).
@@ -305,28 +304,6 @@ async fn focus_app(id: String, exe: String, hwnd: Option<isize>) -> Result<(), S
         }
     })
     .await?
-}
-
-#[tauri::command]
-fn gaze_status() -> gaze::Status {
-    gaze::status()
-}
-
-/// Turns eye tracking on or off.
-#[tauri::command]
-fn gaze_set(enabled: Option<bool>, app: AppHandle, shared: Shr) -> gaze::Status {
-    let mut settings = Settings::load(&shared.dir);
-    {
-        let mut st = gaze::STATUS.lock().unwrap();
-        if let Some(on) = enabled {
-            st.enabled = on;
-            settings.gaze = on;
-        }
-    }
-    settings.save(&shared.dir);
-    let st = gaze::status();
-    let _ = app.emit("gaze:status", st.clone());
-    st
 }
 
 #[tauri::command]
@@ -1135,8 +1112,6 @@ fn main() {
             audio_mic,
             audio_apps,
             audio_app_set,
-            gaze_status,
-            gaze_set,
             copy_text,
             set_volume,
             set_mute,
@@ -1177,6 +1152,7 @@ fn main() {
             mod_install,
             mod_catalog,
             modules::mod_list,
+            modules::topic_last,
             modules::mod_call,
             modules::mod_set_enabled,
             modules::mod_restart,
@@ -1228,7 +1204,6 @@ fn main() {
 
             island::spawn_cursor(win.clone(), shared.clone());
             embed::spawn_reaper(app.handle().clone());
-            gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze);
             spawn_meter(win.clone(), shared.clone());
             spawn_status(win, shared.clone());
             stats::spawn(shared.clone());

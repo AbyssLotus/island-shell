@@ -110,13 +110,6 @@
    "drives": []
   }
  },
- "gaze_status": {
-  "available": false,
-  "connected": false,
-  "present": false,
-  "enabled": false,
-  "pause_when_away": false
- },
  "clip_list": [
   {
    "id": 3,
@@ -479,5 +472,18 @@
  "app_volume_get": 0.8,
  "app_volume_set": null,
  "meter_follow": null,
- "focus_app": null
+ "focus_app": null,
+ "mod:gaze.status": {
+  "available": false,
+  "connected": false,
+  "present": false,
+  "enabled": false
+ },
+ "mod:gaze.set": {
+  "available": false,
+  "connected": false,
+  "present": false,
+  "enabled": false
+ },
+ "topic_last": null
 }

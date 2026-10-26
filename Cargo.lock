@@ -1275,6 +1275,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gaze-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "serde",
+ "serde_json",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "gdk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,16 @@
+{
+  "id": "gaze",
+  "name": "Tobii eye tracker",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "With a Tobii tracker, the island notices when you look at it (it opens, and notifications wait until you've seen them), and your music can pause when you step away.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "gaze-module.exe", "run": "always" },
+  "ui": { "entry": "ui/gaze.js", "eager": true },
+  "contributes": {},
+  "publishes": ["presence"],
+  "subscribes": ["island.geometry", "fullscreen"],
+  "talksTo": [],
+  "keywords": ["eye tracking", "tobii", "gaze", "eyes", "presence", "away"],
+  "legacy": []
+}

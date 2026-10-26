@@ -278,10 +278,28 @@ pub fn fullscreen_app(own: Option<HWND>) -> Option<String> {
 
 /// Polls the cursor and lets mouse input reach the page only while it is over the island
 /// (or while the panel is open, so clicks outside it can close it).
+/// `island.geometry` (§4.7): the island's rectangle in physical screen pixels, its monitor, the
+/// scale, and whether it shows (not in bar style without its dropdown, not faded for fullscreen).
+fn geometry(g: &Geom, p: &Placement, faded: bool, own: Option<HWND>) -> serde_json::Value {
+    let mut wr = RECT { left: p.x, top: p.y, ..Default::default() };
+    if let Some(h) = own {
+        let _ = unsafe { GetWindowRect(h, &mut wr) };
+    }
+    let s = p.scale;
+    let m = p.monitor;
+    serde_json::json!({
+        "rect": { "x": (wr.left as f64 + g.x * s).round(), "y": (wr.top as f64 + g.y * s).round(), "w": (g.w * s).round(), "h": (g.h * s).round() },
+        "monitor": { "x": m.left, "y": m.top, "w": m.right - m.left, "h": m.bottom - m.top },
+        "scale": s,
+        "visible": g.w > 0.0 && !faded,
+    })
+}
+
 pub fn spawn_cursor(win: WebviewWindow, shared: Arc<Shared>) {
     std::thread::spawn(move || {
         let mut last: Option<bool> = None;
         let own = hwnd_of(&win);
+        let mut last_geo: Option<serde_json::Value> = None;
         let mut tick: u64 = 0;
         crate::util::com_mta();
         let vdm = crate::bar::desktop_manager();
@@ -315,6 +333,14 @@ pub fn spawn_cursor(win: WebviewWindow, shared: Arc<Shared>) {
             let g = *shared.geom.lock().unwrap();
             let p = *shared.place.lock().unwrap();
             let faded = shared.fullscreen_hidden.load(Ordering::Relaxed);
+            // Where the island is on screen, for modules (`island.geometry`: the eye tracker), when it changes.
+            if tick % 4 == 0 {
+                let geo = geometry(&g, &p, faded, own);
+                if last_geo.as_ref() != Some(&geo) {
+                    crate::modules::publish(island_host::proto::topic::ISLAND_GEOMETRY, geo.clone());
+                    last_geo = Some(geo);
+                }
+            }
             let mut pt = POINT::default();
             if unsafe { GetCursorPos(&mut pt) }.is_err() {
                 continue;
