@@ -2,6 +2,15 @@
 
 The full reference. For installing and first steps, see the [setup guide](SETUP.md); for building it yourself, [BUILDING.md](BUILDING.md).
 
+## Built in, and modules
+
+Island Shell itself is the island, the Command Center, the Task Manager and stats, the calendar and Today, apps, the clipboard, sound, Wi-Fi and Bluetooth, procedural wallpapers and power. Everything marked *(module)* below is a module you add only if you want it: **Music**, **Discord**, **Canvas**, **Destiny 2** (with DIM), **Steam & games**, the **Tobii eye tracker**, **Voicemeeter**, **Wallpaper Engine** and **VPN**. A module you haven't added has no files, no process and no tab.
+
+- **Modules cube** (Command Center): *Installed* (each one's state, memory and CPU, what it talks to, its settings and its recent log; Turn off, Restart, Update, Remove, keeping or forgetting its keys and data), *Available* (from the signed release catalog, ready to install) and *Updates*. **Load a folder…** loads an unpacked module in developer mode.
+- **Search** offers **Install …** for a module you haven't added, by its name or what it does ("lyrics" finds Music).
+- **Without Music**, the pill at rest shows the weather's icon and temperature, the date and the clock, and Controls has no now-playing card.
+- How modules work, and how to write one: [MODULES.md](MODULES.md).
+
 ## Using the island
 
 | Action | How |
@@ -62,7 +71,7 @@ Every app in your Start menu: Pinned (click switches to an open window, like a t
 - **Open now**: every open window (click to switch, minimize or close), and the tray icons below (click, double-click and right-click work as on the taskbar).
 - **Right-click** any app for the same actions plus moving it into or out of a folder; right-click a window to switch, minimize, close or pin its app.
 
-### Games (the Games cube)
+### Games (the Games cube) *(module)*
 
 Your Steam library, full size. The chosen game fills the top with its hero banner and logo (your custom artwork from Steam first, with the logo where you placed it there), a big Play button (*Playing* while it runs, *Update* when Steam has one waiting), when you last played, how many hours you've played (and how many in the last two weeks), its size on disk, and buttons for Show in Steam, the install folder, Screenshots and the Store page.
 
@@ -70,7 +79,7 @@ Your Steam library, full size. The chosen game fills the top with its hero banne
 - Your other launchers (Epic, EA, Battle.net…) sit at the bottom.
 - Hours played come from Steam's own count in your account's `localconfig.vdf`; sizes from each game's manifest. Nothing is sent anywhere.
 
-### Music (the Music cube, under the eclipse)
+### Music (the Music cube, under the eclipse) *(module)*
 
 What's playing, full size: the cover (Apple's full-size art when the catalog has the song, otherwise the player's own), glowing with the music; the title, artist and album, the year, genre and track number, and the Lossless / Dolby Atmos badge. Below it a progress bar you can drag, shuffle / previous / play / next / repeat, Favorite (Apple Music), the player's own volume, a button that copies the song's Apple Music link, and *Open Apple Music* (which closes the Command Center). The sheet is washed in the album's colour.
 
@@ -141,8 +150,8 @@ Controls → **Layout** switches between them (Island Shell restarts in the new 
 
 ## What's real in this version
 
-- **Controls**: Wi-Fi and Bluetooth radios, volume and mute on the default output device, a compact now-playing card (click it for the Music tab), dark/light island, and a taskbar show/hide switch. Sound output and Night light open the matching Settings page for now.
-- **Music**: built around Apple Music, with the basics for Spotify and anything else that reports to Windows media controls.
+- **Controls**: Wi-Fi and Bluetooth radios, volume and mute on the default output device, a compact now-playing card while something plays (click it for the Music tab), dark/light island, and a taskbar show/hide switch. Sound output and Night light open the matching Settings page for now.
+- **Music** *(module)*: built around Apple Music, with the basics for Spotify and anything else that reports to Windows media controls.
   - *Now playing*: big artwork that tints the whole card, title, artist and album, a seek bar (drag it), time left, shuffle, previous / play / next, repeat (off → all → one) and the player's own volume (just that app, like the Volume mixer). Open Apple Music brings its window forward.
   - *Apple Music extras*: Apple Music only tells Windows the title, artwork and play/pause/next, and squeezes "Artist — Album" into one field. Island Shell splits the album back out, and reads and presses Apple Music's own player bar through UI Automation (the accessibility API) for seeking, shuffle, repeat, Favorite (the star) and the Lossless / Dolby Atmos badge. It works while Apple Music is minimized or in its mini player.
   - *Lyrics*: time-synced lyrics from [LRCLIB](https://lrclib.net), a free open lyrics database. The line being sung stays in the middle; click any line to jump there; scroll to look ahead (it follows again a few seconds later). The current line also shows when you hover the pill. Only the song's title, artist, album and length are sent, and results are cached. The Lyrics button turns lookups off.
@@ -150,9 +159,9 @@ Controls → **Layout** switches between them (Island Shell restarts in the new 
   - *Which player*: whatever is playing, Apple Music first, then Spotify, then anything else. When more than one app has a media session, chips in the corner let you pin one (Auto goes back to choosing).
   - Spotify gets whatever its media session offers: seeking, shuffle and repeat when it reports them, plus volume, equalizer and lyrics. There's no Favorite outside Apple Music.
 - **Audio** (Win+A, or the volume chip in the top bar, or the Sound output tile): master volume and mute; every output and input device, click one to make it the default for everything (it uses the same Windows interface the Sound settings page does); the default microphone's level and mute; and a mixer with each app's own volume, mute and a live level meter (apps playing to any device, merged per program; Apple Music shows as Apple Music even though its sound comes from its background agent).
-  - *Voicemeeter*: with Voicemeeter installed, a **Windows / Voicemeeter** switch at the top of the tab. The Voicemeeter view shows your inputs (the strip names you gave them, faders over live meters, mute, and A1–B3 routing) and outputs (A1–B3 with their devices, faders, mute), plus **Restart engine**. Drag or scroll a fader (Shift = fine), double-click for 0 dB. It runs on VoiceDeck's own Voicemeeter engine (`audio-app/crates/vm-core`, linked rather than copied), and Voicemeeter takes several remote clients at once, so the island and VoiceDeck stay in step. Meters are only read while that view is on screen.
+  - *Voicemeeter* *(module)*: a **Windows / Voicemeeter / Sounds** switch at the top of the tab. The Voicemeeter view shows your inputs (the strip names you gave them, faders over live meters, mute, and A1–B3 routing) and outputs (A1–B3 with their devices, faders, mute), plus **Restart engine**. Drag or scroll a fader (Shift = fine), double-click for 0 dB. It runs on VoiceDeck's own Voicemeeter engine (`audio-app/crates/vm-core`, linked rather than copied), and Voicemeeter takes several remote clients at once, so the island and VoiceDeck stay in step. Meters are only read while that view is on screen.
   - *VoiceDeck*: **Open VoiceDeck** brings your VoiceDeck window up (it lives in the tray). In the top bar, a **mic chip** mutes strip 1, the same strip VoiceDeck's mic-mute key and red tray icon follow.
-- **Canvas** (your school's Canvas), two ways to connect:
+- **Canvas** *(module)* (your school's Canvas), two ways to connect:
   - *Calendar feed* (for schools that block access tokens): in Canvas, Calendar → *Calendar Feed* (bottom right); paste the `.ics` link. It gives every due date and course event, with the course and a link, but no grades, submission status or announcements. Done ticks are kept on this PC (`canvas-done.json`), and a **Courses** card shows each class's load for the coming week in place of grades. Notifications: due within 3 hours (on top of everything) and newly posted assignments. The link is DPAPI-encrypted, since anyone with it can see the calendar.
   - *Access token*, where the school allows them. Everything below:
   - *Coming up*: Canvas's planner for the next three weeks, grouped by day, colored by course. Each item shows its kind, course, time and points, plus *Submitted* / *Graded* / *Missing* / time-left chips. The checkbox ticks it off in Canvas itself, like the Canvas app's. Click an item to open it in your browser (never Edge).
@@ -160,24 +169,24 @@ Controls → **Layout** switches between them (Island Shell restarts in the new 
   - *Notifications*, checked every 10 minutes: due within 3 hours and not submitted (on top of everything, fullscreen games included), newly graded work with the score, new announcements. Clicking one opens the Canvas tab. The first check after connecting only takes note of what's already there.
   - *Setup, once*: your Canvas address (e.g. `school.instructure.com`) and a token from Canvas → Account → Settings → *+ New Access Token*. It's DPAPI-encrypted in `canvas.json`. Some schools turn tokens off.
 - **Network**: your current Wi-Fi or Ethernet connection, plus a card for each VPN you have installed (the network chip in the top bar opens it; Controls has a tile for each).
-  - *Tailscale*: connected or not, your tailnet and this PC's address, Connect / Disconnect (it starts the Tailscale app when needed), an exit-node picker when your tailnet has exit nodes, and every device with its address, OS and whether the link is direct or relayed (offline ones show when they were last seen). Click an address to copy it.
+  - *Tailscale* *(the VPN module)*: connected or not, your tailnet and this PC's address, Connect / Disconnect (it starts the Tailscale app when needed), an exit-node picker when your tailnet has exit nodes, and every device with its address, OS and whether the link is direct or relayed (offline ones show when they were last seen). Click an address to copy it.
   - *Radmin VPN*: on or off, your 26.x address, your networks, and who's online right now, connected directly or through Radmin's relay, and since when (or when they were last seen). Radmin has no command line or API, so this comes from its service log (`C:\ProgramData\Famatech\Radmin VPN\service.log`) and the network list its window keeps in the registry. Its power switch only exists in its own window; Open brings that window out of the tray.
   - The top bar's network chip shows a small shield while either VPN is connected.
-- **Discord** (through the Discord app's local connection, so Discord has to be running):
+- **Discord** *(module)* (through the Discord app's local connection, so Discord has to be running):
   - *Your call*: the voice channel you're in and its server, everyone in it with their avatar, a green ring on whoever is talking, and who's muted or deafened. Mute, Deafen and Leave buttons. While you're in a call the pill (or a chip in the top bar) shows up to three avatars with the same talking rings, and a muted-mic icon when you're muted.
   - *@mentions*: when someone @mentions you (or replies to you with the ping on), the island shows it with their avatar, on top of everything, fullscreen games included, for 6 seconds, without taking focus. Plain messages, DMs without an @, `@everyone`, `@here` and role pings are left to Discord. Switch: *Show when someone @mentions me*. You may want to turn off Discord's own Windows notifications so you don't get both.
   - *Listening to Apple Music*: while Apple Music plays, your Discord status shows the song, artist and album, the album art, a time bar, and a *Listen on Apple Music* button for others (art and link come from Apple's public iTunes catalog). It clears when the music stops. Switch: *Show what I'm listening to*.
   - *Setup, once*: Discord only lets an app its owner made read your calls and notifications, so the island runs as your own Discord application. In the [Discord Developer Portal](https://discord.com/developers/applications) click **New Application** and name it **Apple Music** (the status says "Listening to" + the app's name). In its **OAuth2** page add the redirect `http://localhost`, then paste the **Client ID** and **Client Secret** into the Discord tab and click Connect. Discord asks you to authorize it once; after that the island signs in by itself. The status alone needs only the Client ID.
   - The secret and Discord's sign-in tokens are encrypted with Windows' DPAPI (only your Windows account can read them) in `discord.json`. *App settings → Forget this app* deletes them.
-- **Games**: your installed Steam games as a shelf of their portrait covers (no titles needed, the logo is on the art): your own custom covers from Steam first (*Manage → Set custom artwork*, including animated WebP/APNG ones, which play), otherwise Steam's default art, most recently played first and a little bigger. A game that's running gets a green *Playing* badge, one waiting on an update says *Update*. Click to play (through `steam://rungameid/`), right-click for *Show in Steam* and *Open install folder*, scroll the mouse wheel to move along the shelf.
+- **Games** *(module)*: your installed Steam games as a shelf of their portrait covers (no titles needed, the logo is on the art): your own custom covers from Steam first (*Manage → Set custom artwork*, including animated WebP/APNG ones, which play), otherwise Steam's default art, most recently played first and a little bigger. A game that's running gets a green *Playing* badge, one waiting on an update says *Update*. Click to play (through `steam://rungameid/`), right-click for *Show in Steam* and *Open install folder*, scroll the mouse wheel to move along the shelf.
   - Under a divider, your other launchers as app icons (Steam, Epic, EA, Ubisoft Connect, Riot Client, Rockstar, RSI, Hytale, Battle.net, GOG, Xbox, Minecraft/Prism/Modrinth, Kyber, Roblox, whichever are installed). Clicking one switches to it if it's already open.
   - Read from Steam's own files: `libraryfolders.vdf`, each library's `appmanifest_*.acf` (name, install state, last played), your custom art in `userdata\<id>\config\grid\<appid>p.*`, and `appcache\librarycache`. A custom cover bigger than 1800×2700 is shrunk once into `covers\` in the data folder. Tools and non-games (redistributables, dedicated servers, Wallpaper Engine…) are left out. The gamepad button in the top bar opens the tab.
-- **Destiny**: your Guardians from Bungie's API, with your own API key.
+- **Destiny** *(module)*: your Guardians from Bungie's API, with your own API key.
   - *Characters* as their emblem banners: class, Power, race and when you last played, or a green line with what you're doing right now ("Crucible · Control"). Click one for its loadout.
   - *Loadout*: subclass, the three weapons with names and Power, and the five armor pieces with Power; exotics get a gold border.
   - *Xûr*: his exotic weapons and armor as icons (names on hover) and when his stock refreshes. Bungie currently lists him all week, without a location; if that changes back, it shows a countdown to his arrival. Daily and weekly reset countdowns sit at the top (17:00 UTC; weekly on Tuesdays).
   - *Setup, once*: paste the API key from [bungie.net/en/Application](https://www.bungie.net/en/Application) and your Bungie Name (`Name#1234`). Everything shown is public, so there's no Bungie sign-in. The key is DPAPI-encrypted in `destiny.json`. Item and activity names and icons are fetched from Bungie's manifest one at a time and cached in `destiny-defs.json`. The profile is re-read every minute while the tab is open, Xûr every 20 minutes. If the profile is private on bungie.net, the tab says so.
-- **Eye tracking** (Tobii trackers, through the Stream Engine library that Tobii Experience installs; nothing to set up):
+- **Eye tracking** *(module)* (Tobii trackers, through the Stream Engine library that Tobii Experience installs; nothing to set up):
   - Looking at the pill opens its preview, like hovering it with the mouse; look away and it closes. (Island layout; the bars have no pill.)
   - Notifications stay until you've looked at them (up to 20 seconds), instead of vanishing while you were looking elsewhere.
   - Optional: *Pause music when I step away* (Controls, under Layout). After 10 seconds away from the screen the music pauses; it plays again when you're back, unless you'd paused it yourself.
@@ -199,7 +208,7 @@ Controls → **Layout** switches between them (Island Shell restarts in the new 
   - *Pinned*: right-click any app or open window → Pin, or drag an app into the row. Pinned apps switch to their open window if there is one, otherwise launch. Drag to reorder, drag out to unpin.
   - *Folders*: right-click an app → New folder… or a folder name, or drag an app onto a folder. Apps in folders leave the main grid. Click a folder to open, rename or delete it (its apps go back to All apps).
   - Typing searches open windows and apps; Enter switches to the first window or launches the first app.
-- **Wallpaper**: with Wallpaper Engine installed, a **Wallpaper Engine / Island scenes** switch.
+- **Wallpaper**: with the Wallpaper Engine module, a **Wallpaper Engine / Island scenes** switch.
   - *Wallpaper Engine*: your whole library (Workshop subscriptions, your own projects, the bundled ones) as a grid, the one that's on first (marked ON), then recently used, then newest. Search titles and tags, filter Scenes / Videos / Web, hover a tile to play its animated preview, click to put it on your screen (through Wallpaper Engine's own `-control openWallpaper`). Pause/play and mute buttons control the running wallpaper. Mature-rated wallpapers stay blurred until you hover them.
   - Previews are ~1 MB GIFs or JPGs, so each gets a small still thumbnail, made once with Windows' image decoder and cached in `wethumbs\` (600 took about 8 seconds); only the hovered tile plays its real preview, and the grid is built a page at a time and dropped when you leave the tab.
   - *Island scenes*: six generated scenes rendered at your monitor's resolution and set on every monitor.

@@ -674,7 +674,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M3.3 | Release workflow | M3.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.4 | Picking modules | M3.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.5 | Migration from 0.1.x | M3.2, M2.8 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M3.6 | Docs | M3.4 | todo | |
+| M3.6 | Docs | M3.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 
 ## Starting a session
 

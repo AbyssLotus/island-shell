@@ -1,6 +1,6 @@
 # Building Island Shell
 
-Island Shell is a [Tauri 2](https://tauri.app) app: a Rust backend (`src-tauri/`) and a plain HTML/CSS/JS page with no bundler (`src/`). It runs on Windows 10 and 11 (x64) and uses WebView2.
+Island Shell is a [Tauri 2](https://tauri.app) app: a Rust backend (`src-tauri/`) and a plain HTML/CSS/JS page with no bundler (`src/`). It runs on Windows 10 and 11 (x64) and uses WebView2. Its integrations (Music, Discord, Canvas, Destiny 2…) are **modules** in `modules/`, each a small backend process plus UI the island loads; [MODULES.md](MODULES.md) is how they work and how to write one.
 
 ## What you need
 
@@ -28,6 +28,19 @@ Release build: `cargo tauri build --no-bundle` (or drop `--no-bundle` for an NSI
 The repo is one Cargo workspace (the root `Cargo.toml`): the app, its crates, the modules and the tools share one `Cargo.lock` and one `target/` folder, and the release profile lives in the root manifest.
 
 Tests: `cargo test --workspace` from the repo root. Many modules have `#[ignore]`d tests that print live readings from your PC (`cargo test --release <module>::tests::live -- --ignored --nocapture`). Each one's `#[ignore = "needs …"]` says what it needs. CI (`.github/workflows/ci.yml`) runs `cargo check --workspace --all-targets` and `cargo test --workspace` on Windows for every push and pull request, plus `node --test` over `dev/tests` once that folder exists.
+
+## Modules while you develop
+
+A build without the release key can't download modules, so load the repo's own in **developer mode**:
+
+```
+cargo build --workspace --bins --exclude island-shell --exclude pack-modules
+cargo run -p pack-modules -- stage --out target\dev-modules
+```
+
+`stage` writes every module, unzipped, with its backend exe beside it, into `target\dev-modules\<id>\`. In the Command Center's **Modules** cube, **Load a folder…** and pick `target\dev-modules` to load them all (or one module's folder for just that one). They're badged *Developer* and aren't checked against a signature. After changing a module, **Turn off** it in the Modules cube (a running backend's exe can't be replaced), build and `stage` again, and turn it back on; its UI reloads with the island. Keeping `target\` out of your antivirus's scans helps: Defender's cloud scan sometimes takes small new unsigned exes (the test helper `echo-module.exe` among them) for malware.
+
+The dev harness (`dev/harness`, see its README) shows the page and every module's UI in an ordinary browser with made-up data, no Windows needed.
 
 ## Releases and updates
 
@@ -66,65 +79,60 @@ cargo run -p pack-modules -- verify dist --key src-tauri\catalog.pub
 ## Layout
 
 ```
+Cargo.toml           the workspace: the app, its crates, the modules and the tools
 src/                 the island page (no bundler)
-  index.html
-  style.css
-  app.js             island state machine, tabs, polling
+  index.html, style.css, kit.css   the page; kit.css is the shared look every module's shadow root adopts
+  app.js             island state machine, tabs, polling, the now-playing chrome (from a `media` activity),
+                     the resting pill, a call on the pill (a `call` activity), and the services modules get
+  registry.js        tabs, sections, tiles, chips, cubes, sites, sheets, search, commands, hotkeys, setup cards,
+                     activities; cube slots, activity order, the resting pill's weather, Win + letter table
+  modhost.js         the module host on the page: manifests become registry entries, UI loads into shadow roots, ctx API 1
   engine.js          procedural wallpaper renderer
   cc.js, cc.css      the Command Center (Win + Space): eclipse canvas, search, cubes, sheets
+  cc-apps.js         the Apps sheet: every Start menu app, pins, folders, open windows, the tray
   cc-calendar.js     the Today sheet's calendar app: month / week / day / agenda, editor, calendars list
+  cc-modules.js      the Modules sheet: installed, available and updates; settings, logs, usage, developer mode
   cc-taskmgr.js      the Task Manager window: sidebar, status bar, Processes, Performance, Startup apps
   tm-overview.js     Task Manager pages: Summary, System Info, App history, Users
   tm-system.js       Task Manager pages: Services, Power & Freq, Connections, Installed Apps
   tm-tools.js        Task Manager pages: Disk Space (circle packing), Benchmarks (dials, WebGL test)
-  tm-util.js         Task Manager formats and SVG: graphs, sparklines, LED meters, dials
-  tm.css             the Task Manager window
-  cc-games.js        the Games sheet: hero banner and logo, Play, playtime, the cover library
-  cc-music.js        the Music sheet: big cover, controls, synced lyrics
+  tm-util.js, tm.css Task Manager formats, graphs, meters, dials; its window
+  setup.js           the first-run setup guide, with its Pick your modules step
   sounds.js          notification sounds: Web Audio synthesis, per-kind choices, your own files (IndexedDB)
 src-tauri/src/
-  main.rs            commands, tray, startup, shutdown
-  island.rs          window placement, click-through, fullscreen hiding, focus hand-back
+  main.rs            commands, tray, startup, shutdown, the status loop
+  modules.rs         runs modules (crates/island-host): serves their UI at mod.localhost, routes calls, events,
+                     topics and activities, developer mode, install / remove, the upgrade from 0.1.x
+  updater.rs         the signed release catalog: Island Shell's own updates, module updates, the install queue
+  island.rs          window placement, click-through, fullscreen hiding, focus hand-back, island.geometry
   taskbar.rs         hide / restore / crash recovery
-  media.rs           Windows media controls (GSMTC): picks the player, seek / shuffle / repeat
-  applemusic.rs      Apple Music's player bar through UI Automation (seek, shuffle, repeat, favorite, badge)
-  lyrics.rs          LRCLIB lookup, LRC parsing, cache
-  audio.rs           volume, output/input devices and switching the default (IPolicyConfig), mic, per-app mixer and level meter
-  vpn.rs             Tailscale (its CLI) and Radmin VPN (service log + registry) for the Network tab
-  music.rs           the Music sheet's full-size cover, year, genre and link from the iTunes catalog (best match by title, artist and album)
-  taskmgr.rs         Task Manager: every process and thread state from one NtQuerySystemInformation call, per-CPU kernel time, owner and command line, grouping, GPU / disk / network counters (volumes when PhysicalDisk has no instances), end task, efficiency mode, run, app history, startup apps
-  sysinfo.rs         System Info: Windows, board / BIOS, CPU caches, SMBIOS memory modules, DXGI adapters with driver versions, displays (QueryDisplayConfig), disks, volumes, adapters, TPM; NVMe health log
-  services.rs        services (SCM, configs cached; start/stop/restart, elevated through PowerShell when refused) and signed-in sessions (WTS)
-  installed.rs       installed apps: Uninstall keys and Store packages, background folder sizes, uninstall / modify
-  conns.rs           TCP/UDP owner-PID tables, scopes, well-known ports, reverse DNS on six threads
-  diskscan.rs        Disk Space scanner: six threads over FindFirstFileEx, compact folder tree with kinds of file, views for the bubble map
-  bench.rs           benchmarks: CPU, memory, disk (unbuffered), internet (speed.cloudflare.com)
-  embed.rs           docked websites in Command Center sheets (Discord, Canvas, DIM): owned windows, navigation guard, idle reaper, per-site skins (discord-skin.css, dim-skin.css, canvas-skin.css), each only on that site's own hosts
-  calendar.rs        the calendar: your events, added iCal feeds (15-minute cache), Canvas due dates, Destiny's reset
-  ics.rs             iCalendar parser: RRULE (daily / weekly / monthly / yearly, BYDAY, BYMONTHDAY, COUNT, UNTIL), EXDATE, RECURRENCE-ID; wall-clock times through Windows' time-zone APIs
-  places.rs          Command Center places: drives, known folders, Windows' Recent list (shortcuts resolved), open / reveal, tool allowlist
-  canvas.rs          Canvas LMS: calendar feed (.ics parser) or REST API: planner items, missing work, grades, announcements, planner overrides, 10-minute notification check
-  destiny.rs         Bungie API: characters, loadouts, current activity, Xûr; manifest definitions fetched one by one and cached
-  discord.rs         Discord local RPC pipe: voice call, speaking, mute/deafen/leave, notifications, Apple Music Rich Presence, OAuth with DPAPI-stored tokens
-  winkey.rs          Windows key: solo tap and the Win+A/G/V/N/W shortcuts (low-level keyboard hook)
-  voicemeeter.rs     Voicemeeter mixer + VoiceDeck, through VoiceDeck's vd-vm-core engine crate
-  wpe.rs             Wallpaper Engine: library scan, current/recent from its config, WIC thumbnails, CLI control
-  gaze.rs            Tobii eye tracking: eyes-on-island dwell, presence, pause music when away
-  games.rs           installed Steam games, covers, heroes and logos (with Steam's logo placement), sizes, playtime from localconfig.vdf, launch through steam://
-  radios.rs          Wi-Fi / Bluetooth radios, current network
-  stats.rs           PDH counters, DXGI, disks
-  sensors.rs         temperatures, fans, clocks without HWiNFO: GPUs via D3DKMT perf data (CPU via its built-in GPU), SSDs via IOCTL_STORAGE_QUERY_PROPERTY
-  clipboard.rs       clipboard listener + history
-  apps.rs            AppsFolder scan, icon extraction, launch
-  wallpaper.rs       IDesktopWallpaper
-  power.rs           lock / sleep / restart / shut down
+  winkey.rs          Windows key: solo tap and the Win + letter shortcuts (low-level keyboard hook)
+  audio.rs           volume, devices and switching the default (IPolicyConfig), mic, per-app mixer, a program's
+                     own volume and level meter (the equalizer, for a module's player)
+  embed.rs           docked websites from modules' manifests (Discord, Canvas, DIM): owned windows, navigation guard,
+                     idle reaper, each site's skin on its own hosts
+  calendar.rs, ics.rs the calendar: your events, iCal feeds (15-minute cache), modules' calendar sources; iCalendar parser
+  taskmgr.rs         Task Manager: processes and threads from one NtQuerySystemInformation call, grouping (module
+                     backends sit in Island Shell's group), counters, end task, efficiency mode, app history, startup apps
+  sysinfo.rs, services.rs, installed.rs, conns.rs, diskscan.rs, bench.rs, sensors.rs, stats.rs   the other Task Manager pages
+  apps.rs, running.rs, icons.rs, places.rs   Start menu apps, open windows, icons, Command Center places
+  clipboard.rs, radios.rs, bar.rs, wallpaper.rs, power.rs, tray.rs, util.rs
 src-tauri/examples/  diagnostics (build with `cargo build --examples`, run them from a normal terminal)
-  applemusic_dump.rs   every media session + Apple Music's UI Automation tree; run it if an Apple Music update breaks the bridge
-  sensors_probe.rs     every GPU's and drive's sensor readings, as Windows reports them without admin
-  topmost_probe.rs     how a background process can raise the resting island (writes %USERPROFILE%\island-topmost-probe.txt; `read` only reports)
-  audio_sessions.rs    every audio session on every output device, with owner process and live levels
-  tobii_probe.rs       a few seconds of gaze and presence from the eye tracker (Tobii Stream Engine)
-  uia_dump.rs          UI Automation tree of any program's windows: `uia_dump.exe <part of exe name>`
+  applemusic_dump.rs   every media session + Apple Music's UI Automation tree; run it if an Apple Music update breaks the Music module's bridge
+  sensors_probe.rs, topmost_probe.rs, audio_sessions.rs, tobii_probe.rs, uia_dump.rs, winkey_log.rs
+crates/
+  island-module-proto  the module protocol: messages, framing, manifests (with validation)
+  island-module        the SDK for module backends: run loop, host messages, DPAPI secrets, HTTP to declared hosts
+  island-host          the supervisor: run modes, crash backoff, job object, routing, topics, packages, installs
+  island-catalog       the signed release catalog
+  island-win           Windows helpers module backends share (Steam, processes, registry, windowless launching)
+  vd-vm-core           the Voicemeeter Remote API engine from the VoiceDeck project (MIT), for the Voicemeeter module
+modules/<id>/        each module: module.json, src/main.rs (its backend), ui/ (its UI), skins/ (docked sites' skins)
+  music, discord, canvas, destiny, games, gaze, voicemeeter, vpn, wallpaper-engine
+tools/
+  pack-modules         module zips, the signed catalog, `verify`, and `stage` for developer mode
+  discord-skin         generates the Discord module's skin from Discord's own colour scales
+dev/
+  harness              the page in an ordinary browser with a mocked backend and made-up data
+  tests                front-end tests (`node --test "dev/tests/**/*.js"`)
 ```
-
-`crates/vd-vm-core/` is the Voicemeeter Remote API engine from the VoiceDeck project (MIT), used by the Audio tab.

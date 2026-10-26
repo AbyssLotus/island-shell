@@ -4,6 +4,7 @@
 //! pack-modules pack --out DIR --version X.Y.Z --release-url URL [--installer FILE] [--notes TEXT]
 //!                   [--modules DIR] [--bins DIR] [--previous modules.json] [--published TIME] [--unsigned]
 //! pack-modules verify DIR --key FILE
+//! pack-modules stage --out DIR [--modules DIR] [--bins DIR]
 //! ```
 //!
 //! `pack` makes, in DIR:
@@ -20,6 +21,10 @@
 //!
 //! `verify` checks a folder made by `pack` against a public key: the signature, the catalog's
 //! rules, and every zip and installer in the folder against what the catalog says.
+//!
+//! `stage` writes every module, unzipped, into DIR/<id>/ with its backend exe beside it (from
+//! `--bins`, default `target/debug`): folders the island loads in developer mode (Modules → Load a
+//! folder…, which takes DIR itself to load them all), for trying a build without a release.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -37,7 +42,8 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("pack") => Opts::parse(&args[1..]).and_then(|o| pack(&o)).map(|s| println!("{s}")),
         Some("verify") => verify_cmd(&args[1..]).map(|s| println!("{s}")),
-        _ => Err("usage: pack-modules pack --out DIR --version X.Y.Z --release-url URL [options] | pack-modules verify DIR --key FILE".into()),
+        Some("stage") => stage_cmd(&args[1..]).map(|s| println!("{s}")),
+        _ => Err("usage: pack-modules pack --out DIR --version X.Y.Z --release-url URL [options] | pack-modules verify DIR --key FILE | pack-modules stage --out DIR".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -204,12 +210,12 @@ fn collect(dir: &Path, bins: &Path) -> Result<(Manifest, Vec<u8>, BTreeMap<Strin
     Ok((manifest, bytes, files))
 }
 
-/// Not packed: the manifest itself (written separately), Rust sources and build output, dotfiles.
 /// The setup guide ticks it to start with (the manifest's `contributes.setup.preselect`).
 fn preselect(m: &Manifest) -> bool {
     m.contributes.setup.as_ref().is_some_and(|s| s.preselect)
 }
 
+/// Not packed: the manifest itself (written separately), Rust sources and build output, dotfiles.
 fn skip(rel: &str) -> bool {
     rel == "module.json" || rel == "Cargo.toml" || rel.starts_with("src/") || rel.starts_with("target/") || rel.split('/').any(|p| p.starts_with('.'))
 }
@@ -245,6 +251,40 @@ fn unwrap_tauri(text: &str) -> String {
         return t.to_string();
     }
     B64.decode(t.replace(['\r', '\n'], "")).ok().and_then(|b| String::from_utf8(b).ok()).filter(|s| s.starts_with("untrusted comment:")).unwrap_or_else(|| t.to_string())
+}
+
+/// `stage --out DIR [--modules DIR] [--bins DIR]`
+fn stage_cmd(args: &[String]) -> Result<String, String> {
+    let (mut out, mut modules, mut bins) = (None, PathBuf::from("modules"), PathBuf::from("target").join("debug"));
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        let mut val = || it.next().cloned().ok_or_else(|| format!("{a} needs a value"));
+        match a.as_str() {
+            "--out" => out = Some(PathBuf::from(val()?)),
+            "--modules" => modules = PathBuf::from(val()?),
+            "--bins" => bins = PathBuf::from(val()?),
+            other => return Err(format!("unknown option {other}")),
+        }
+    }
+    stage(&out.ok_or("stage needs --out DIR")?, &modules, &bins)
+}
+
+/// Every module, unzipped, in out/<id>/: its files, its backend exe and its manifest (with hashes).
+fn stage(out: &Path, modules: &Path, bins: &Path) -> Result<String, String> {
+    let mut done = vec![];
+    for dir in module_dirs(modules)? {
+        let (manifest, bytes, files) = collect(&dir, bins)?;
+        let to = out.join(&manifest.id);
+        let _ = std::fs::remove_dir_all(&to);
+        for (rel, data) in &files {
+            let p = to.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap_or(&to)).map_err(|e| e.to_string())?;
+            std::fs::write(&p, data).map_err(|e| format!("{}: {e}", p.display()))?;
+        }
+        std::fs::write(to.join("module.json"), bytes).map_err(|e| e.to_string())?;
+        done.push(manifest.id);
+    }
+    Ok(format!("staged {} in {}: {}", done.len(), out.display(), done.join(", ")))
 }
 
 fn verify_cmd(args: &[String]) -> Result<String, String> {

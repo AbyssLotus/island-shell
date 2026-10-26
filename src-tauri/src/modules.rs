@@ -355,8 +355,8 @@ pub fn mod_theme(dark: bool, accent: String) {
     }
 }
 
-/// Developer mode: loads an unpacked module folder (unsigned; the Modules sheet badges it).
-/// With no path, asks for a folder.
+/// Developer mode: loads an unpacked module folder (unsigned; the Modules sheet badges it), or every
+/// module in a folder of them (what `pack-modules stage` makes). With no path, asks for a folder.
 #[tauri::command]
 pub async fn mod_load_folder(path: Option<String>, app: AppHandle, shared: tauri::State<'_, Arc<crate::Shared>>) -> Result<Option<ModuleInfo>, String> {
     let dir = shared.dir.clone();
@@ -367,18 +367,38 @@ pub async fn mod_load_folder(path: Option<String>, app: AppHandle, shared: tauri
             None => return Ok(None),
         },
     };
+    if !folder.join("module.json").is_file() {
+        let mut subs: Vec<PathBuf> = std::fs::read_dir(&folder).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).filter(|p| p.join("module.json").is_file()).collect();
+        if subs.is_empty() {
+            return Err("That folder has no module.json, nor modules in it".into());
+        }
+        subs.sort();
+        let (mut last, mut errors) = (None, vec![]);
+        for sub in subs {
+            match load_one(&sub, &app, &dir) {
+                Ok(info) => last = info.or(last),
+                Err(e) => errors.push(format!("{}: {e}", sub.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())),
+            }
+        }
+        return if last.is_none() && !errors.is_empty() { Err(errors.join("; ")) } else { Ok(last) };
+    }
+    load_one(&folder, &app, &dir)
+}
+
+/// One developer-mode folder.
+fn load_one(folder: &Path, app: &AppHandle, dir: &Path) -> Result<Option<ModuleInfo>, String> {
     let s = sup().ok_or("Modules aren't running")?;
     let bytes = std::fs::read(folder.join("module.json")).map_err(|_| "That folder has no module.json".to_string())?;
     let manifest = island_host::proto::Manifest::parse(&bytes)?;
     if s.info(&manifest.id).is_some() {
         return Err(format!("{} is already installed; remove it first", manifest.name));
     }
-    let id = s.load(&folder, true, true)?;
+    let id = s.load(folder, true, true)?;
     save_installed(|set| {
         set.modules.insert(id.clone(), Entry { version: manifest.version.clone(), enabled: true, auto_update: false, dev: true, installed: now_rfc3339(), source: folder.to_string_lossy().into_owned() });
     })?;
     BROKEN.lock().unwrap().retain(|(b, _)| *b != id);
-    sync_contributions(&dir);
+    sync_contributions(dir);
     let _ = app.emit("mod:installed", &id);
     log_line(&format!("modules: loaded {id} from {} (developer mode)", folder.display()));
     Ok(s.info(&id))
