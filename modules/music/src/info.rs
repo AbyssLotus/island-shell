@@ -7,9 +7,6 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 use serde_json::Value;
-use windows::core::HSTRING;
-use windows::Foundation::Uri;
-use windows::Web::Http::HttpClient;
 
 #[derive(Serialize, Clone, Default)]
 pub struct Info {
@@ -26,18 +23,13 @@ pub struct Info {
 
 static CACHE: Mutex<Option<HashMap<String, Info>>> = Mutex::new(None);
 
+/// Through the SDK, so only itunes.apple.com.
 fn get(url: &str) -> Result<Value, String> {
-    let e = |e: windows::core::Error| format!("iTunes lookup failed: {}", e.message());
-    let client = HttpClient::new().map_err(e)?;
-    let _ = client.DefaultRequestHeaders().and_then(|h| h.UserAgent()).and_then(|ua| ua.TryParseAdd(&HSTRING::from("IslandShell/1.0")));
-    let uri = Uri::CreateUri(&HSTRING::from(url)).map_err(e)?;
-    let resp = client.GetAsync(&uri).and_then(|op| op.get()).map_err(e)?;
-    let status = resp.StatusCode().map_err(e)?.0;
-    if !(200..300).contains(&status) {
-        return Err(format!("iTunes lookup failed: HTTP {status}"));
+    let resp = island_module::http::get(url).map_err(|e| format!("iTunes lookup failed: {e}"))?;
+    if !resp.ok() {
+        return Err(format!("iTunes lookup failed: HTTP {}", resp.status));
     }
-    let body = resp.Content().and_then(|c| c.ReadAsStringAsync()).and_then(|op| op.get()).map_err(e)?;
-    serde_json::from_str(&body.to_string()).map_err(|e| e.to_string())
+    Ok(resp.json())
 }
 
 fn norm(s: &str) -> String {
@@ -77,7 +69,7 @@ pub fn info(title: &str, artist: &str, album: &str) -> Result<Info, String> {
     if let Some(v) = CACHE.lock().unwrap().get_or_insert_with(HashMap::new).get(&key) {
         return Ok(v.clone());
     }
-    let term = crate::util::url_encode(&format!("{artist} {title}"));
+    let term = crate::url_encode(&format!("{artist} {title}"));
     let v = get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=25&term={term}"))?;
     let results = v["results"].as_array().cloned().unwrap_or_default();
     // On a tie the earlier result wins: iTunes lists the most relevant first.

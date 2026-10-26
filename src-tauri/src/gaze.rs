@@ -4,8 +4,9 @@
 //! - Looking at the island counts like hovering it: the pill opens its preview, and a notification
 //!   waits until it has been seen. The page gets `gaze:island` true/false (with dwell times so a
 //!   passing glance doesn't flicker it), never raw gaze points.
-//! - Presence (someone in front of the tracker) can pause the music after a while away and resume
-//!   it on return, if the user turned that on.
+//! - Presence (someone in front of the tracker) goes to modules as the `presence` topic: "looking"
+//!   (eyes on the island), "present", or "away" (nobody there for 10 s). The Music module pauses
+//!   the music on "away" and plays it again on return, if you asked it to.
 //!
 //! Gaze is only used live, in this process; nothing is stored or sent. Stream Engine is opened for
 //! "interactive" use, which is what Tobii licenses consumer trackers for.
@@ -22,7 +23,7 @@ use windows::Win32::Foundation::{HMODULE, RECT};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
-use crate::{media, util, Shared};
+use crate::{util, Shared};
 
 /// How long eyes must rest on the island before it counts, and be gone before it stops counting.
 const DWELL_IN: Duration = Duration::from_millis(330);
@@ -46,8 +47,6 @@ pub struct Status {
     pub present: bool,
     /// The user's switch for all eye-tracking features.
     pub enabled: bool,
-    /// Pause the music after stepping away, resume on return.
-    pub pause_when_away: bool,
 }
 
 #[repr(C)]
@@ -130,7 +129,7 @@ unsafe extern "C" fn on_presence(status: c_int, _ts: i64, data: *mut c_void) {
     (&mut *(data as *mut Feed)).presence = Some(status == PRESENT);
 }
 
-pub static STATUS: Mutex<Status> = Mutex::new(Status { available: false, connected: false, present: false, enabled: false, pause_when_away: false });
+pub static STATUS: Mutex<Status> = Mutex::new(Status { available: false, connected: false, present: false, enabled: false });
 
 pub fn status() -> Status {
     STATUS.lock().unwrap().clone()
@@ -148,12 +147,8 @@ fn update(app: &AppHandle, f: impl FnOnce(&mut Status)) {
     }
 }
 
-pub fn spawn(app: AppHandle, shared: Arc<Shared>, enabled: bool, pause_when_away: bool) {
-    {
-        let mut st = STATUS.lock().unwrap();
-        st.enabled = enabled;
-        st.pause_when_away = pause_when_away;
-    }
+pub fn spawn(app: AppHandle, shared: Arc<Shared>, enabled: bool) {
+    STATUS.lock().unwrap().enabled = enabled;
     std::thread::spawn(move || {
         util::com_mta();
         let Some(api) = Api::load() else {
@@ -227,14 +222,15 @@ fn run(app: &AppHandle, shared: &Shared, api: &Api, dev: *mut c_void) {
     let mut seen_since = Instant::now();
     let mut last_there = Instant::now();
     let mut away_for = Duration::ZERO;
-    let mut paused_at = Instant::now();
-    let mut paused_by_us = false;
+    let mut published = "";
     let mut logged_presence: Option<bool> = None;
     let mut presence_logs = 0;
     let mut failures = 0;
     let mut first_look = true;
     loop {
         if !status().enabled {
+            // Turned off on purpose: whatever waited for you to come back can carry on.
+            crate::modules::publish(island_host::proto::topic::PRESENCE, serde_json::json!({ "state": "present" }));
             return;
         }
         if unsafe { (api.process)(dev) } != 0 {
@@ -298,39 +294,19 @@ fn run(app: &AppHandle, shared: &Shared, api: &Api, dev: *mut c_void) {
                 util::log_line("eye tracking: away (nobody in front of the tracker)");
             } else {
                 util::log_line(&format!("eye tracking: back after {:.0} s away", away_for.as_secs_f32()));
-                if paused_by_us {
-                    paused_by_us = false;
-                    media_action(shared, "play");
-                    util::log_line("eye tracking: resuming the music");
-                }
             }
         }
         if !present {
             away_for = gone;
         }
-        let playing = shared.media_playing.load(Ordering::Relaxed);
-        if gone >= AWAY_PAUSE && !paused_by_us && playing && status().pause_when_away {
-            paused_by_us = true;
-            paused_at = now;
-            media_action(shared, "pause");
-            util::log_line(&format!("eye tracking: away for {:.0} s, pausing the music", gone.as_secs_f32()));
-        }
-        // Playing again while still away means someone else started it: not ours to resume. (The
-        // playing flag lags the pause by up to a second, hence the grace period.)
-        if paused_by_us && playing && now - paused_at > Duration::from_secs(4) {
-            paused_by_us = false;
-            util::log_line("eye tracking: the music was started again while you were away");
+        // What modules hear: away once nobody's been there for a while, looking while your eyes are
+        // on the island, present otherwise.
+        let state = if gone >= AWAY_PAUSE { "away" } else if on_island { "looking" } else { "present" };
+        if state != published {
+            published = state;
+            crate::modules::publish(island_host::proto::topic::PRESENCE, serde_json::json!({ "state": state }));
         }
         std::thread::sleep(Duration::from_millis(16));
-    }
-}
-
-fn media_action(shared: &Shared, action: &str) {
-    let preferred = shared.media_source.lock().unwrap().clone();
-    if let Some(m) = media::manager() {
-        if let Err(e) = media::command(&m, &preferred, action, 0.0) {
-            util::log_line(&format!("eye tracking: couldn't {action} the music ({e})"));
-        }
     }
 }
 

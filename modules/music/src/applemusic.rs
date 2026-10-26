@@ -24,7 +24,7 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowTextW, IsWindow};
 
-use crate::util::log_line;
+use crate::log_line;
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -86,7 +86,7 @@ struct Bar {
 }
 
 fn run(rx: Receiver<(Cmd, Reply)>) {
-    crate::util::com_mta();
+    crate::com_mta();
     let auto: IUIAutomation = match unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) } {
         Ok(a) => a,
         Err(e) => {
@@ -162,7 +162,7 @@ fn main_window() -> Option<HWND> {
         if String::from_utf16_lossy(&buf[..n.max(0) as usize]) == "Apple Music" {
             let n = GetClassNameW(h, &mut buf);
             if String::from_utf16_lossy(&buf[..n.max(0) as usize]) == "WinUIDesktopWin32WindowClass"
-                && crate::running::exe_of_window(h).1.ends_with("\\applemusic.exe")
+                && crate::exe_of_window(h).ends_with("\\applemusic.exe")
             {
                 *out = Some(h);
                 return BOOL(0);

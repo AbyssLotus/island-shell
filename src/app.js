@@ -1,7 +1,7 @@
 import { WALLS, drawWall } from './engine.js';
 import { createCommandCenter } from './cc.js';
 import { createSounds } from './sounds.js';
-import { createRegistry, topActivity } from './registry.js';
+import { createRegistry, topActivity, restWeather, restDate } from './registry.js';
 import { createModuleHost } from './modhost.js';
 
 const TAURI = window.__TAURI__;
@@ -112,8 +112,8 @@ $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 /* ---------- tabs (src/registry.js) ---------- */
 const R = createRegistry();
 // The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
-// (src/modhost.js), slotting in by order: Canvas's 50, Discord's 70, Games' 80 and Destiny's 90 keep their old places.
-[['controls', 'Controls', 'gear', 600, 10], ['music', 'Music', 'note', 700, 20], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
+// (src/modhost.js), slotting in by order: Music's 20, Canvas's 50, Discord's 70, Games' 80 and Destiny's 90 keep their old places.
+[['controls', 'Controls', 'gear', 600, 10], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
   ['network', 'Network', 'wifi', 680, 60],
   ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
   ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
@@ -133,8 +133,7 @@ const gradFor = s => { const g = GRADS[hashStr(s) % GRADS.length]; return `linea
 
 const S = {
   mode: 'boot', tab: TABS.includes(store.get('tab', '')) ? store.get('tab', '') : 'controls', hover: false,
-  status: null, media: null, mediaKey: '', thumb: null, thumbTry: 0, mediaHold: null, seek: null, scrubbing: false, scrubVal: 0, appVolAt: 0, tickRaf: 0,
-  lyricsOn: store.get('lyrics', true), ly: { key: '', state: 'idle', data: null, idx: -1 }, lyWant: '', lyWantAt: 0, lyFollowPause: 0,
+  status: null, media: null, mediaKey: '', meterFor: '', tickRaf: 0,
   audio: null, volSetAt: -1e9, // when the user last moved a volume slider (nothing yet)
   dark: store.get('dark', true),
   wall: store.get('wall', -1), wallSel: 0, follow: store.get('follow', false), applying: false,
@@ -272,7 +271,7 @@ function setTab(t) {
   switchView(t, false); layout(); moveInk(); onTabShown(t);
 }
 function onTabShown(t) {
-  if (t === 'music' || t === 'controls') { S.ly.idx = -2; syncLyric(curPos(), true); mediaTick(); }
+  if (t === 'controls') mediaTick();
   if (t === 'stats') statsLoop();
   if (t === 'network') { renderNetNow(); layout(); }
   if (t === 'wallpaper') showWallpapers();
@@ -331,7 +330,7 @@ island.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') on
 island.addEventListener('pointerleave', onLeave);
 L.pill.addEventListener('click', () => openPanel());
 L.pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPanel(null, true); } });
-L.peek.addEventListener('click', e => { if (!e.target.closest('[data-act]')) openPanel(S.media ? 'music' : null); });
+L.peek.addEventListener('click', e => { if (e.target.closest('[data-act]')) return; if (S.media && S.media.action) openTarget(S.media.action); else openPanel(null); });
 L.toast.addEventListener('click', () => openPanel(S.toastTab || undefined));
 
 let wheelAcc = 0, wheelX = 0, wheelT, wheelLock = 0;
@@ -398,214 +397,135 @@ function toast(title, sub, ic, opts = {}) {
   } else toastT = setTimeout(hide, ms);
 }
 
-/* ---------- status: media, audio, radios ---------- */
+/* ---------- status: audio, radios ---------- */
 const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 async function pollStatus() {
   try { applyStatus(await invoke('get_status')); } catch (e) {}
   setTimeout(pollStatus, 1000);
 }
-/** What the user just changed wins over the next status polls (players report changes late). */
-function holdMedia(fields, ms = 1800) {
-  S.mediaHold = { ...fields, until: performance.now() + ms };
-  if (S.media) Object.assign(S.media, fields);
-}
 function applyStatus(st) {
   S.status = st;
-  const m = st.media, hold = S.mediaHold;
-  if (m && hold && performance.now() < hold.until) for (const k in hold) if (k !== 'until') m[k] = hold[k];
-  const changed = !!m !== !!S.media || !!(m && m.key !== S.mediaKey);
-  S.media = m;
-  if (!m) { S.mediaKey = ''; setThumb(null); setTint(null); }
-  else if (m.key !== S.mediaKey || (!S.thumb && Date.now() - S.thumbTry > 5000)) {
-    if (m.key !== S.mediaKey) { setThumb(null); S.seek = null; }
-    S.mediaKey = m.key; S.thumbTry = Date.now();
-    const key = m.key;
-    // The artwork arrives as raw bytes and lives as one blob URL (no base64 copies in the page).
-    invoke('media_thumb').then(buf => {
-      if (S.mediaKey !== key || !buf || !buf.byteLength) return;
-      setThumb(URL.createObjectURL(new Blob([buf]))); renderMedia(); tintFrom(S.thumb);
-    }).catch(() => {});
-  }
   if (st.audio && performance.now() - S.volSetAt > 1500) S.audio = st.audio;
-  maybeLyrics(m);
-  renderMedia(changed); renderControls(); renderBar(); mediaTick();
+  renderMediaSource(); renderControls(); renderBar();
   if (S.mode === 'panel' && S.tab === 'network') renderNetNow();
 }
-function setThumb(url) { if (S.thumb) URL.revokeObjectURL(S.thumb); S.thumb = url; }
+
+/* ---------- now playing (a module's `media` activity: the Music module's) ----------
+   What's playing shows on the pill (cover and equalizer), the peek, the Controls card and the top
+   bar, all drawn from the highest `media` activity; their buttons go back to its run(action). The
+   equalizer follows the player's own sound: the activity's image names (`exe`), metered here.
+   With nothing playing, the pill rests on the weather, the date and the clock (renderRest). */
+function mediaOf(a) {
+  if (!a) return null;
+  return {
+    title: a.text || '', artist: a.sub || '', app: a.app || '', playing: !!a.playing, position: +a.position || 0, duration: +a.duration || 0,
+    sampled_at: +a.sampled_at || Date.now(), can_next: !!a.can_next, can_prev: !!a.can_prev, key: a.key || a.text || '',
+    art: a.art || '', exe: a.exe || '', lyric: a.lyric || '', action: a.action || '', run: typeof a.run === 'function' ? a.run : null
+  };
+}
+/** The activities changed: what's playing now, if anything. */
+function syncMedia() {
+  const m = mediaOf(topActivity(R.activities.all().filter(x => x.kind === 'media')));
+  const changed = !!m !== !!S.media || !!(m && m.key !== S.mediaKey);
+  S.media = m; S.mediaKey = m ? m.key : '';
+  // The equalizer meters the player itself while it plays.
+  const meter = m ? `${m.exe}|${m.playing}` : '';
+  if (meter !== S.meterFor) { S.meterFor = meter; quiet(invoke('meter_follow', { exe: m ? m.exe : '', playing: !!(m && m.playing) })); }
+  renderMedia(changed); renderControls(); renderBar(); mediaTick();
+}
+/** A now-playing button (prev, toggle, next), for the activity's module. */
+function mediaAct(action) {
+  const m = S.media; if (!m || !m.run) return;
+  Promise.resolve().then(() => m.run(action)).catch(err => toast(clipTxt(m.app || 'Music', 48), clipTxt(String((err && err.message) || err), 72), 'x', { sound: 'problem' }));
+}
 const artEls = $$('[data-m="art"]'), titleEls = $$('[data-m="title"]'), artistEls = $$('[data-m="artist"]'), sourceEls = $$('[data-m="source"]'), durEls = $$('[data-m="dur"]'), toggleBtns = $$('[data-act="toggle"]');
-function renderMedia(changed) {
+function renderMediaSource() {
+  const m = S.media;
+  sourceEls.forEach(e => txt(e, m ? `${m.app}${S.audio ? ' · ' + S.audio.device : ''}` : (S.audio ? S.audio.device : 'Sound')));
+}
+/** The peek's second line with nothing playing: the weather, when there's a reading. */
+function restLine() {
+  const c = store.get('weather', null), w = restWeather(c, S.city, S.unit);
+  return w ? `${w.temp}°${S.unit} · ${wmo(c.code)[0]}${c.name ? ' · ' + c.name : ''}` : '';
+}
+function renderMedia() {
   const m = S.media;
   island.classList.toggle('no-media', !m);
   island.classList.toggle('playing', !!(m && m.playing));
-  const art = S.thumb ? `url("${S.thumb}") center / cover no-repeat` : m ? gradFor(m.title + m.artist) : 'var(--ink-3)';
-  if (art !== S.artNow) { S.artNow = art; artEls.forEach(e => { e.style.setProperty('--art', art); e.classList.toggle('has-thumb', !!S.thumb); }); }
+  const art = m && m.art ? `url("${m.art}") center / cover no-repeat` : m ? gradFor(m.title + m.artist) : 'var(--ink-3)';
+  if (art !== S.artNow) { S.artNow = art; artEls.forEach(e => { e.style.setProperty('--art', art); e.classList.toggle('has-thumb', !!(m && m.art)); }); }
   const now = new Date();
-  titleEls.forEach(e => txt(e, m ? m.title || 'Unknown title' : 'Nothing playing'));
-  artistEls.forEach(e => txt(e, m ? m.artist || m.app : now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
-  sourceEls.forEach(e => txt(e, m ? `${m.app}${S.audio ? ' · ' + S.audio.device : ''}` : (S.audio ? S.audio.device : 'Sound')));
+  titleEls.forEach(e => txt(e, m ? m.title || 'Unknown title' : now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
+  artistEls.forEach(e => txt(e, m ? m.artist || m.app : restLine()));
+  renderMediaSource();
   durEls.forEach(e => txt(e, fmtT(m && m.duration)));
   toggleBtns.forEach(b => { const p = !!(m && m.playing); setHtml(b, icon(p ? 'pause' : 'play')); b.setAttribute('aria-label', p ? 'Pause' : 'Play'); b.disabled = !m; });
   $$('[data-act="next"]').forEach(b => { b.disabled = !(m && m.can_next); });
   $$('[data-act="prev"]').forEach(b => { b.disabled = !(m && m.can_prev); });
-  renderMusic(changed);
+  // The line being sung, which the module follows in its lyrics.
+  const line = m ? m.lyric : '';
+  $$('[data-m="lyric"]').forEach(e => { if (e.textContent !== line) { e.textContent = line; e.style.animation = 'none'; void e.offsetWidth; e.style.animation = ''; } });
   S.lastSec = -1; paintProgress();
+  renderRest();
 }
-
-/* ---------- music tab ---------- */
-/** Where the song is right now, carried forward from the last measurement. */
+/** Where the song is right now, carried forward from the last reading. */
 function curPos() {
   const m = S.media; if (!m) return 0;
-  const now = performance.now();
-  if (S.seek && now < S.seek.until) return S.seek.pos + (m.playing ? (now - S.seek.at) / 1000 : 0);
   const p = m.position + (m.playing ? Math.max(0, Date.now() - m.sampled_at) / 1000 : 0);
   return m.duration > 0 ? Math.min(p, m.duration) : p;
 }
-const mediaShowing = () => S.mode === 'peek' || (S.mode === 'panel' && (S.tab === 'music' || S.tab === 'controls'));
-/** Runs every frame while a progress bar or the lyrics are on screen and the song is moving. */
+const mediaShowing = () => S.mode === 'peek' || (S.mode === 'panel' && S.tab === 'controls');
+/** Runs every frame while a progress bar is on screen and the song is moving. */
 function mediaTick() {
   if (S.tickRaf) return;
   const step = () => {
     S.tickRaf = 0;
     if (!S.media || !mediaShowing()) return;
     paintProgress();
-    if (S.media.playing || S.scrubbing) S.tickRaf = requestAnimationFrame(step);
+    if (S.media.playing) S.tickRaf = requestAnimationFrame(step);
   };
   S.tickRaf = requestAnimationFrame(step);
 }
-const progBars = $$('[data-m="bar"]'), posTexts = $$('[data-m="pos"]'), seekEl = $('#muSeek');
+const progBars = $$('[data-m="bar"]'), posTexts = $$('[data-m="pos"]');
 function paintProgress() {
-  const m = S.media, dur = m ? m.duration : 0;
-  const pos = S.scrubbing ? S.scrubVal : curPos();
+  const m = S.media, dur = m ? m.duration : 0, pos = curPos();
   const pct = dur > 0 ? clamp(pos / dur * 100, 0, 100) : 0;
   for (const e of progBars) e.style.width = pct.toFixed(2) + '%';
-  if (!S.scrubbing) seekEl.value = Math.round(pct * 10);
-  seekEl.style.setProperty('--p', pct.toFixed(2) + '%');
   const sec = Math.floor(pos);
-  if (sec !== S.lastSec) {
-    S.lastSec = sec;
-    for (const e of posTexts) e.textContent = fmtT(pos);
-    $('#muLeft').textContent = dur > 0 ? '-' + fmtT(dur - Math.floor(pos)) : '';
-  }
-  if (!S.scrubbing) syncLyric(pos);
+  if (sec !== S.lastSec) { S.lastSec = sec; for (const e of posTexts) e.textContent = fmtT(pos); }
 }
-function seekTo(sec) {
-  const m = S.media; if (!m || !m.can_seek) return;
-  sec = clamp(sec, 0, m.duration > 0 ? m.duration - 0.5 : sec);
-  S.seek = { pos: sec, at: performance.now(), until: performance.now() + 2200 };
-  S.ly.idx = -2; S.lyFollowPause = 0; S.lastSec = -1;
-  paintProgress(); mediaTick();
-  invoke('media_cmd', { action: 'seek', value: sec }).catch(err => { S.seek = null; flashNote(String(err)); });
-}
-function flashNote(msg) { note('#muNote', msg); clearTimeout(S.noteT); S.noteT = setTimeout(() => note('#muNote', ''), 4500); }
-seekEl.addEventListener('input', () => {
-  const m = S.media; if (!m || !(m.duration > 0)) return;
-  S.scrubbing = true; S.scrubVal = seekEl.value / 1000 * m.duration; S.lastSec = -1;
-  paintProgress(); mediaTick();
-});
-seekEl.addEventListener('change', () => {
-  const m = S.media; S.scrubbing = false;
-  if (m && m.duration > 0) seekTo(seekEl.value / 1000 * m.duration);
-});
-['pointerup', 'blur'].forEach(ev => seekEl.addEventListener(ev, () => { setTimeout(() => { S.scrubbing = false; }, 0); }));
-
-function renderMusic(changed) {
-  const m = S.media;
-  txt($('#muApp'), m ? m.app : 'Nothing playing');
-  const badge = $('#muBadge');
-  badge.hidden = !(m && m.badge);
-  if (m && m.badge) badge.textContent = m.badge;
-  txt($('#muAlbum'), m && m.album ? m.album : '');
-  if (!m) txt($('#v-music [data-m="artist"]'), 'Play something in Apple Music or Spotify');
-  if (changed) { const t = $('.mu-title'); t.classList.remove('new'); void t.offsetWidth; t.classList.add('new'); }
-  // Shuffle and repeat keep their place (hidden but still taking space) so play stays centered.
-  const tg = (act, show, on, label, keepSpace) => $$(`#v-music [data-act="${act}"]`).forEach(b => {
-    if (keepSpace) b.style.visibility = show ? '' : 'hidden'; else b.hidden = !show;
-    b.setAttribute('aria-pressed', !!on); b.setAttribute('aria-label', label); b.title = label;
-  });
-  tg('shuffle', !!m && m.shuffle != null, m && m.shuffle, m && m.shuffle ? 'Shuffle is on' : 'Shuffle', true);
-  const rep = m ? m.repeat : null;
-  tg('repeat', rep != null, rep && rep !== 'off', rep === 'one' ? 'Repeating this song' : rep === 'all' ? 'Repeating all' : 'Repeat', true);
-  setHtml($('#v-music [data-act="repeat"]'), icon('repeat') + (rep === 'one' ? '<b class="rep1">1</b>' : ''));
-  tg('favorite', !!m && m.favorite != null, m && m.favorite, m && m.favorite ? 'Favorited' : 'Favorite', false);
-  const vw = $('#muVolWrap'), vol = $('#muVol');
-  vw.hidden = !(m && m.app_volume != null);
-  if (m && m.app_volume != null && performance.now() - S.appVolAt > 1500) { const v = Math.round(m.app_volume * 100); vol.value = v; vol.style.setProperty('--p', v + '%'); }
-  vw.title = m ? `${m.app} volume (just this app)` : '';
-  const open = $('#muOpen'); open.hidden = !m; if (m) txt(open, `Open ${m.app}`);
-  seekEl.disabled = !(m && m.can_seek && m.duration > 0);
-  const ss = (m && m.sessions) || [];
-  setHtml($('#muSources'), ss.length > 1 || (m && m.pinned)
-    ? `<button type="button" class="chip" data-src="" aria-pressed="${!(m && m.pinned)}" title="Show whatever is playing">Auto</button>` +
-      ss.map(x => `<button type="button" class="chip${x.playing ? ' live' : ''}" data-src="${esc(x.id)}" aria-pressed="${!!(m && m.pinned && m.id === x.id)}" title="${esc(x.title || x.app)}">${esc(x.app)}</button>`).join('')
-    : '');
-  $('#lyLines').classList.toggle('no-seek', !(m && m.can_seek));
-}
-$('#muSources').addEventListener('click', e => {
-  const b = e.target.closest('[data-src]'); if (!b) return;
-  quiet(invoke('media_source', { id: b.dataset.src }).then(() => setTimeout(async () => { try { applyStatus(await invoke('get_status')); } catch (err) {} }, 1100)));
-});
-$('#muVol').addEventListener('input', e => {
-  const el = e.target; el.style.setProperty('--p', el.value + '%'); S.appVolAt = performance.now();
-  clearTimeout(S.volT); S.volT = setTimeout(() => invoke('media_app_volume', { level: el.value / 100 }).catch(err => flashNote(String(err))), 40);
-});
-$('#v-controls .card.media').addEventListener('click', e => { if (!e.target.closest('[data-act]') && S.media) setTab('music'); });
-
+$('#v-controls .card.media').addEventListener('click', e => { if (!e.target.closest('[data-act]') && S.media && S.media.action) openTarget(S.media.action); });
+// The island's own now-playing buttons (a module's views handle theirs inside their shadow roots).
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
-  const action = b.dataset.act, m = S.media;
-  if (m) {
-    if (action === 'toggle') holdMedia({ playing: !m.playing }, 1500);
-    if (action === 'shuffle' && m.shuffle != null) holdMedia({ shuffle: !m.shuffle });
-    if (action === 'repeat' && m.repeat != null) holdMedia({ repeat: { off: 'all', all: 'one', one: 'off' }[m.repeat] || 'off' });
-    if (action === 'favorite' && m.favorite != null) holdMedia({ favorite: !m.favorite }, 2500);
-    if (action === 'next' || action === 'prev') S.seek = null;
-    renderMedia();
-  }
-  invoke('media_cmd', { action }).catch(err => { S.mediaHold = null; flashNote(String(err)); });
-  if (action === 'open') closePanel(true);
-  else if (S.mode !== 'panel' && !S.ccOpen) quiet(invoke('release_focus'));
+  mediaAct(b.dataset.act);
+  if (S.mode !== 'panel' && !S.ccOpen) quiet(invoke('release_focus'));
 });
 
-/* album-art tint for the music tab */
-function tintFrom(url) {
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas'); c.width = c.height = 24;
-    const g = c.getContext('2d', { willReadFrequently: true });
-    g.drawImage(img, 0, 0, 24, 24);
-    const px = g.getImageData(0, 0, 24, 24).data;
-    let r = 0, gr = 0, b = 0, sum = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      const R = px[i], G = px[i + 1], B = px[i + 2], mx = Math.max(R, G, B), mn = Math.min(R, G, B);
-      const w = (mx ? (mx - mn) / mx : 0) ** 2 * (mx / 255) + 0.015; // favor vivid, bright pixels
-      r += R * w; gr += G * w; b += B * w; sum += w;
-    }
-    setTint([r / sum, gr / sum, b / sum]);
-  };
-  img.src = url;
-}
-function setTint(rgb) {
-  if (!rgb) { island.style.removeProperty('--tint'); island.style.removeProperty('--on-tint'); S.tint = null; return; }
-  S.tint = rgb;
-  let [r, g, b] = rgb.map(v => v / 255);
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0;
-  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h = Math.round(h * 60 + 360) % 360;
-  const l0 = (mx + mn) / 2, s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0;
-  // Keep it readable on the island: lighter on the dark skin, deeper on the light one.
-  const sat = Math.round(clamp(s0 * 100, d ? 38 : 0, 85));
-  const lig = Math.round(S.dark ? clamp(l0 * 100, 58, 72) : clamp(l0 * 100, 36, 48));
-  island.style.setProperty('--tint', `hsl(${h} ${sat}% ${lig}%)`);
-  island.style.setProperty('--on-tint', lig > 55 ? '#141218' : '#ffffff');
+/* ---------- the pill at rest (§4.11) ----------
+   Nothing playing, no call and no timer: the weather's icon and temperature, the date and the
+   clock. With no city (or no reading in 3 hours), just the date and the clock. */
+function renderRest() {
+  const rest = !S.media && !island.classList.contains('in-call') && !S.timer.running;
+  const w = rest ? restWeather(store.get('weather', null), S.city, S.unit) : null;
+  island.classList.toggle('resting', rest);
+  island.classList.toggle('rest-wx', !!w);
+  const pr = $('#pillRest'), pd = $('#pillDate');
+  pr.hidden = !w;
+  if (w) setHtml(pr, `${icon(w.icon)}<span>${w.temp}°</span>`);
+  pd.hidden = !rest;
+  if (rest) txt(pd, restDate(new Date()));
+  // The peek's square shows the weather too.
+  const peekArt = $('.peek .art'), wx = !S.media && !!w;
+  setHtml(peekArt, wx ? icon(w.icon) : '');
+  peekArt.classList.toggle('wx', wx);
 }
 
 /* live levels from the player's audio session drive the equalizer bars */
-// Only the bars themselves (and the cover art while the Music tab shows) are restyled, 30 times a
-// second. Variables on <body> restyled every element on the page each time, which piled up
-// hundreds of MB of garbage between collections.
+// Only the bars themselves are restyled, 30 times a second. Variables on <body> restyled every
+// element on the page each time, which piled up hundreds of MB of garbage between collections.
+// Module views that glow with the music (the Music tab) hear the island's `level` event.
 let lvl = 0, lvlOffT = 0;
-const muArt = $('.mu-art');
 function eqBars() { if (!S.eqBars || !S.eqBars.every(b => b.isConnected)) S.eqBars = $$('.eq i'); return S.eqBars; }
 listen('media:level', e => {
   lvl = Math.max(Math.pow(clamp(+e.payload || 0, 0, 1), 0.7), lvl * 0.8); // quick attack, smooth release
@@ -614,92 +534,15 @@ listen('media:level', e => {
     const k = i % 4, h = lvl * (0.5 + 0.5 * Math.abs(Math.sin(t * (2.3 + k * 1.4) + k * 1.9)));
     bars[i].style.transform = `scaleY(${(0.16 + 0.84 * h).toFixed(3)})`;
   }
-  if (S.mode === 'panel' && S.tab === 'music') muArt.style.setProperty('--lvl', lvl.toFixed(3));
+  islandEvents.dispatchEvent(new CustomEvent('level', { detail: lvl }));
   if (!S.eqLive) { S.eqLive = true; document.body.classList.add('live-eq'); }
   if (!S.eqLogged && e.payload > 0.02) { S.eqLogged = true; log(`equalizer is following the music (peak ${(+e.payload).toFixed(2)})`); }
   clearTimeout(lvlOffT);
   lvlOffT = setTimeout(() => {
     S.eqLive = false; document.body.classList.remove('live-eq');
     for (const b of eqBars()) b.style.transform = '';
-    muArt.style.setProperty('--lvl', '0'); lvl = 0;
+    lvl = 0; islandEvents.dispatchEvent(new CustomEvent('level', { detail: 0 }));
   }, 500);
-});
-
-/* lyrics (LRCLIB, looked up by the backend) */
-function maybeLyrics(m) {
-  const key = m ? m.key : '';
-  if (key !== S.lyWant) { S.lyWant = key; S.lyWantAt = Date.now(); }
-  if (S.ly.key && S.ly.key !== key) { S.ly = { key: '', state: 'idle', data: null, idx: -1 }; renderLyrics(); }
-  if (!m || !S.lyricsOn || S.ly.key === key) return;
-  // Wait a moment for the song length: it makes the match exact.
-  if (!(m.duration > 0) && Date.now() - S.lyWantAt < 2500) return;
-  S.ly = { key, state: 'loading', data: null, idx: -1 };
-  renderLyrics();
-  invoke('media_lyrics', { title: m.title, artist: m.artist, album: m.album || '', duration: m.duration || 0 })
-    .then(d => { if (S.ly.key === key) { S.ly.state = d ? 'ok' : 'none'; S.ly.data = d; renderLyrics(); } })
-    .catch(err => {
-      if (S.ly.key !== key) return;
-      S.ly.state = 'error'; renderLyrics(); log(`lyrics: ${err}`);
-      setTimeout(() => { if (S.ly.key === key && S.ly.state === 'error') S.ly.key = ''; }, 30000); // try again later
-    });
-}
-function renderLyrics() {
-  const box = $('#lyrics'), lines = $('#lyLines'), d = S.ly.data, st = S.ly.state;
-  box.hidden = !S.lyricsOn || !S.media;
-  $('#muLyricsBtn').setAttribute('aria-pressed', S.lyricsOn);
-  let html = '', msg = '', foot = '';
-  if (st === 'loading') msg = 'Looking for lyrics…';
-  else if (st === 'error') msg = 'Couldn’t reach the lyrics service. Trying again in a bit.';
-  else if (st === 'none' || !d) msg = st === 'idle' ? '' : 'No lyrics found for this song.';
-  else if (d.lines.length) {
-    html = d.lines.map((l, i) => `<button type="button" class="ly-line${l.text ? '' : ' gap'}" data-i="${i}">${l.text ? esc(l.text) : '♪'}</button>`).join('');
-    foot = 'Lyrics from LRCLIB';
-  } else if (d.plain) {
-    html = d.plain.split('\n').map(t => `<p class="ly-line">${esc(t) || '&nbsp;'}</p>`).join('');
-    foot = 'Not time-synced · LRCLIB';
-  } else msg = 'Instrumental ♪';
-  box.classList.toggle('msg', !html);
-  lines.classList.toggle('plain', !!(d && !d.lines.length && d.plain));
-  lines.innerHTML = html || esc(msg);
-  $('#lyNote').textContent = foot;
-  lines.scrollTop = 0; S.ly.idx = -2;
-  syncLyric(curPos(), true);
-  if (S.mode === 'panel') layout();
-}
-/** Highlights the line being sung and keeps it in the middle of the box. */
-function syncLyric(pos, instant) {
-  const d = S.ly.data, timed = !!(d && d.lines.length);
-  let idx = -1;
-  if (timed) {
-    const t = pos + 0.3; // a beat early, like Apple Music
-    let lo = 0, hi = d.lines.length - 1;
-    while (lo <= hi) { const mid = (lo + hi) >> 1; if (d.lines[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
-  }
-  if (idx === S.ly.idx) return;
-  const first = S.ly.idx === -2;
-  S.ly.idx = idx;
-  const lines = $('#lyLines');
-  if (timed) {
-    const els = lines.children;
-    for (let i = 0; i < els.length; i++) { els[i].classList.toggle('on', i === idx); els[i].classList.toggle('past', i < idx); }
-    const el = els[Math.max(idx, 0)];
-    if (el && performance.now() > S.lyFollowPause && S.mode === 'panel' && S.tab === 'music') {
-      lines.scrollTo({ top: el.offsetTop - lines.clientHeight / 2 + el.offsetHeight / 2, behavior: instant || first || reduced ? 'auto' : 'smooth' });
-    }
-  }
-  const text = timed && idx >= 0 ? d.lines[idx].text : '';
-  $$('[data-m="lyric"]').forEach(e => { if (e.textContent !== text) { e.textContent = text; e.style.animation = 'none'; void e.offsetWidth; e.style.animation = ''; } });
-}
-$('#lyLines').addEventListener('click', e => {
-  const b = e.target.closest('.ly-line[data-i]'); if (!b || !S.ly.data) return;
-  const l = S.ly.data.lines[+b.dataset.i]; if (l) seekTo(l.t);
-});
-// Scrolling the lyrics yourself pauses the auto-follow for a few seconds.
-['wheel', 'pointerdown'].forEach(ev => $('#lyLines').addEventListener(ev, () => { S.lyFollowPause = performance.now() + 4000; }, { passive: true }));
-$('#muLyricsBtn').addEventListener('click', () => {
-  S.lyricsOn = !S.lyricsOn; store.set('lyrics', S.lyricsOn);
-  S.ly = { key: '', state: 'idle', data: null, idx: -1 };
-  renderLyrics(); maybeLyrics(S.media);
 });
 
 
@@ -1038,6 +881,7 @@ function renderWeather(d) {
   $('#wDesc').textContent = label;
   $('#wRange').textContent = `H ${conv(d.hi)}° · L ${conv(d.lo)}°`;
   $('#wCity').textContent = d.name;
+  renderRest(); renderMedia(); renderBar();
 }
 async function loadWeather(force) {
   const cache = store.get('weather', null);
@@ -1079,6 +923,7 @@ function renderTimer() {
   $$('#presets .chip').forEach(b => b.setAttribute('aria-pressed', +b.dataset.min === T.min));
   $('#pillTimer').hidden = !T.running;
   island.classList.toggle('timing', T.running);
+  renderRest();
 }
 const saveTimer = () => store.set('timer', S.timer);
 $('#presets').addEventListener('click', e => {
@@ -1836,7 +1681,7 @@ const htmlNow = new WeakMap();
 function setHtml(el, html) { if (htmlNow.get(el) === html) return false; htmlNow.set(el, html); el.innerHTML = html; return true; }
 /** Same for plain text. */
 function txt(el, s) { s = String(s); if (el.textContent !== s) el.textContent = s; }
-function applySkin() { island.dataset.skin = barEl.dataset.skin = S.dark ? 'dark' : 'light'; if (S.tint) setTint(S.tint); }
+function applySkin() { island.dataset.skin = barEl.dataset.skin = S.dark ? 'dark' : 'light'; }
 function applyStyle(style) {
   S.style = style === 'bar' || style === 'tall' ? style : 'island';
   const bar = isBar();
@@ -1878,7 +1723,9 @@ function renderBar() {
   if (!isBar()) return;
   const st = S.status || { wifi: {}, bluetooth: {}, net: {}, battery: {}, desktops: null, cpu: 0 };
   const d = new Date();
-  setHtml($('#barClock'), `<span>${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ${d.toLocaleDateString(undefined, { weekday: 'short' })}</span>`);
+  // The weather's icon and temperature just left of the clock (§4.11).
+  const wx = restWeather(store.get('weather', null), S.city, S.unit);
+  setHtml($('#barClock'), `${wx ? `<span class="bar-wx">${icon(wx.icon)}${wx.temp}°</span>` : ''}<span>${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ${d.toLocaleDateString(undefined, { weekday: 'short' })}</span>`);
   const a = S.audio;
   setHtml($('#barVol'), `${icon(a && (a.muted || a.level === 0) ? 'mute' : deviceIcon(a))}<span>${a ? (a.muted ? 'Muted' : Math.round(a.level * 100) + '%') : '–'}</span>`);
   const bt = $('#barBt'); bt.hidden = !st.bluetooth.present; bt.classList.toggle('on', !!st.bluetooth.on);
@@ -2028,6 +1875,7 @@ function tickClock() {
   $('#tHour').textContent = String(h12).padStart(2, '0'); $('#tMin').textContent = mm;
   $('#tSub').textContent = `${d.getHours() < 12 ? 'AM' : 'PM'} · ${d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}`;
   if (d.getDate() !== weekDay) renderWeek();
+  if (d.getMinutes() !== S.restMin) { S.restMin = d.getMinutes(); renderRest(); }
 }
 setInterval(tickClock, 1000);
 
@@ -2080,6 +1928,10 @@ const modHost = createModuleHost({
     showing: tab => S.mode === 'panel' && S.tab === tab,
     closePanel: keep => closePanel(keep),
     releaseFocus: () => quiet(invoke('release_focus')),
+    /** Brings a module's app forward ({ id, exe, hwnd }): the island does it, being the one in front. */
+    focusApp: app => invoke('focus_app', { id: app.id || '', exe: app.exe || '', hwnd: app.hwnd || null }),
+    /** A program's own volume by its image names (`|`-separated), like the Volume mixer's. */
+    audio: { appVolume: exe => invoke('app_volume_get', { exe }), setAppVolume: (exe, level) => invoke('app_volume_set', { exe, level }) },
     menu: (x, y, items) => showCtx(x, y, items),
     state: () => ({ mode: S.mode, tab: S.tab, dark: S.dark, style: S.style, cc: !!S.ccOpen, fullscreen: !!S.fullscreen }),
     on: (name, fn) => { const h = e => fn(e.detail); islandEvents.addEventListener(name, h); return () => islandEvents.removeEventListener(name, h); }
@@ -2092,7 +1944,7 @@ const modHost = createModuleHost({
   sectionsChanged: () => syncSections(),
   tabFailed: (tab, name, e) => { const v = views[tab]; if (v) v.querySelector('.mod-fail').textContent = `${name} couldn't load: ${e && e.message || e}`; layout(); }
 });
-/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities'. */
+/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities', 'level' (the equalizer's, 0–1). */
 const islandEvents = new EventTarget();
 /* ---------- a call on the pill and the top bar (a module's `call` activity, like Discord's) ----------
    Who's in it (up to three faces, a green ring on whoever's talking) and your own mute or deafen,
@@ -2118,8 +1970,10 @@ function renderPillCall() {
     w = 9 + 18 + (av.length - 1) * 12 + (a.icon ? 17 : 0);
   }
   if (w !== S.callW) { S.callW = w; layout(); }
+  renderRest();
 }
 islandEvents.addEventListener('activities', renderPillCall);
+islandEvents.addEventListener('activities', syncMedia);
 /** Views for module tabs come and go with the registry. */
 function syncViews() {
   const box = $('.views');
@@ -2255,7 +2109,6 @@ const cmdCenter = createCommandCenter({
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },
-  media: { curPos, seekTo, toggleLyrics: () => $('#muLyricsBtn').click() },
   setDark: on => { S.dark = on; store.set('dark', on); applySkin(); },
   apps: {
     appOf, appForWin, pinIdForWin, launch, openPinned, activate: activateWin,

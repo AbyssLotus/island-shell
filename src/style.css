@@ -61,6 +61,20 @@ body { color: var(--fg); font-family: var(--f-body); font-size: 13px; -webkit-fo
 .pill-dot { display: none; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 #island.no-media .pill .art, #island.no-media .pill .eq { display: none; }
 #island.no-media .pill-dot { display: block; }
+/* The pill at rest (§4.11): the weather and the date beside the clock. */
+.pill-right { display: flex; align-items: center; gap: 8px; }
+.pill-date { font: 500 13px/1 var(--f-body); color: var(--muted); }
+.pill-rest { display: flex; align-items: center; gap: 5px; margin-left: 4px; font: 500 13px/1 var(--f-body); font-variant-numeric: tabular-nums; }
+.pill-rest[hidden], .pill-date[hidden] { display: none; }
+.pill-rest .i { width: 16px; height: 16px; color: var(--accent-text); }
+#island.rest-wx .pill-dot { display: none; }
+.peek .art.wx { display: grid; place-items: center; background: var(--ink-2); }
+.peek .art.wx::before, .peek .art.wx::after { display: none; }
+.peek .art.wx .i { width: 28px; height: 28px; color: var(--accent-text); }
+.bar-wx { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.bar-wx .i { width: 14px; height: 14px; }
+/* Nothing playing, no now-playing card in Controls. */
+#island.no-media .card.media { display: none; }
 .art { position: relative; overflow: hidden; flex: none; border-radius: 8px; background: var(--art, var(--ink-3)); }
 .art::after { content: ""; position: absolute; width: 46%; aspect-ratio: 1; border-radius: 50%; right: 12%; bottom: 14%; background: rgba(255, 255, 255, .3); }
 .art::before { content: ""; position: absolute; left: -20%; right: -20%; bottom: -30%; height: 55%; border-radius: 50%; background: rgba(0, 0, 0, .18); }
@@ -472,79 +486,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .12s !important; transition-delay: 0s !important; }
 }
 
-/* ---------- music ---------- */
-#island { --tint: var(--accent); --on-tint: var(--on-accent); --lvl: 0; }
-.mu-hero { position: relative; isolation: isolate; display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 18px; padding: 14px; border-radius: 22px; overflow: hidden; background: color-mix(in oklab, var(--tint) 14%, var(--ink-2)); transition: background-color .8s ease; }
-.mu-backdrop { position: absolute; inset: -40px; z-index: -1; background: var(--art, none); filter: blur(46px) saturate(1.5); opacity: 0; transform: scale(1.1); transition: opacity .8s ease; }
-.mu-backdrop.has-thumb { opacity: .42; }
-#island[data-skin="light"] .mu-backdrop.has-thumb { opacity: .3; }
-.mu-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 30%, color-mix(in oklab, var(--ink-solid) 55%, transparent)); }
-.mu-art { width: 196px; height: 196px; border-radius: 18px; box-shadow: 0 22px 44px -18px color-mix(in srgb, var(--tint) calc(35% + var(--lvl) * 45%), transparent), 0 0 0 1px var(--line); transform: scale(calc(1 + var(--lvl) * .012)); transition: transform 90ms linear, box-shadow .2s linear; }
-#island:not(.playing) .mu-art { transform: scale(.94); transition: transform .6s var(--spring), box-shadow .6s ease; }
-.mu-side { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-.mu-src { display: flex; align-items: center; gap: 7px; min-height: 24px; margin-bottom: 4px; font-size: 11.5px; color: var(--muted); }
-.mu-app { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.mu-app::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .3s; }
-#island.playing .mu-app::before { background: var(--good); box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 22%, transparent); }
-.mu-badge { padding: 3px 7px; border-radius: 6px; font: 600 10px/1 var(--f-body); letter-spacing: .02em; color: var(--fg); background: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
-.mu-sources { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.mu-sources .chip { padding: 5px 9px; font-size: 11px; white-space: nowrap; }
-.mu-sources .chip.live::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 50%; background: var(--good); vertical-align: middle; }
-.mu-title { font: 650 21px/1.2 var(--f-display); letter-spacing: -.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.mu-title.new { animation: mu-in .5s var(--glide); }
-.mu-sub { display: flex; gap: 6px; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.mu-sub > span { overflow: hidden; text-overflow: ellipsis; }
-.mu-sub > span:first-child { color: color-mix(in oklab, var(--fg) 82%, var(--muted)); flex: none; max-width: 60%; }
-.mu-album:not(:empty)::before { content: "\00b7"; margin-right: 6px; }
-@keyframes mu-in { from { opacity: 0; transform: translateY(6px); } }
-.mu-prog { display: grid; grid-template-columns: 38px minmax(0, 1fr) 42px; align-items: center; gap: 8px; margin-top: 10px; font: 500 10.5px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.mu-prog > span:last-child { text-align: right; }
-.scrub { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 0; background: none; cursor: pointer; --p: 0%; }
-.scrub::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--tint) var(--p), var(--ink-3) var(--p)); transition: height .2s var(--spring); }
-.scrub:hover::-webkit-slider-runnable-track, .scrub:active::-webkit-slider-runnable-track { height: 8px; }
-.scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; margin-top: -4px; border-radius: 50%; background: var(--fg); box-shadow: 0 1px 6px rgba(0, 0, 0, .35); opacity: 0; transform: scale(.4); transition: opacity .2s, transform .25s var(--spring), margin-top .2s var(--spring); }
-.scrub:hover::-webkit-slider-thumb, .scrub:active::-webkit-slider-thumb { opacity: 1; transform: none; margin-top: -2.5px; }
-.scrub:disabled { cursor: default; }
-.scrub:disabled::-webkit-slider-thumb { display: none; }
-.mu-ctl { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
-.mu-ctl .ib { width: 40px; height: 40px; }
-.mu-ctl .ib .i { width: 19px; height: 19px; }
-.mu-ctl .ib.play { width: 50px; height: 50px; background: var(--tint); color: var(--on-tint); box-shadow: 0 10px 24px -10px var(--tint); transition: background-color .8s ease, color .8s ease, transform .15s; }
-.mu-ctl .ib.play .i { width: 21px; height: 21px; }
-.ib.tg { position: relative; color: var(--muted); }
-.ib.tg[aria-pressed="true"] { color: var(--tint); background: color-mix(in oklab, var(--tint) 16%, transparent); }
-.mu-ctl .ib.tg .i { width: 17px; height: 17px; }
-.ib.tg .rep1 { position: absolute; right: 7px; bottom: 7px; font: 700 8px/1 var(--f-mono); }
-.mu-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.mu-row .fav[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-soft); }
-.mu-row .fav[aria-pressed="true"] .i { fill: currentColor; }
-.mu-vol { display: flex; align-items: center; gap: 7px; width: 150px; height: 30px; padding: 0 10px; border-radius: 10px; background: var(--ink-2); color: var(--muted); }
-.mu-vol .i { width: 14px; height: 14px; }
-.mu-vol input { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 14px; margin: 0; background: none; cursor: pointer; --p: 100%; }
-.mu-vol input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--fg) var(--p), var(--ink-3) var(--p)); }
-.mu-vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border-radius: 50%; background: var(--fg); }
-#v-music .chip { white-space: nowrap; }
-#island.no-media .mu-ctl .ib, #island.no-media .mu-row { opacity: .4; pointer-events: none; }
-
-.lyrics { position: relative; margin-top: 8px; height: 214px; border-radius: 22px; background: var(--ink-2); overflow: hidden; }
-.ly-lines { position: relative; height: 100%; overflow-y: auto; scrollbar-width: none; padding: 84px 22px; -webkit-mask-image: linear-gradient(180deg, transparent, #000 26%, #000 70%, transparent); mask-image: linear-gradient(180deg, transparent, #000 26%, #000 70%, transparent); }
-.ly-lines::-webkit-scrollbar { display: none; }
-.ly-line { display: block; width: 100%; margin: 0; padding: 5px 8px; border: 0; border-radius: 10px; background: none; text-align: left; font: 650 19px/1.3 var(--f-display); letter-spacing: -.01em; color: var(--fg); opacity: .28; filter: blur(.6px); transform-origin: left center; transform: scale(.97); cursor: pointer; transition: opacity .5s ease, transform .6s var(--spring), filter .5s ease, background .2s; }
-.ly-line:hover { background: var(--ink-2); opacity: .55; }
-.ly-line.past { opacity: .42; filter: none; }
-.ly-line.on { opacity: 1; filter: none; transform: none; }
-.ly-line.gap { letter-spacing: .3em; }
-.ly-lines.plain { padding: 18px 22px 30px; }
-.ly-lines.plain .ly-line { font: 500 14px/1.5 var(--f-body); opacity: .8; filter: none; transform: none; cursor: default; padding: 0 8px; }
-.ly-lines.no-seek .ly-line { cursor: default; }
-.ly-note { position: absolute; right: 16px; bottom: 10px; margin: 0; font-size: 10.5px; color: var(--faint); pointer-events: none; }
-.ly-note:empty { display: none; }
-.lyrics.msg .ly-lines { display: grid; place-items: center; padding: 0 20px; text-align: center; -webkit-mask-image: none; mask-image: none; color: var(--muted); font-size: 13px; }
-@container (max-width: 560px) {
-  .mu-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 14px; }
-  .mu-art { width: 120px; height: 120px; }
-}
-
 /* ---------- network: what you're on, and module badges on the bar's network chip (VPN's shield) ---------- */
 .net-now { display: flex; align-items: center; gap: 8px; margin: 2px 4px 10px; font-size: 12px; color: var(--muted); }
 .net-now .i { width: 15px; height: 15px; color: var(--fg); }
@@ -688,10 +629,6 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .top .meter i, .bar i, .au-range::-webkit-slider-runnable-track { box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 60%, transparent); }
 /* Stats: the gauges' rings sit in a faint corona. */
 .gauge .ring { filter: drop-shadow(0 0 12px rgba(var(--glow), .12)); }
-/* Music: a cold corona round the album art that swells with the music; the sung line glows. */
-.mu-art { box-shadow: 0 22px 44px -18px color-mix(in srgb, var(--tint) calc(35% + var(--lvl) * 45%), transparent), 0 0 0 1px rgba(var(--glow), .16), 0 0 calc(26px + var(--lvl) * 30px) -8px rgba(var(--glow), calc(.25 + var(--lvl) * .35)); }
-.ly-line.on { text-shadow: 0 0 20px color-mix(in oklab, var(--tint) 55%, transparent), 0 0 1px rgba(255, 255, 255, .4); }
-.scrub::-webkit-slider-runnable-track { box-shadow: 0 0 10px -2px color-mix(in oklab, var(--tint) 60%, transparent); }
 /* Audio: the chosen device and the level meters in Taken light. */
 .au-dv[aria-checked="true"] .dot { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px var(--accent); }
 .au-app .meter i { background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 45%, transparent), var(--accent)); box-shadow: 0 0 8px var(--accent); }

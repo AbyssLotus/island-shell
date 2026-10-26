@@ -6,8 +6,8 @@
 // (island_rect with urgent).
 //
 // Some sections are their own apps here instead of the island's view: Today is a full calendar
-// (cc-calendar.js) and Music a full-size player with synced lyrics (cc-music.js); modules bring
-// their own (Games: the Steam library with each game's hero banner). The Stats cube opens
+// (cc-calendar.js) and Apps the Start menu (cc-apps.js); modules bring their own (Games: the
+// Steam library with each game's hero banner; Music: a full-size player with synced lyrics). The Stats cube opens
 // the Task Manager (cc-taskmgr.js), a window over the eclipse.
 //
 // Search covers Start apps, open windows, drives and folders, recently opened files, what modules add (Steam games),
@@ -16,7 +16,6 @@
 
 import { createCalendar } from './cc-calendar.js';
 import { createTaskManager } from './cc-taskmgr.js';
-import { createMusic } from './cc-music.js';
 import { createApps } from './cc-apps.js';
 import { createSetup } from './setup.js';
 import { placeCubes } from './registry.js';
@@ -115,14 +114,13 @@ export function createCommandCenter(ctx) {
   let isOpen = false, busy = false, wins = [], places = [], index = [], flat = [], sel = 0, scope = 'all', sheetTab = null, sheetMode = 'island', embedT = 0;
   let hist = store.get('ccHist', []), nextEv = null, nativeOn = null;
   const cal = createCalendar({ invoke, esc, ic, store, S, flash });
-  const mus = createMusic({ S, invoke, esc, ic, media: ctx.media, listen: ctx.listen, flash, close: after => close(after, true) });
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
   [['apps', 'Apps', 'grid'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
-    ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse'],
-    ['music', 'Music', 'note']].forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
-  for (const [id, app] of Object.entries({ apps: aps, today: cal, music: mus })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
+    ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse']]
+    .forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
+  for (const [id, app] of Object.entries({ apps: aps, today: cal })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
   const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
@@ -206,10 +204,6 @@ export function createCommandCenter(ctx) {
     const st = S.status || {}, list = [];
     // stay: keep the Command Center open afterwards ('quiet': and say nothing).
     const add = (name, icn, sub, keys, run, stay) => list.push({ kind: 'command', name, icon: icn, sub, keys, run, stay });
-    if (S.media) {
-      add(S.media.playing ? 'Pause the music' : 'Play the music', S.media.playing ? 'pause' : 'play', `${S.media.app || 'Music'} · ${S.media.title}`, 'apple music media play pause song', () => invoke('media_cmd', { action: 'toggle' }));
-      add('Next track', 'next', `${S.media.app || 'Music'}`, 'skip song music', () => invoke('media_cmd', { action: 'next' }));
-    }
     if (st.wifi && st.wifi.present) add(st.wifi.on ? 'Turn Wi-Fi off' : 'Turn Wi-Fi on', 'wifi', 'Wireless', 'wifi wireless internet', () => invoke('set_radio', { kind: 'wifi', on: !st.wifi.on }));
     if (st.bluetooth && st.bluetooth.present) add(st.bluetooth.on ? 'Turn Bluetooth off' : 'Turn Bluetooth on', 'bt', 'Wireless', 'bluetooth', () => invoke('set_radio', { kind: 'bluetooth', on: !st.bluetooth.on }));
     add(st.taskbar_hidden ? 'Show the taskbar' : 'Hide the taskbar', 'taskbar', 'Island Shell', 'taskbar windows', () => invoke('set_taskbar', { hidden: !st.taskbar_hidden }));
@@ -344,7 +338,6 @@ export function createCommandCenter(ctx) {
       case 'today': { if (nextEv) { const d = new Date(nextEv.start), sameDay = d.toDateString() === new Date().toDateString(); return `${nextEv.all_day ? (sameDay ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })) : (sameDay ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${nextEv.title}`; } const w = store.get('weather', null); return w ? `${Math.round(S.unit === 'C' ? w.temp : w.temp * 9 / 5 + 32)}° · ${w.name || ''}` : 'Weather & to-dos'; }
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
       case 'clipboard': return `${(S.clips || []).length} items`;
-      case 'music': { const m = S.media; return m ? `${m.playing ? '' : 'Paused · '}${m.title || 'Unknown title'}` : 'Nothing playing'; }
       case 'stats': return `CPU ${Math.round(st.cpu || 0)}%${st.cpu_temp != null ? ` · ${Math.round(st.cpu_temp)}°` : ''}`;
       default: return '';
     }

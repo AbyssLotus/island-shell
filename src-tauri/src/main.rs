@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod applemusic;
 mod apps;
 mod audio;
 mod bar;
@@ -15,10 +14,7 @@ mod gaze;
 mod icons;
 mod installed;
 mod island;
-mod lyrics;
-mod media;
 mod modules;
-mod music;
 mod places;
 mod power;
 mod radios;
@@ -68,9 +64,8 @@ pub struct Shared {
     pub bar_mode: AtomicBool,
     /// The taller bar ("tall" style).
     pub bar_tall: AtomicBool,
-    /// Media session the user picked in the Music tab (app id); empty = choose automatically.
-    pub media_source: Mutex<String>,
-    /// Process image name of the player being shown, for its volume and level meter.
+    /// The player the equalizer meters (image names, `|`-separated) and whether it plays: a module's
+    /// `media` activity's, through `meter_follow`.
     pub media_exe: Mutex<String>,
     pub media_playing: AtomicBool,
     /// A notification that must be seen is showing: the island is above everything, fullscreen apps too.
@@ -85,7 +80,6 @@ pub struct Shared {
 
 #[derive(Serialize, Clone, Default)]
 pub struct Status {
-    pub media: Option<media::MediaInfo>,
     pub audio: Option<audio::AudioInfo>,
     pub wifi: radios::RadioInfo,
     pub bluetooth: radios::RadioInfo,
@@ -108,13 +102,13 @@ struct Settings {
     /// "island", "bar" or "tall" (a taller bar).
     #[serde(default = "default_style")]
     style: String,
-    /// See `Shared::media_source`.
+    /// 0.1.x's choice of media session; kept for the Music module to read once, then unused.
     #[serde(default)]
     media_source: String,
     /// Eye-tracking features (only does anything with a Tobii tracker).
     #[serde(default = "default_true")]
     gaze: bool,
-    /// Pause the music after stepping away from the tracker; resume on return.
+    /// 0.1.x's "pause the music when I step away"; the Music module reads it once (it's its setting now).
     #[serde(default)]
     gaze_pause: bool,
 }
@@ -269,45 +263,48 @@ fn desktop_new() {
     bar::new_desktop();
 }
 
+/// What the equalizer meters (spawn_meter): a module's player, by its image names (`|`-separated),
+/// while it plays. The Music module's `media` activity carries them.
 #[tauri::command]
-async fn media_thumb(shared: Shr<'_>) -> Result<tauri::ipc::Response, String> {
-    let preferred = shared.media_source.lock().unwrap().clone();
-    // Raw bytes (an ArrayBuffer in the page; empty when there's no artwork).
-    let bytes = blocking(move || media::manager().and_then(|m| media::thumbnail(&m, &preferred))).await?;
-    Ok(tauri::ipc::Response::new(bytes.unwrap_or_default()))
+fn meter_follow(exe: String, playing: bool, shared: Shr) {
+    *shared.media_exe.lock().unwrap() = exe;
+    shared.media_playing.store(playing, Ordering::Relaxed);
 }
 
-/// toggle, next, prev, seek (`value` = seconds), shuffle, repeat, favorite, open.
+/// A program's own volume (0–1), by its image names (`|`-separated), like the Volume mixer's.
 #[tauri::command]
-async fn media_cmd(action: String, value: Option<f64>, shared: Shr<'_>) -> Result<(), String> {
-    let preferred = shared.media_source.lock().unwrap().clone();
-    blocking(move || {
-        let m = media::manager().ok_or("Nothing is playing")?;
-        media::command(&m, &preferred, &action, value.unwrap_or(0.0))
-    })
-    .await?
+async fn app_volume_get(exe: String) -> Option<f32> {
+    blocking(move || audio::app_volume(&exe)).await.ok().flatten()
 }
 
-/// Shows this media session instead of choosing automatically ("" = automatic again).
 #[tauri::command]
-fn media_source(id: String, shared: Shr) {
-    *shared.media_source.lock().unwrap() = id.clone();
-    let mut settings = Settings::load(&shared.dir);
-    settings.media_source = id;
-    settings.save(&shared.dir);
-}
-
-/// Sets the volume of the player being shown (not the whole PC).
-#[tauri::command]
-async fn media_app_volume(level: f32, shared: Shr<'_>) -> Result<(), String> {
-    let exe = shared.media_exe.lock().unwrap().clone();
+async fn app_volume_set(exe: String, level: f32) -> Result<(), String> {
     blocking(move || audio::set_app_volume(&exe, level)).await?
 }
 
+/// Brings a module's app forward (the Music module's player): its window when `hwnd` is still one,
+/// else a window of the app (`id` its app id, `exe` its image names), else, for a Store app, starts
+/// it. The island does it because it's the one in front when you ask.
 #[tauri::command]
-async fn media_lyrics(title: String, artist: String, album: String, duration: f64, shared: Shr<'_>) -> Result<Option<lyrics::Lyrics>, String> {
-    let dir = shared.dir.clone();
-    blocking(move || lyrics::fetch(&dir, &title, &artist, &album, duration)).await?
+async fn focus_app(id: String, exe: String, hwnd: Option<isize>) -> Result<(), String> {
+    blocking(move || {
+        if let Some(h) = hwnd.filter(|h| *h != 0) {
+            if running::activate(h).is_ok() {
+                return Ok(());
+            }
+        }
+        let exes: Vec<String> = exe.split('|').filter(|e| !e.is_empty()).map(|e| e.to_lowercase()).collect();
+        let windows = running::list(&util::data_dir(), 0);
+        let hit = windows.iter().find(|w| {
+            (!id.is_empty() && w.aumid.as_deref() == Some(id.as_str())) || w.exe.rsplit('\\').next().is_some_and(|e| exes.iter().any(|x| *x == e.to_lowercase()))
+        });
+        match hit {
+            Some(w) => running::activate(w.hwnd),
+            None if id.contains('!') => apps::launch(&id),
+            None => Err("Couldn't find the player's window".into()),
+        }
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -315,19 +312,15 @@ fn gaze_status() -> gaze::Status {
     gaze::status()
 }
 
-/// Turns eye tracking on/off and/or the pause-when-away option.
+/// Turns eye tracking on or off.
 #[tauri::command]
-fn gaze_set(enabled: Option<bool>, pause_when_away: Option<bool>, app: AppHandle, shared: Shr) -> gaze::Status {
+fn gaze_set(enabled: Option<bool>, app: AppHandle, shared: Shr) -> gaze::Status {
     let mut settings = Settings::load(&shared.dir);
     {
         let mut st = gaze::STATUS.lock().unwrap();
         if let Some(on) = enabled {
             st.enabled = on;
             settings.gaze = on;
-        }
-        if let Some(on) = pause_when_away {
-            st.pause_when_away = on;
-            settings.gaze_pause = on;
         }
     }
     settings.save(&shared.dir);
@@ -441,12 +434,6 @@ fn open_link(url: String) -> Result<(), String> {
         return Err("Not a web link".into());
     }
     util::open_web(&url)
-}
-
-/// The Music sheet's cover, year, genre and Apple Music link for a song (see music.rs).
-#[tauri::command]
-async fn music_info(title: String, artist: String, album: String) -> Result<music::Info, String> {
-    blocking(move || music::info(&title, &artist, &album)).await?
 }
 
 /// The Command Center's Task Manager (see taskmgr.rs): the latest sample, None until the first.
@@ -863,32 +850,13 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
     std::thread::spawn(move || {
         util::com_mta();
         let own = island::hwnd_of(&win);
-        let mut mgr = media::manager();
         let mut tick: u64 = 0;
         let (mut wifi, mut bt, mut net) = Default::default();
         let mut battery = bar::Battery::default();
-        let mut media_sig = None;
         loop {
             if tick % 10 == 0 {
                 battery = bar::battery();
             }
-            if mgr.is_none() && tick % 10 == 0 {
-                mgr = media::manager();
-            }
-            let preferred = shared.media_source.lock().unwrap().clone();
-            let mut media = mgr.as_ref().and_then(|m| media::snapshot(m, &preferred));
-            if let Some(m) = media.as_mut() {
-                m.app_volume = audio::app_volume(&m.exe);
-            }
-            *shared.media_exe.lock().unwrap() = media.as_ref().map(|m| m.exe.clone()).unwrap_or_default();
-            // What's playing, for modules (the Discord module's status), when the song, play state or
-            // position jumps (a seek). The Music module publishes it itself once it takes over.
-            let sig = media.as_ref().map(|m| (m.key.clone(), m.playing, if m.playing { (m.sampled_at as i64 - (m.position * 1000.0) as i64) / 3000 } else { 0 }));
-            if sig != media_sig {
-                media_sig = sig;
-                modules::publish(island_host::proto::topic::MEDIA_STATE, media::topic(media.as_ref()));
-            }
-            shared.media_playing.store(media.as_ref().is_some_and(|m| m.playing), Ordering::Relaxed);
             let audio = audio::info();
             if tick % 3 == 0 {
                 (wifi, bt) = radios::radios();
@@ -923,7 +891,6 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
                 bar::ensure(h, p.monitor, (height * p.scale).round() as i32, fade && !shared.urgent.load(Ordering::Relaxed));
             }
             *shared.status.lock().unwrap() = Status {
-                media,
                 audio,
                 wifi: wifi.clone(),
                 bluetooth: bt.clone(),
@@ -1073,7 +1040,6 @@ fn main() {
         raised: AtomicBool::new(false),
         bar_mode: AtomicBool::new(is_bar_style(&settings.style)),
         bar_tall: AtomicBool::new(settings.style == "tall"),
-        media_source: Mutex::new(settings.media_source.clone()),
         media_exe: Mutex::new(String::new()),
         media_playing: AtomicBool::new(false),
         active: AtomicBool::new(false),
@@ -1121,11 +1087,10 @@ fn main() {
         .manage(shared.clone())
         .invoke_handler(tauri::generate_handler![
             get_status,
-            media_thumb,
-            media_cmd,
-            media_source,
-            media_app_volume,
-            media_lyrics,
+            meter_follow,
+            app_volume_get,
+            app_volume_set,
+            focus_app,
             audio_devices,
             cc_mode,
             cc_places,
@@ -1143,7 +1108,6 @@ fn main() {
             calendar_delete,
             open_link,
             tm_snapshot,
-            music_info,
             tm_end,
             tm_eco,
             tm_startup,
@@ -1263,9 +1227,8 @@ fn main() {
             }
 
             island::spawn_cursor(win.clone(), shared.clone());
-            applemusic::spawn();
             embed::spawn_reaper(app.handle().clone());
-            gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze, settings.gaze_pause);
+            gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze);
             spawn_meter(win.clone(), shared.clone());
             spawn_status(win, shared.clone());
             stats::spawn(shared.clone());

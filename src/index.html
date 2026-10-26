@@ -45,13 +45,14 @@
         <span class="art mini" data-m="art"></span>
         <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span class="pill-dot" aria-hidden="true"></span>
+        <span class="pill-rest" id="pillRest" hidden></span>
         <span class="pill-timer" id="pillTimer" hidden>
           <svg class="mini-ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="trk" cx="10" cy="10" r="8"/><circle class="val" id="pillRing" cx="10" cy="10" r="8"/></svg>
           <b id="pillTimerTxt">25:00</b>
         </span>
         <span class="pill-call" id="pillCall" hidden></span>
       </span>
-      <span class="pill-time" id="pillTime"></span>
+      <span class="pill-right"><span class="pill-date" id="pillDate" hidden></span><span class="pill-time" id="pillTime"></span></span>
     </div>
   </div>
 
@@ -119,47 +120,6 @@
             <button class="ib" type="button" data-act="next" aria-label="Next track"><i data-ic="next"></i></button>
           </div>
         </div>
-      </section>
-
-      <section class="view" id="v-music" data-tab="music" role="tabpanel" aria-labelledby="tab-music">
-        <div class="mu-hero">
-          <div class="mu-backdrop" data-m="art" aria-hidden="true"></div>
-          <div class="mu-art art" data-m="art"></div>
-          <div class="mu-side">
-            <div class="mu-src">
-              <span class="mu-app" id="muApp"></span>
-              <span class="mu-badge" id="muBadge" hidden></span>
-              <span class="grow"></span>
-              <div class="mu-sources" id="muSources" role="group" aria-label="Player"></div>
-            </div>
-            <b class="mu-title" data-m="title"></b>
-            <span class="mu-sub"><span data-m="artist"></span><span class="mu-album" id="muAlbum"></span></span>
-            <div class="mu-prog">
-              <span data-m="pos">0:00</span>
-              <input class="scrub" id="muSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Song position">
-              <span id="muLeft">-0:00</span>
-            </div>
-            <div class="mu-ctl">
-              <button class="ib tg" type="button" data-act="shuffle" aria-label="Shuffle" aria-pressed="false"><i data-ic="shuffle"></i></button>
-              <button class="ib" type="button" data-act="prev" aria-label="Previous track"><i data-ic="prev"></i></button>
-              <button class="ib play" type="button" data-act="toggle" aria-label="Play"></button>
-              <button class="ib" type="button" data-act="next" aria-label="Next track"><i data-ic="next"></i></button>
-              <button class="ib tg" type="button" data-act="repeat" aria-label="Repeat" aria-pressed="false"><i data-ic="repeat"></i></button>
-            </div>
-            <div class="mu-row">
-              <button class="ib tg fav" type="button" data-act="favorite" aria-label="Favorite" aria-pressed="false"><i data-ic="star"></i></button>
-              <label class="mu-vol" id="muVolWrap"><i data-ic="speaker"></i><input id="muVol" type="range" min="0" max="100" value="100" aria-label="Player volume"></label>
-              <span class="grow"></span>
-              <button class="chip" type="button" id="muLyricsBtn" aria-pressed="true">Lyrics</button>
-              <button class="chip" type="button" data-act="open" id="muOpen">Open</button>
-            </div>
-          </div>
-        </div>
-        <div class="lyrics" id="lyrics">
-          <div class="ly-lines" id="lyLines"></div>
-          <p class="ly-note" id="lyNote"></p>
-        </div>
-        <p class="note" id="muNote" hidden></p>
       </section>
 
       <section class="view" id="v-audio" data-tab="audio" role="tabpanel" aria-labelledby="tab-audio">

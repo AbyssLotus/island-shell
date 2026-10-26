@@ -8,12 +8,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use windows::core::HSTRING;
-use windows::Foundation::Uri;
-use windows::Web::Http::HttpClient;
 
 const API: &str = "https://lrclib.net/api";
-const USER_AGENT: &str = "IslandShell/0.1 (personal Windows desktop shell)";
 /// How long to wait before asking again about a song LRCLIB didn't have.
 const RETRY_MISS_MS: u64 = 12 * 60 * 60 * 1000;
 
@@ -39,6 +35,7 @@ struct Cached {
     at: u64,
 }
 
+/// `dir` is the module's cache folder (lyrics can always be looked up again).
 pub fn fetch(dir: &Path, title: &str, artist: &str, album: &str, duration: f64) -> Result<Option<Lyrics>, String> {
     if title.trim().is_empty() {
         return Ok(None);
@@ -46,13 +43,13 @@ pub fn fetch(dir: &Path, title: &str, artist: &str, album: &str, duration: f64) 
     let cache_dir = dir.join("lyrics");
     let file = cache_dir.join(format!("{:016x}.json", fnv(&format!("{artist}\n{title}\n{album}"))));
     if let Some(c) = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Cached>(&b).ok()) {
-        if c.found.is_some() || crate::util::now_ms().saturating_sub(c.at) < RETRY_MISS_MS {
+        if c.found.is_some() || crate::now_ms().saturating_sub(c.at) < RETRY_MISS_MS {
             return Ok(c.found);
         }
     }
     let found = lookup(title, artist, album, duration)?;
     let _ = std::fs::create_dir_all(&cache_dir);
-    let cached = Cached { found, at: crate::util::now_ms() };
+    let cached = Cached { found, at: crate::now_ms() };
     if let Ok(b) = serde_json::to_vec(&cached) {
         let _ = std::fs::write(&file, b);
     }
@@ -78,7 +75,7 @@ fn lookup(title: &str, artist: &str, album: &str, duration: f64) -> Result<Optio
                 }
             }
             Ok(None) => {}
-            Err(e) => crate::util::log_line(&format!("{e}; trying a search instead")),
+            Err(e) => crate::log_line(&format!("{e}; trying a search instead")),
         }
     }
     // Then a search with a cleaned-up title ("Song (feat. X)" → "Song") and the first artist only.
@@ -177,22 +174,16 @@ fn main_artist(a: &str) -> String {
     s.trim().to_string()
 }
 
-/// GET → Some(body), None for 404 (LRCLIB's "not found").
+/// GET → Some(body), None for 404 (LRCLIB's "not found"). Through the SDK, so only lrclib.net.
 fn get(url: &str) -> Result<Option<String>, String> {
-    let e = |e: windows::core::Error| format!("lyrics lookup failed: {}", e.message());
-    let client = HttpClient::new().map_err(e)?;
-    let _ = client.DefaultRequestHeaders().and_then(|h| h.UserAgent()).and_then(|ua| ua.TryParseAdd(&HSTRING::from(USER_AGENT)));
-    let uri = Uri::CreateUri(&HSTRING::from(url)).map_err(e)?;
-    let resp = client.GetAsync(&uri).and_then(|op| op.get()).map_err(e)?;
-    let status = resp.StatusCode().map_err(e)?.0;
-    if status == 404 {
+    let resp = island_module::http::get(url).map_err(|e| format!("lyrics lookup failed: {e}"))?;
+    if resp.status == 404 {
         return Ok(None);
     }
-    if !(200..300).contains(&status) {
-        return Err(format!("lyrics lookup failed: HTTP {status}"));
+    if !resp.ok() {
+        return Err(format!("lyrics lookup failed: HTTP {}", resp.status));
     }
-    let body = resp.Content().and_then(|c| c.ReadAsStringAsync()).and_then(|op| op.get()).map_err(e)?;
-    Ok(Some(body.to_string()))
+    Ok(Some(resp.text()))
 }
 
 /// Percent-encodes a query value.

@@ -1,17 +1,19 @@
 // The Command Center's Music sheet: what's playing, full size. A big cover that glows with the
 // music, the song's year and genre, a progress bar you can drag, the player's controls, and the
-// synced lyrics (click a line to jump there). It reads the island's own state (the song, where it
-// is, the lyrics it already looked up) and asks music.rs for the full-size cover from Apple's
-// catalog. The play / next / shuffle / repeat / favorite buttons are the island's own data-act
-// buttons, so they behave exactly like the Music tab's.
+// synced lyrics (click a line to jump there). It reads `core` (music.js: the song, where it is,
+// the lyrics already looked up) and asks the backend for the full-size cover from Apple's catalog.
+// Moved from the island's cc-music.js.
 
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function createMusic({ S, invoke, esc, ic, media, listen, flash, close }) {
-  let el = null, raf = 0, unlisten = null;
+export function createSheet(core) {
+  let el = null, raf = 0, offLevel = null;
   let metaKey = '', lyKey = '', lyIdx = -2, followPause = 0, lastSec = -1, lvl = 0;
-  let info = null, infoFor = '', cover = '', coverFor = '', scrub = null, volAt = 0, volT = 0;
+  let info = null, infoFor = '', cover = '', scrub = null, volAt = 0, volT = 0;
+  const ctx = () => core.ctx;
+  const ic = n => ctx().ui.icon(n), esc = s => ctx().ui.esc(s);
+  const flash = msg => ctx().island.flash(msg);
   const $ = s => el && el.querySelector(s);
 
   function build() {
@@ -46,26 +48,26 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
   function wantInfo(m) {
     const k = m ? `${m.title}\n${m.artist}\n${m.album || ''}` : '';
     if (k === infoFor) return;
-    infoFor = k; info = null; cover = ''; coverFor = '';
+    infoFor = k; info = null; cover = '';
     if (!m || !m.title) return;
-    invoke('music_info', { title: m.title, artist: m.artist || '', album: m.album || '' }).then(r => {
+    ctx().call('info', { title: m.title, artist: m.artist || '', album: m.album || '' }).then(r => {
       if (infoFor !== k) return;
       info = r; metaKey = '';
       // The full-size cover replaces the player's small one once it has loaded.
-      if (r && r.cover) { const img = new Image(); img.onload = () => { if (infoFor === k) { cover = r.cover; coverFor = k; metaKey = ''; } }; img.src = r.cover; }
+      if (r && r.cover) { const img = new Image(); img.onload = () => { if (infoFor === k) { cover = r.cover; metaKey = ''; } }; img.src = r.cover; }
     }).catch(() => {});
   }
   function renderMeta(m) {
     el.classList.toggle('idle', !m);
     $('.mus-empty').hidden = !!m;
     if (!m) return;
-    const art = cover || S.thumb || '';
+    const art = cover || core.art() || '';
     const img = $('.mus-cover');
     if (art && img.getAttribute('src') !== art) img.src = art;
     img.hidden = !art; $('.mus-art .mus-ph').hidden = !!art;
     $('.mus-bg').style.backgroundImage = $('.mus-glow').style.backgroundImage = art ? `url("${art}")` : 'none';
-    const t = S.tint ? S.tint.map(v => Math.round(v)).join(',') : '190,230,255';
-    el.style.setProperty('--mt', t);
+    const rgb = core.rgb();
+    el.style.setProperty('--mt', rgb ? rgb.map(v => Math.round(v)).join(',') : '190,230,255');
     $('.mus-src').innerHTML = `<span class="mus-dot${m.playing ? ' on' : ''}"></span>${esc(m.app)}${m.badge ? `<b class="mus-badge">${esc(m.badge)}</b>` : ''}`;
     $('.mus-title').textContent = m.title || 'Unknown title';
     $('.mus-artist').textContent = [m.artist, m.album || (info && info.album)].filter(Boolean).join(' — ');
@@ -77,11 +79,12 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
     const play = $('[data-act="toggle"]'); play.innerHTML = ic(m.playing ? 'pause' : 'play'); play.setAttribute('aria-label', m.playing ? 'Pause' : 'Play');
     $('[data-act="next"]').disabled = !m.can_next; $('[data-act="prev"]').disabled = !m.can_prev;
     const fav = $('[data-act="favorite"]'); fav.hidden = m.favorite == null; fav.setAttribute('aria-pressed', !!m.favorite); fav.title = m.favorite ? 'Favorited' : 'Favorite';
-    const vw = $('.mus-vol'), vol = vw.querySelector('input');
-    vw.hidden = m.app_volume == null;
-    if (m.app_volume != null && performance.now() - volAt > 1500) { vol.value = Math.round(m.app_volume * 100); vol.style.setProperty('--p', vol.value + '%'); }
-    $('[data-mu="lyrics"]').innerHTML = `${ic('text')}${S.lyricsOn ? 'Lyrics on' : 'Lyrics off'}`;
-    $('[data-mu="lyrics"]').setAttribute('aria-pressed', !!S.lyricsOn);
+    const v = core.volume(), vw = $('.mus-vol'), vol = vw.querySelector('input');
+    vw.hidden = v == null;
+    if (v != null && performance.now() - volAt > 1500) { vol.value = Math.round(v * 100); vol.style.setProperty('--p', vol.value + '%'); }
+    const on = core.lyricsOn();
+    $('[data-mu="lyrics"]').innerHTML = `${ic('text')}${on ? 'Lyrics on' : 'Lyrics off'}`;
+    $('[data-mu="lyrics"]').setAttribute('aria-pressed', !!on);
     $('[data-mu="link"]').hidden = !(info && info.link);
     $('[data-mu="open"]').innerHTML = `${ic('ext')}Open ${esc(m.app)}`;
     const ss = m.sessions || [];
@@ -93,9 +96,9 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
 
   /* ---------- lyrics ---------- */
   function renderLyrics() {
-    const box = $('.mus-ly'), ly = S.ly || {}, d = ly.data, st = ly.state;
+    const box = $('.mus-ly'), ly = core.lyrics(), d = ly.data, st = ly.state;
     let html = '', msg = '', foot = '';
-    if (!S.lyricsOn) msg = 'Lyrics are off.';
+    if (!core.lyricsOn()) msg = 'Lyrics are off.';
     else if (st === 'loading') msg = 'Looking for lyrics…';
     else if (st === 'error') msg = 'Couldn’t reach the lyrics service. Trying again in a bit.';
     else if (!d) msg = st === 'none' ? 'No lyrics found for this song.' : '';
@@ -108,10 +111,8 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
     box.scrollTop = 0; lyIdx = -2;
   }
   function syncLyrics(pos) {
-    const d = S.ly && S.ly.data; if (!d || !d.lines.length) return;
-    const t = pos + .3;
-    let idx = -1, lo = 0, hi = d.lines.length - 1;
-    while (lo <= hi) { const mid = (lo + hi) >> 1; if (d.lines[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+    const d = core.lyrics().data; if (!d || !d.lines.length) return;
+    const idx = core.lineAt(pos);
     if (idx === lyIdx) return;
     const first = lyIdx === -2; lyIdx = idx;
     const box = $('.mus-ly'), els = box.querySelectorAll('.mus-line');
@@ -123,21 +124,21 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
   /* ---------- every frame while it shows ---------- */
   function frame() {
     raf = 0; if (!el) return;
-    const m = S.media;
+    const m = core.media(), ly = core.lyrics();
     wantInfo(m);
-    const k = m ? [m.key, m.playing, m.shuffle, m.repeat, m.favorite, m.badge, m.app_volume, m.can_next, m.can_prev, m.can_seek, m.pinned, (m.sessions || []).map(x => x.id + x.playing).join(), S.thumb, cover, info ? 1 : 0, S.lyricsOn, S.tint && S.tint.join()].join('|') : 'none';
+    const k = m ? [m.key, m.playing, m.shuffle, m.repeat, m.favorite, m.badge, core.volume(), m.can_next, m.can_prev, m.can_seek, m.pinned, (m.sessions || []).map(x => x.id + x.playing).join(), core.art(), cover, info ? 1 : 0, core.lyricsOn(), (core.rgb() || []).join()].join('|') : 'none';
     if (k !== metaKey) { metaKey = k; renderMeta(m); }
-    const ly = S.ly || {}, lk = [ly.key, ly.state, ly.data ? 1 : 0, S.lyricsOn, !!m].join('|');
+    const lk = [ly.key, ly.state, ly.data ? 1 : 0, core.lyricsOn(), !!m].join('|');
     if (lk !== lyKey) { lyKey = lk; renderLyrics(); }
     if (m) {
-      const dur = m.duration || 0, pos = scrub != null ? scrub * dur : media.curPos();
+      const dur = m.duration || 0, pos = scrub != null ? scrub * dur : core.curPos();
       const pct = dur > 0 ? clamp(pos / dur, 0, 1) : 0;
       el.style.setProperty('--pp', (pct * 100).toFixed(3) + '%');
       const sec = Math.floor(pos);
       if (sec !== lastSec) { lastSec = sec; $('.mus-pos').textContent = fmt(pos); $('.mus-rem').textContent = dur > 0 ? '-' + fmt(dur - sec) : ''; const bar = $('.mus-bar'); bar.setAttribute('aria-valuemax', Math.round(dur)); bar.setAttribute('aria-valuenow', sec); bar.setAttribute('aria-valuetext', `${fmt(pos)} of ${fmt(dur)}`); }
       if (scrub == null) syncLyrics(pos);
     }
-    lvl *= .9;
+    lvl *= 0.9;
     el.style.setProperty('--lvl', lvl.toFixed(3));
     raf = requestAnimationFrame(frame);
   }
@@ -145,61 +146,61 @@ export function createMusic({ S, invoke, esc, ic, media, listen, flash, close })
   /* ---------- input ---------- */
   function onClick(e) {
     const t = e.target;
+    const a = t.closest('[data-act]');
+    if (a) { if (!a.disabled) core.act(a.dataset.act).catch(err => flash(String(err && err.message || err))); return; }
     const line = t.closest('.mus-line[data-i]');
-    if (line && S.ly && S.ly.data && S.media && S.media.can_seek) { const l = S.ly.data.lines[+line.dataset.i]; if (l) { media.seekTo(l.t); lyIdx = -2; followPause = 0; } return; }
+    const m = core.media(), d = core.lyrics().data;
+    if (line && d && m && m.can_seek) { const l = d.lines[+line.dataset.i]; if (l) { core.seekTo(l.t).catch(() => {}); lyIdx = -2; followPause = 0; } return; }
     const b = t.closest('[data-mu]');
     if (b) {
       const k = b.dataset.mu;
-      if (k === 'lyrics') media.toggleLyrics();
-      else if (k === 'link' && info && info.link) invoke('copy_text', { text: info.link }).then(() => flash('Song link copied')).catch(err => flash(String(err)));
-      else if (k === 'open') close(() => invoke('media_cmd', { action: 'open' }).catch(() => {}));
+      if (k === 'lyrics') core.toggleLyrics();
+      else if (k === 'link' && info && info.link) navigator.clipboard.writeText(info.link).then(() => flash('Song link copied')).catch(err => flash(String(err)));
+      else if (k === 'open') ctx().island.closeCommandCenter(() => core.act('open').catch(() => {}));
       return;
     }
     const src = t.closest('[data-src]');
-    if (src) invoke('media_source', { id: src.dataset.src }).catch(err => flash(String(err)));
+    if (src) core.setSource(src.dataset.src).catch(err => flash(String(err && err.message || err)));
   }
   function fracAt(x) { const r = $('.mus-bar').getBoundingClientRect(); return clamp((x - r.left) / r.width, 0, 1); }
   function onPointerDown(e) {
-    const bar = e.target.closest('.mus-bar'); const m = S.media;
+    const bar = e.target.closest('.mus-bar'); const m = core.media();
     if (!bar || e.button !== 0 || !m || !m.can_seek || !(m.duration > 0)) return;
     bar.setPointerCapture(e.pointerId); el.classList.add('scrubbing'); scrub = fracAt(e.clientX);
     const move = ev => { scrub = fracAt(ev.clientX); };
-    const up = ev => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); el.classList.remove('scrubbing'); const f = fracAt(ev.clientX); scrub = null; media.seekTo(f * m.duration); lyIdx = -2; };
+    const up = ev => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); el.classList.remove('scrubbing'); const f = fracAt(ev.clientX); scrub = null; core.seekTo(f * m.duration).catch(() => {}); lyIdx = -2; };
     bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
   }
   function onInput(e) {
     const r = e.target.closest('.mus-vol input'); if (!r) return;
     r.style.setProperty('--p', r.value + '%'); volAt = performance.now();
-    clearTimeout(volT); volT = setTimeout(() => invoke('media_app_volume', { level: r.value / 100 }).catch(err => flash(String(err))), 40);
+    clearTimeout(volT); volT = setTimeout(() => core.setVolume(r.value / 100).catch(err => flash(String(err && err.message || err))), 40);
   }
   /** Keys while the sheet shows; true when it used the key. */
   function key(e) {
     if (!el || (e.target.matches && e.target.matches('input, textarea, select'))) return false;
-    const m = S.media;
+    const m = core.media();
     if (e.key === ' ' && m) { el.querySelector('[data-act="toggle"]').click(); return true; }
-    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && m && m.can_seek) { media.seekTo(media.curPos() + (e.key === 'ArrowRight' ? 10 : -10)); lyIdx = -2; return true; }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && m && m.can_seek) { core.seekTo(core.curPos() + (e.key === 'ArrowRight' ? 10 : -10)).catch(() => {}); lyIdx = -2; return true; }
     if ((e.key === 'n' || e.key === 'N') && m && m.can_next) { el.querySelector('[data-act="next"]').click(); return true; }
     if ((e.key === 'p' || e.key === 'P') && m && m.can_prev) { el.querySelector('[data-act="prev"]').click(); return true; }
-    if (e.key === 'l' || e.key === 'L') { media.toggleLyrics(); return true; }
+    if (e.key === 'l' || e.key === 'L') { core.toggleLyrics(); return true; }
     return false;
   }
 
   return {
-    async mount(host) {
+    mount(host) {
       el = document.createElement('div'); el.className = 'mus';
       build(); host.append(el);
       el.addEventListener('click', onClick); el.addEventListener('pointerdown', onPointerDown); el.addEventListener('input', onInput);
       // Scrolling the lyrics yourself pauses the auto-follow for a few seconds.
       const box = $('.mus-ly');
       ['wheel', 'pointerdown'].forEach(ev => box.addEventListener(ev, () => { followPause = performance.now() + 4000; }, { passive: true }));
+      core.refreshVolume();
+      offLevel = core.onLevel(v => { lvl = Math.max(v, lvl); });
       cancelAnimationFrame(raf); frame(); // draws now, then once a frame
-      const mine = el;
-      try {
-        const un = await listen('media:level', e => { lvl = Math.max(Math.pow(clamp(+e.payload || 0, 0, 1), .7), lvl); });
-        if (el === mine) unlisten = un; else un();
-      } catch (err) {}
     },
-    unmount() { cancelAnimationFrame(raf); raf = 0; if (unlisten) { unlisten(); unlisten = null; } if (el) el.remove(); el = null; scrub = null; },
+    unmount() { cancelAnimationFrame(raf); raf = 0; if (offLevel) { offLevel(); offLevel = null; } if (el) el.remove(); el = null; scrub = null; },
     key
   };
 }

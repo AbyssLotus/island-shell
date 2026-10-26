@@ -195,7 +195,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | `power` | base | `{ state: "suspend" \| "resume" }` |
 | `theme` | base | `{ dark, accent }` |
 | `media.state` | music | `{ playing, app, source, title, artist, album, duration, position }` |
-| `presence` | gaze | `{ state: "looking" \| "present" \| "away" }` |
+| `presence` | gaze | `{ state: "looking" \| "present" \| "away" }`: "away" once nobody has been in front of the tracker for 10 s |
 
 Late subscribers get the last value immediately. Topics are only state, never commands. For example, Music reacts to `presence: away` by pausing itself, if its "pause when I step away" setting is on. That setting moves from the Tobii settings into Music's.
 
@@ -204,6 +204,7 @@ Late subscribers get the last value immediately. Topics are only state, never co
 `{ id, kind: "media" | "call" | "timer" | "custom", priority, icon?, art?, text, sub?, progress?: 0..1, action?: "tab:<id>", avatars?: [{ id, src, talk }] }`
 
 - Priority defaults by kind: call 30, timer 20, media 10, custom 5.
+- A `media` activity is what's playing: `{ text: title, sub: artist, app, art, playing, position, sampled_at, duration, can_next, can_prev, key, exe, lyric, action, run(action) }`. The island draws its pill cover and equalizer, peek, Controls card and top-bar chip from the highest one; their buttons call `run('toggle' | 'next' | 'prev')`, the equalizer meters `exe` (image names, `|`-separated), and `lyric` is the line being sung for the peek. Without one, the pill is at rest (§4.11) and Controls has no now-playing card.
 - A `call` activity with `avatars` draws on the pill beside the clock: up to three faces, a green ring on each `talk`, and `icon` (your own mute or deafen). Only the rings change while the faces stay the same, so talking doesn't redraw anything. Bar chips take the same `avatars`.
 - The pill shows the highest priority, and on a tie the most recent. The base's own Pomodoro timer becomes a base activity.
 
@@ -629,6 +630,7 @@ Extra conditions:
 | D10 | Backends speak JSON-RPC over their stdin/stdout (anonymous pipes, made non-inheritable) rather than a named pipe: nothing else on the PC can reach them, with no DACL or PID check needed | implementation, 2026-10-25 |
 | D11 | A `while-process` module also starts for a UI call, so it can open its app or be set up while the app isn't running; started that way it stops after its idle time. The Audio tab takes module views like Wallpaper (Voicemeeter's mixer) | implementation, 2026-10-26 |
 | D12 | Until the Music module exists, the base publishes `media.state` from its status loop (when the song, play state or position jumps), so Discord's status keeps working. A docked site can be `split` (its module's island view stays beside it), a notification can carry an `img` (`round` for a person), and a module's setup card can report its state (`ctx.setup.card(() => ({ state }))`) | implementation, 2026-10-26 |
+| D13 | The island keeps the now-playing chrome (pill, peek, Controls card, bar chip) and draws it from a `media` activity; the Music module owns the players, lyrics, the Music tab and sheet. Modules get island services for what the island must do itself: `ctx.island.focusApp` (bring an app forward), `ctx.island.audio.appVolume/setAppVolume`, the equalizer meter (the activity's `exe`) and the `level` event. "Pause when I step away" is the Music module's setting; eye tracking only publishes `presence`. With nothing playing, Controls shows no now-playing card | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -648,10 +650,10 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M0.5e | Built-in: games | M0.5d | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5f | Built-in: voicemeeter | M0.5e | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5g | Built-in: discord | M0.5f | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M0.5h | Built-in: music | M0.5g | todo | |
+| M0.5h | Built-in: music | M0.5g | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5i | Built-in: gaze | M0.5h | todo | |
 | M0.6 | Backend event bus | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M0.7 | Rest state | M0.3 | todo | |
+| M0.7 | Rest state | M0.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.1 | Protocol and SDK crates | M0.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.2 | Supervisor | M1.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.3 | Module UI loading | M1.2, M0.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
@@ -663,7 +665,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M2.4 | Module: games | M2.3, M0.5e | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.5 | Module: voicemeeter | M2.4, M0.5f | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.6 | Module: discord | M2.5, M0.5g | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M2.7 | Module: music | M2.6, M0.5h | todo | |
+| M2.7 | Module: music | M2.6, M0.5h | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.8 | Module: gaze | M2.7, M0.5i | todo | |
 | M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.2 | Install, update, remove | M3.1 | in review (no Modules sheet yet) | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |

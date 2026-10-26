@@ -1,4 +1,6 @@
 //! Now-playing info and transport controls through Windows' system media controls (GSMTC).
+//! (Moved from the island's base into the Music module; bringing the player forward is the
+//! island's job, since it's the one in front when you ask.)
 //!
 //! Apple Music gets extra treatment: its album is split out of the artist field, and seeking,
 //! shuffle, repeat, favorite and the quality badge come from its own player bar (applemusic.rs).
@@ -50,15 +52,14 @@ pub struct MediaInfo {
     pub favorite: Option<bool>,
     /// "Lossless", "Dolby Atmos"… (Apple Music).
     pub badge: String,
-    /// The player app's own volume (0–1), from its audio session.
-    pub app_volume: Option<f32>,
     /// True when the user picked this source instead of the automatic choice.
     pub pinned: bool,
     pub sessions: Vec<SessionInfo>,
     pub key: String,
-    /// Process image name(s) of the player, for its volume and level meter (see `exe_for`).
-    #[serde(skip)]
+    /// Process image name(s) of the player, `|`-separated, for its volume and level meter (see `exe_for`).
     pub exe: String,
+    /// Apple Music's main window, to bring it forward (0 otherwise).
+    pub hwnd: isize,
 }
 
 pub fn manager() -> Option<Manager> {
@@ -194,6 +195,7 @@ pub fn snapshot(mgr: &Manager, preferred: &str) -> Option<MediaInfo> {
             m.repeat = am.repeat;
             m.favorite = am.favorite;
             m.badge = am.badge;
+            m.hwnd = am.hwnd;
         }
     }
     m.sessions = mgr
@@ -218,7 +220,7 @@ pub fn snapshot(mgr: &Manager, preferred: &str) -> Option<MediaInfo> {
     m.exe = exe_for(&id);
     m.pinned = !preferred.is_empty() && preferred == id;
     m.source = source.to_string();
-    m.sampled_at = crate::util::now_ms();
+    m.sampled_at = crate::now_ms();
     Some(MediaInfo { title, artist, album, id, playing, ..m })
 }
 
@@ -283,29 +285,7 @@ pub fn command(mgr: &Manager, preferred: &str, action: &str, value: f64) -> Resu
         }
         "favorite" if apple => applemusic::send(Cmd::Favorite),
         "favorite" => Err("Only Apple Music has favorites here".into()),
-        "open" => open_player(&id),
         _ => Err(format!("Unknown action {action}")),
-    }
-}
-
-/// Brings the player's window to the front.
-fn open_player(id: &str) -> Result<(), String> {
-    if source_of(id) == "apple" {
-        let h = applemusic::state().hwnd;
-        if h != 0 && crate::running::activate(h).is_ok() {
-            return Ok(());
-        }
-    }
-    let exe = exe_for(id);
-    let windows = crate::running::list(&crate::util::data_dir(), 0);
-    let hit = windows
-        .iter()
-        .find(|w| w.aumid.as_deref() == Some(id) || (!exe.is_empty() && w.exe.rsplit('\\').next() == Some(exe.as_str())));
-    match hit {
-        Some(w) => crate::running::activate(w.hwnd),
-        // Store apps can be started (or brought forward) by their app id.
-        None if id.contains('!') => crate::apps::launch(id),
-        None => Err("Couldn't find the player's window".into()),
     }
 }
 
@@ -339,7 +319,7 @@ fn hashed_app_name(id: &str) -> Option<String> {
                 }
                 let sub = String::from_utf16_lossy(&name[..len as usize]);
                 if sub.to_ascii_uppercase().ends_with(&format!("-{key}")) {
-                    found = crate::sysinfo::reg_str(HKEY_CURRENT_USER, &format!(r"{ROOT}\{sub}"), "DisplayName");
+                    found = island_win::reg::user_str(&format!(r"{ROOT}\{sub}"), "DisplayName");
                     if found.is_some() {
                         break;
                     }

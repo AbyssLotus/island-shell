@@ -13,36 +13,6 @@
   "auto": true
  },
  "get_status": {
-  "media": {
-   "title": "Glass Harbor",
-   "artist": "The Lantern Choir",
-   "album": "Low Tide Radio",
-   "app": "Music",
-   "id": "music.app",
-   "source": "music.app",
-   "playing": true,
-   "position": 74.0,
-   "duration": 212.0,
-   "sampled_at": 1792897547887,
-   "can_next": true,
-   "can_prev": true,
-   "can_seek": true,
-   "shuffle": false,
-   "repeat": "none",
-   "favorite": false,
-   "badge": "",
-   "app_volume": 0.8,
-   "pinned": false,
-   "sessions": [
-    {
-     "id": "music.app",
-     "app": "Music",
-     "title": "Glass Harbor",
-     "playing": true
-    }
-   ],
-   "key": "glass-harbor"
-  },
   "audio": {
    "level": 0.42,
    "muted": false,
@@ -308,7 +278,6 @@
    "when": 1761300000000
   }
  ],
- "media_lyrics": null,
  "mod:wallpaper-engine.library": {
   "installed": true,
   "wallpapers": [
@@ -430,5 +399,85 @@
  "mod:games.library": {
   "games": [],
   "running": 0
- }
+ },
+ "mod_states": {
+  "music": "running"
+ },
+ "mod:music.state": {
+  "title": "Glass Harbor",
+  "artist": "The Lantern Choir",
+  "album": "Low Tide Radio",
+  "app": "Music",
+  "id": "music.app",
+  "source": "music.app",
+  "playing": true,
+  "position": 74.0,
+  "duration": 212.0,
+  "sampled_at": 1792897547887,
+  "can_next": true,
+  "can_prev": true,
+  "can_seek": true,
+  "shuffle": false,
+  "repeat": "none",
+  "favorite": false,
+  "badge": "",
+  "pinned": false,
+  "sessions": [
+   {
+    "id": "music.app",
+    "app": "Music",
+    "title": "Glass Harbor",
+    "playing": true
+   }
+  ],
+  "key": "glass-harbor",
+  "exe": "amplibraryagent.exe|applemusic.exe",
+  "hwnd": 0
+ },
+ "mod:music.thumb": null,
+ "mod:music.settings": {
+  "pause_when_away": false,
+  "tracker": false
+ },
+ "mod:music.lyrics": {
+  "lines": [
+   {
+    "t": 0.0,
+    "text": "Lights on the water"
+   },
+   {
+    "t": 6.0,
+    "text": "Glass on the harbor"
+   },
+   {
+    "t": 12.0,
+    "text": "We hum the long way home"
+   },
+   {
+    "t": 18.0,
+    "text": ""
+   },
+   {
+    "t": 24.0,
+    "text": "Lights on the water"
+   }
+  ],
+  "plain": "",
+  "instrumental": false
+ },
+ "mod:music.info": {
+  "cover": "",
+  "year": "2024",
+  "genre": "Electronic",
+  "link": "",
+  "album": "Harbor Lights",
+  "track": 3,
+  "tracks": 10
+ },
+ "mod:music.cmd": null,
+ "mod:music.source": null,
+ "app_volume_get": 0.8,
+ "app_volume_set": null,
+ "meter_follow": null,
+ "focus_app": null
 }

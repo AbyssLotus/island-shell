@@ -33,6 +33,7 @@
 //   open('tab:<id>' | 'cube:<id>')
 //   openWeb(url)                    a link in the default browser (never Edge)
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
+//                                   focusApp({ id, exe, hwnd }), audio.appVolume(exe) / .setAppVolume(exe, level),
 //                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
 //                                   apps.list() / .open(id) / .menu(id, x, y): the Start menu's apps
 //   settings.mount(fn(root))        its page in the Modules sheet
