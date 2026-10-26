@@ -17,6 +17,7 @@
 import { createCalendar } from './cc-calendar.js';
 import { createTaskManager } from './cc-taskmgr.js';
 import { createApps } from './cc-apps.js';
+import { createModules } from './cc-modules.js';
 import { createSetup } from './setup.js';
 import { placeCubes } from './registry.js';
 
@@ -116,11 +117,13 @@ export function createCommandCenter(ctx) {
   const cal = createCalendar({ invoke, esc, ic, store, S, flash });
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
+  const mds = createModules({ invoke, listen: ctx.listen, esc, ic, flash, settingsOf: ctx.settingsOf || (() => null) });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
   [['apps', 'Apps', 'grid'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
     ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse']]
     .forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
-  for (const [id, app] of Object.entries({ apps: aps, today: cal })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
+  REG.cubes.add({ id: 'modules', title: 'Modules', icon: 'layers', stat: () => mds.stat() });
+  for (const [id, app] of Object.entries({ apps: aps, today: cal, modules: mds })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
   /** The cubes as placed in slots right now, in slot (keyboard) order. */
   const cubes = () => placeCubes(REG.cubes.all());
   const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
@@ -160,7 +163,7 @@ export function createCommandCenter(ctx) {
     Object.assign(EC, ET);
     input.value = ''; showResults(false);
     if (!running) { running = true; lastT = 0; requestAnimationFrame(frame); }
-    tick(); renderCubes(); refresh();
+    tick(); renderCubes(); refresh(); mds.refresh().then(renderCubeStats);
     setTimeout(() => input.focus({ preventScroll: true }), 260);
     busy = false;
   }
@@ -209,6 +212,8 @@ export function createCommandCenter(ctx) {
     add(st.taskbar_hidden ? 'Show the taskbar' : 'Hide the taskbar', 'taskbar', 'Island Shell', 'taskbar windows', () => invoke('set_taskbar', { hidden: !st.taskbar_hidden }));
     add('New virtual desktop', 'layers', 'Desktops', 'desktop workspace', () => invoke('desktop_new'));
     add('Task Manager', 'pulse', 'Processes, performance, startup apps', 'processes taskmgr end task kill startup performance memory', () => openTM(), 'quiet');
+    add('Modules', 'layers', 'Island Shell · install, turn off or remove its parts', 'modules plugins extensions add-ons install remove update', () => openSheet('modules'), 'quiet');
+    add('Load a module folder', 'folder', 'Modules · developer mode (unsigned)', 'module developer unpacked load folder', () => invoke('mod_load_folder', { path: null }).then(m => { if (m) flash(`${m.manifest.name} loaded (developer mode)`); }).catch(err => flash(String(err))), 'quiet');
     add('Setup guide', 'rocket', 'Island Shell · the first-run tour', 'setup guide welcome tour help start onboarding how', () => openSetup(), 'quiet');
     add('Open Windows Task Manager', 'pulse', 'Windows · Ctrl + Shift + Esc', 'processes taskmgr', () => invoke('cc_tool', { name: 'taskmgr' }));
     add('Open Terminal', 'terminal', 'Windows Terminal', 'cmd powershell shell console', () => invoke('cc_tool', { name: 'terminal' }));

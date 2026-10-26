@@ -2088,6 +2088,7 @@ function unhostTab(keepMode) {
 }
 const cmdCenter = createCommandCenter({
   S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
+  settingsOf: id => modHost.settingsOf(id),
   // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
   moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
     const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);

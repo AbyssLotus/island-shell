@@ -261,6 +261,41 @@ pub fn mod_logs(id: String) -> Vec<String> {
     sup().map(|s| s.logs(&id)).unwrap_or_default()
 }
 
+/// What each running module's process uses, for the Modules sheet: memory (private bytes, MB) and
+/// CPU (% of the whole PC since the sheet last asked).
+#[tauri::command]
+pub fn mod_usage() -> Vec<Value> {
+    use std::collections::HashMap;
+    use std::time::Instant;
+    use windows::Win32::Foundation::{CloseHandle, FILETIME};
+    use windows::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX};
+    use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    static LAST: Mutex<Option<HashMap<u32, (u64, Instant)>>> = Mutex::new(None);
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f64;
+    let ft = |f: FILETIME| ((f.dwHighDateTime as u64) << 32) | f.dwLowDateTime as u64;
+    let mut last = LAST.lock().unwrap();
+    let last = last.get_or_insert_with(HashMap::new);
+    let mut out = vec![];
+    for m in sup().map(|s| s.list()).unwrap_or_default() {
+        let Some(pid) = m.pid else { continue };
+        let Ok(h) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else { continue };
+        let mut mem = PROCESS_MEMORY_COUNTERS_EX { cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32, ..Default::default() };
+        let private = unsafe { K32GetProcessMemoryInfo(h, &mut mem as *mut _ as *mut PROCESS_MEMORY_COUNTERS, mem.cb) }.as_bool().then_some(mem.PrivateUsage);
+        let (mut c, mut e, mut k, mut u) = Default::default();
+        let busy = unsafe { GetProcessTimes(h, &mut c, &mut e, &mut k, &mut u) }.is_ok().then(|| ft(k) + ft(u));
+        let _ = unsafe { CloseHandle(h) };
+        let now = Instant::now();
+        let cpu = busy.and_then(|b| {
+            let before = last.insert(pid, (b, now));
+            before.map(|(pb, pt)| (b.saturating_sub(pb) as f64 / 1e7) / now.duration_since(pt).as_secs_f64().max(0.001) / cpus * 100.0)
+        });
+        out.push(json!({ "id": m.id, "pid": pid, "mem_mb": private.map(|b| (b as f64 / 1048576.0 * 10.0).round() / 10.0), "cpu": cpu.map(|c| (c * 10.0).round() / 10.0) }));
+    }
+    let alive: Vec<u32> = out.iter().filter_map(|v| v["pid"].as_u64().map(|p| p as u32)).collect();
+    last.retain(|pid, _| alive.contains(pid));
+    out
+}
+
 /// A topic's last value, for the page (it hears later ones as `topic:<name>`).
 #[tauri::command]
 pub fn topic_last(topic: String) -> Value {

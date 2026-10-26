@@ -116,6 +116,22 @@ body.cc-on #island, body.cc-on #bar { opacity: 0 !important; pointer-events: non
 .cc-toast { position: absolute; z-index: 8; left: 50%; bottom: 36px; transform: translate(-50%, 16px); padding: 10px 16px; border-radius: 14px; background: #111115; box-shadow: 0 0 0 1px rgba(var(--glow), .14), 0 18px 46px -14px rgba(0, 0, 0, .7); opacity: 0; pointer-events: none; transition: opacity .2s, transform .45s var(--spring); font-weight: 500; }
 .cc-toast.on { opacity: 1; transform: translate(-50%, 0); }
 /* ---------- sheets: a section full size ---------- */
+/* Parts the base's sheets share (Apps, Modules): the title bar with its filter chips and search, and
+   the round-cornered icon buttons. (Modules' sheets have their own, in their shadow roots.) */
+.sh-ib { width: 46px; height: 46px; display: grid; place-items: center; border: 0; border-radius: 13px; background: rgba(8, 10, 16, .55); color: #eef6ff; box-shadow: inset 0 0 0 1px rgba(var(--glow), .2); backdrop-filter: blur(10px); cursor: pointer; transition: background .15s, box-shadow .2s; }
+.sh-ib:hover { background: rgba(var(--glow), .14); box-shadow: inset 0 0 0 1px rgba(var(--glow), .5), 0 0 18px rgba(var(--glow), .3); }
+.sh-ib svg.i { width: 19px; height: 19px; }
+.sh-bar { display: flex; align-items: center; gap: 14px; padding: 16px 30px 10px; flex-wrap: wrap; }
+.sh-bar h3 { margin: 0; font: 600 18px/1 var(--f-display); letter-spacing: .02em; }
+.sh-bar h3 small { margin-left: 8px; color: var(--muted); font: 500 12px/1 var(--f-mono); }
+.sh-bar .grow { flex: 1; }
+.sh-chips { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .04); }
+.sh-chips button { height: 30px; padding: 0 13px; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 600 12px/1 var(--f-body); cursor: pointer; }
+.sh-chips button[aria-pressed="true"] { background: rgba(var(--glow), .14); color: #f4fbff; box-shadow: inset 0 0 0 1px rgba(var(--glow), .35); }
+.sh-search { display: flex; align-items: center; gap: 8px; width: 240px; height: 34px; padding: 0 12px; border-radius: 11px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); cursor: text; }
+.sh-search:focus-within { box-shadow: inset 0 0 0 1.5px rgba(var(--glow), .7), 0 0 18px rgba(var(--glow), .2); }
+.sh-search svg.i { width: 14px; height: 14px; color: var(--muted); }
+.sh-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: #eef6ff; font: 400 13px/1 var(--f-body); }
 #cc { --accent: #c9e9ff; --on-accent: #04070b; --accent-text: #d9f1ff; --accent-soft: rgba(201, 233, 255, .2); }
 #cc.sheet-open .cc-cubes, #cc.sheet-open .cc-core { opacity: 0; pointer-events: none; }
 /* Under a sheet the cubes and clock stop being drawn at all (not just made clear), so their layers
@@ -446,10 +462,60 @@ textarea.cal-in { height: auto; padding: 10px 12px; line-height: 1.45; resize: v
 
 @media (prefers-reduced-motion: reduce) { #cc, #cc * { animation: none !important; transition: none !important; } }
 
+/* ---------- Modules (cc-modules.js): the parts you install ---------- */
+.mds { position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 440px); gap: 14px; }
+.mds-main { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.mds-n { display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #c9e9ff; color: #04070b; font: 700 10px/1 var(--f-mono); }
+.mds-list { min-height: 0; overflow-y: auto; padding: 6px 16px 28px 30px; display: grid; align-content: start; gap: 4px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .1) transparent; }
+.mds-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 10px; align-items: center; gap: 14px; width: 100%; padding: 10px 14px; border: 0; border-radius: 14px; background: none; color: #eef6ff; text-align: left; font: inherit; cursor: pointer; transition: background .15s, box-shadow .2s; }
+.mds-row:hover { background: rgba(255, 255, 255, .04); }
+.mds-row.sel { background: var(--sel); box-shadow: inset 0 0 0 1px rgba(var(--glow), .16); }
+.mds-t { min-width: 0; display: grid; gap: 4px; }
+.mds-t b { display: flex; align-items: center; gap: 8px; font: 600 14px/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mds-t small { color: var(--muted); font: 400 11.5px/1.3 var(--f-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mds-dev { padding: 2px 6px; border-radius: 5px; background: rgba(255, 196, 120, .14); color: #ffd7a0; font: 600 9.5px/1.2 var(--f-body); font-style: normal; letter-spacing: .04em; text-transform: uppercase; }
+.mds-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.mds-row.t-running .mds-dot { background: #9be38a; box-shadow: 0 0 10px #9be38a; }
+.mds-row.t-starting .mds-dot, .mds-row.t-backoff .mds-dot, .mds-row.t-update .mds-dot { background: #ffd166; box-shadow: 0 0 10px #ffd166; }
+.mds-row.t-failed .mds-dot { background: #ff8a7a; box-shadow: 0 0 10px #ff8a7a; }
+.mds-row.t-disabled { opacity: .55; }
+.mds-ic { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, .06); color: #c9e9ff; box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); }
+.mds-ic svg.i { width: 22px; height: 22px; }
+.mds-svg { width: 22px; height: 22px; background: currentColor; -webkit-mask: var(--src) center / contain no-repeat; mask: var(--src) center / contain no-repeat; }
+.mds-ic.big { width: 64px; height: 64px; border-radius: 18px; }
+.mds-ic.big .mds-svg, .mds-ic.big svg.i { width: 32px; height: 32px; }
+.mds-none { margin: 22px 0; color: var(--muted); font-size: 13px; max-width: 520px; }
+.mds-side { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .1) transparent; }
+.mds-card { display: grid; gap: 14px; padding: 18px 18px 22px; }
+.mds-head { display: flex; align-items: center; gap: 14px; }
+.mds-head h2 { margin: 0 0 5px; font: 600 20px/1.15 var(--f-display); }
+.mds-head small { color: var(--muted); font: 500 11.5px/1.3 var(--f-mono); }
+.mds-desc { margin: 0; color: rgba(238, 246, 255, .82); font-size: 13px; line-height: 1.5; }
+.mds-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mds-facts div { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(var(--glow), .08); }
+.mds-facts small { color: rgba(238, 246, 255, .55); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.mds-facts b { font: 500 14px/1.2 var(--f-mono); color: #f4fbff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mds-state.t-running { color: #9be38a; }
+.mds-state.t-failed, .mds-state.t-backoff { color: #ff8a7a; }
+.mds-runs { margin: -4px 0 0; color: var(--muted); font-size: 12px; }
+.mds-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.mds-acts .cc-btn svg.i { width: 15px; height: 15px; }
+.mds-acts .cc-btn:disabled { opacity: .45; cursor: default; }
+.mds-confirm { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 138, 122, .07); box-shadow: inset 0 0 0 1px rgba(255, 138, 122, .25); }
+.mds-confirm[hidden] { display: none; }
+.mds-forget { display: inline-flex; align-items: center; gap: 8px; color: #eef6ff; font-size: 12.5px; cursor: pointer; }
+.mds-err { margin: 0; color: #ffb4a8; font: 400 11.5px/1.4 var(--f-mono); white-space: pre-wrap; }
+.mds-card h4 { margin: 6px 0 -4px; font: 600 11px/1 var(--f-body); letter-spacing: .16em; text-transform: uppercase; color: rgba(238, 246, 255, .62); }
+.mds-talks { margin: 0; padding-left: 18px; display: grid; gap: 5px; color: rgba(238, 246, 255, .8); font-size: 12.5px; line-height: 1.4; }
+.mds-quiet { margin: 0; color: var(--muted); font-size: 12.5px; }
+.mds-settings { padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(var(--glow), .08); }
+.mds-logs summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.mds-logs pre { max-height: 220px; margin: 8px 0 0; padding: 10px 12px; overflow: auto; border-radius: 10px; background: rgba(0, 0, 0, .35); color: rgba(238, 246, 255, .75); font: 400 10.5px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- Taken details for the Command Center ---------- */
 /* The sigil beside the name, and Destiny's diamond before each heading. */
 .cc-brand b::before { content: ""; display: inline-block; width: 15px; height: 15px; margin: 0 8px -2px 0; background: #e6f5ff; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; filter: drop-shadow(0 0 6px rgba(var(--glow), .9)); }
-:is(.cal-rail h4, .aps-h, .aps-side h4)::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 9px 2px 1px; border: 1px solid #c9e9ff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(var(--glow), .8); vertical-align: middle; }
+:is(.sh-bar h3, .cal-rail h4, .aps-h, .aps-side h4, .mds-card h4)::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 9px 2px 1px; border: 1px solid #c9e9ff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(var(--glow), .8); vertical-align: middle; }
 .cal-empty::before, .aps-none:not(.sm)::before { content: ""; display: block; width: 22px; height: 22px; margin: 0 0 9px; background: currentColor; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; opacity: .5; }
 /* The chosen Task Manager row and calendar day get the reticle. */
 .tm-procs tr.sel td:first-child { position: relative; }

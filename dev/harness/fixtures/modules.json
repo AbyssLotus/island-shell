@@ -1,0 +1,70 @@
+{
+ "mod_states": {
+  "music": "running",
+  "discord": "running"
+ },
+ "mod_catalog": [
+  {
+   "id": "music",
+   "name": "Music",
+   "version": "1.0.0",
+   "api": 1,
+   "description": "What's playing.",
+   "talksTo": [],
+   "size": 812345,
+   "url": "",
+   "sha256": ""
+  },
+  {
+   "id": "weather-radar",
+   "name": "Weather radar",
+   "version": "1.2.0",
+   "api": 1,
+   "description": "A made-up module for the harness: the rain radar over your city, on the island.",
+   "talksTo": [
+    "A radar service, with your city"
+   ],
+   "size": 402112,
+   "url": "",
+   "sha256": ""
+  }
+ ],
+ "mod_usage": [
+  {
+   "id": "music",
+   "pid": 4242,
+   "mem_mb": 3.8,
+   "cpu": 0.2
+  },
+  {
+   "id": "discord",
+   "pid": 4343,
+   "mem_mb": 2.9,
+   "cpu": 0.0
+  }
+ ],
+ "mod_logs": [
+  "1793000000000 info connected",
+  "1793000001000 info signed in"
+ ],
+ "update_status": {
+  "current": "0.2.0",
+  "state": "idle",
+  "latest": "0.2.0",
+  "notes": "",
+  "size": 0,
+  "progress": 0,
+  "checked": 1793000000000,
+  "error": "",
+  "auto": true,
+  "modules": [
+   {
+    "id": "destiny",
+    "name": "Destiny 2",
+    "from": "1.0.0",
+    "to": "1.0.1"
+   }
+  ],
+  "module_busy": ""
+ }
+}

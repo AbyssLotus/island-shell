@@ -1153,6 +1153,7 @@ fn main() {
             mod_catalog,
             modules::mod_list,
             modules::topic_last,
+            modules::mod_usage,
             modules::mod_call,
             modules::mod_set_enabled,
             modules::mod_restart,

@@ -658,7 +658,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M1.1 | Protocol and SDK crates | M0.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.2 | Supervisor | M1.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.3 | Module UI loading | M1.2, M0.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M1.4 | Modules sheet | M1.3 | todo | |
+| M1.4 | Modules sheet | M1.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M1.5 | Destiny 2 module (pilot) | M1.4, M0.5a, M0.6 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.1 | Module: canvas | M1.5, M0.5b | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.2 | Module: wallpaper-engine | M2.1, M0.5c | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
