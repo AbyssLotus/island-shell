@@ -12,6 +12,9 @@
 //   id, version                     the module
 //   call(method, params)            its backend; rejects with { code, message }
 //   on(name, fn) → off              its backend's host.emit events
+//   backend.running(), .state(), .on(fn(state)) → off
+//                                   whether its backend runs now ('running', 'stopped', 'backoff', …)
+//                                   and when that changes, without starting it the way call() can
 //   store.get(k, d) / .set(k, v)    localStorage, as "mod.<id>.<k>"
 //   url(path), cacheUrl(path)       a file in the module, an image in its cache folder
 //   imageUrl(file)                  an image in a folder its backend shared (host.images)
@@ -81,7 +84,7 @@ export function createModuleHost(env) {
 
   function register(info) {
     const man = info.manifest, id = man.id, c = man.contributes || {};
-    const m = { info, man, offs: [], loading: null, api: null, ctx: null, tabs: new Map(), sections: new Map(), cubes: new Map(), settings: null, shown: new Set() };
+    const m = { info, man, offs: [], loading: null, api: null, ctx: null, tabs: new Map(), sections: new Map(), cubes: new Map(), settings: null, shown: new Set(), stateFns: new Set() };
     mods.set(id, m);
     for (const t of c.tabs || []) {
       if (R.tabs.has(t.id)) { log(`modules: ${id} wants tab ${t.id}, which is taken`); continue; }
@@ -141,6 +144,11 @@ export function createModuleHost(env) {
         let off = null, dead = false;
         listen(`mod:${id}:${name}`, e => fn(e.payload)).then(u => { if (dead) u(); else off = u; });
         return own(() => { dead = true; if (off) off(); });
+      },
+      backend: {
+        state: () => m.info.state,
+        running: () => m.info.state === 'running',
+        on(fn) { m.stateFns.add(fn); return own(() => m.stateFns.delete(fn)); }
       },
       store: {
         get(k, d) { try { const v = localStorage.getItem(`mod.${id}.${k}`); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -267,7 +275,11 @@ export function createModuleHost(env) {
       const info = e.payload, had = mods.has(info.id);
       if (info.enabled && !had && info.manifest.ui) register(info);
       else if (!info.enabled && had) unregister(info.id);
-      else if (had) mods.get(info.id).info = info;
+      else if (had) {
+        const m = mods.get(info.id), was = m.info.state;
+        m.info = info;
+        if (info.state !== was) for (const fn of m.stateFns) { try { fn(info.state); } catch (err) { log(`modules: ${info.id} backend.on: ${err}`); } }
+      }
     });
     // Installed, or updated: an updated module's old UI goes and the new version's comes in.
     listen('mod:installed', async () => {

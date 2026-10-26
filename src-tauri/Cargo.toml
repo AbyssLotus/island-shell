@@ -18,8 +18,6 @@ serde_json = "1"
 base64 = "0.22"
 png = "0.18"
 arboard = "3.6"
-# VoiceDeck's Voicemeeter engine (a copy of the VoiceDeck project's vm-core crate, MIT).
-vd-vm-core = { path = "../crates/vd-vm-core" }
 # The signed release catalog: the updater (and later the module installer) reads it.
 island-catalog = { path = "../crates/island-catalog" }
 # Runs module backends (crates/island-host) and speaks their protocol.

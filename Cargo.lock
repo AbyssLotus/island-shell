@@ -2007,7 +2007,6 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
- "vd-vm-core",
  "webview2-com",
  "windows 0.61.3",
  "windows-core 0.61.2",
@@ -4567,6 +4566,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "voicemeeter-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "island-win",
+ "serde_json",
+ "vd-vm-core",
+]
 
 [[package]]
 name = "vpn-module"

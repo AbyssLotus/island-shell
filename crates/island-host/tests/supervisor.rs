@@ -244,17 +244,18 @@ fn ui_events_activities_and_calendar() {
 fn while_process_follows_the_process() {
     let r = root("process");
     let (sup, _) = host(&r);
-    let id = sup.load(&module(&r, "echo-e", json!({ "backend": { "run": "while-process", "process": ["Fake.exe"] } })), true, true).unwrap();
+    let id = sup.load(&module(&r, "echo-e", json!({ "backend": { "run": "while-process", "process": ["Fake.exe"], "idle": "1s" } })), true, true).unwrap();
     assert_eq!(sup.watched_processes(), vec!["Fake.exe".to_string()]);
-    let e = sup.call(&id, "echo", Value::Null).unwrap_err();
-    assert_eq!(e.code, code::STOPPED);
-    assert!(e.message.contains("Fake.exe"), "{}", e.message);
     sup.set_processes(["fake.EXE".to_string(), "other.exe".to_string()]);
     wait_for("start with its process", 5, || state(&sup, &id) == State::Running);
-    assert_eq!(sup.call(&id, "echo", json!(1)).unwrap(), json!(1));
     sup.set_processes(["other.exe".to_string()]);
     wait_for("stop after the grace period", 5, || state(&sup, &id) == State::Stopped);
     assert_eq!(sup.info(&id).unwrap().crashes, 0);
+    // Without its process, a UI call starts it (to open the app, or set it up), and it stays only
+    // for its idle time.
+    assert_eq!(sup.call(&id, "echo", json!(1)).unwrap(), json!(1));
+    assert_eq!(state(&sup, &id), State::Running);
+    wait_for("stop once idle", 5, || state(&sup, &id) == State::Stopped);
     sup.shutdown();
 }
 

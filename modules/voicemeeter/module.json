@@ -1,0 +1,21 @@
+{
+  "id": "voicemeeter",
+  "name": "Voicemeeter",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Voicemeeter's mixer in the Audio tab: every input and output's level, mute and routing, a mic switch on the top bar, and VoiceDeck one click away.",
+  "icon": "ui/icon.svg",
+  "backend": {
+    "exe": "voicemeeter-module.exe",
+    "run": "while-process",
+    "process": ["voicemeeter.exe", "voicemeeter_x64.exe", "voicemeeterpro.exe", "voicemeeterpro_x64.exe", "voicemeeter8.exe", "voicemeeter8x64.exe"],
+    "idle": "60s"
+  },
+  "ui": { "entry": "ui/voicemeeter.js", "css": ["ui/voicemeeter.css"], "eager": true },
+  "contributes": {
+    "sections": [{ "tab": "audio", "id": "mixer", "order": 10, "title": "Voicemeeter", "view": true }]
+  },
+  "talksTo": [],
+  "keywords": ["voicemeeter", "voicedeck", "mixer", "banana", "potato", "strip", "bus", "mic", "audio engine"],
+  "legacy": ["voicedeck_path.txt"]
+}

@@ -48,7 +48,12 @@
       return out.filter(e => e.start >= from && e.start <= to);
     },
     tm_snapshot: () => fixtures.tm_snapshot ?? null,
-    mod_list: () => fixtures.mod_list ?? (params.get('mods') === '0' ? { modules: [], broken: [] } : get('/__harness/modules.json')),
+    mod_list: () => {
+      const l = fixtures.mod_list ?? (params.get('mods') === '0' ? { modules: [], broken: [] } : get('/__harness/modules.json'));
+      // A scenario can say whose backends are running ("mod_states": { "<id>": "running" }).
+      for (const m of (l && l.modules) || []) if (fixtures.mod_states && fixtures.mod_states[m.id]) m.state = fixtures.mod_states[m.id];
+      return l;
+    },
     mod_call: ({ id, method }) => {
       const k = `mod:${id}.${method}`;
       if (k in fixtures) return structuredClone(fixtures[k]);

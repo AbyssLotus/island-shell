@@ -493,8 +493,9 @@ fn log(inner: &Inner, id: &str, level: &str, msg: &str) {
     inner.sink.log(id, level, msg);
 }
 
-/// The running process, starting it if allowed. `for_call` is a UI call (which may start
-/// `on-demand` and `scheduled` modules; `always` and `while-process` ones run on their own terms).
+/// The running process, starting it if allowed. `for_call` is a UI call, which may start any
+/// module but an `always` one (that runs on its own terms). A `while-process` module started by a
+/// call (its app isn't running: the UI wants to open it, or set it up) stays for its idle time.
 fn ensure_running(inner: &Arc<Inner>, id: &str, for_call: bool) -> Result<Arc<Proc>, RpcError> {
     let stopped = |why: String| RpcError::new(code::STOPPED, why);
     let proc = {
@@ -508,9 +509,8 @@ fn ensure_running(inner: &Arc<Inner>, id: &str, for_call: bool) -> Result<Arc<Pr
             State::Backoff if slot.retry_at.is_some_and(|t| t > Instant::now()) => return Err(stopped(format!("{name} is restarting"))),
             State::Running | State::Starting => slot.proc.clone().expect("a running slot has a process"),
             _ => {
-                if for_call && mode == RunMode::WhileProcess {
-                    let procs = slot.manifest.backend.as_ref().map(|b| b.process.join(" or ")).unwrap_or_default();
-                    return Err(stopped(format!("{name} works while {procs} is running")));
+                if for_call && mode == RunMode::Always {
+                    return Err(stopped(format!("{name} isn't running")));
                 }
                 spawn(inner, slot).map_err(|e| {
                     slot.state = State::Failed;
@@ -904,7 +904,12 @@ fn step(inner: &Arc<Inner>) {
                         if stopped {
                             actions.push(Action::Start(id));
                         }
-                    } else if running && !slot.stopping && slot.process_seen.is_none_or(|t| now.duration_since(t) > inner.timing.process_grace) {
+                    } else if running
+                        && !slot.stopping
+                        && busy == 0
+                        && slot.process_seen.is_none_or(|t| now.duration_since(t) > inner.timing.process_grace)
+                        && (!slot.called || now.duration_since(slot.last_used) > slot.manifest.idle())
+                    {
                         actions.push(Action::Stop(id));
                     }
                 }

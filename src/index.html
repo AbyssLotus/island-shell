@@ -27,7 +27,6 @@
   <div class="bar-r">
     <button class="bchip media-chip" type="button" id="barMedia" data-open="music" hidden></button>
     <button class="bchip dc-chip" type="button" id="barDc" data-open="discord" hidden></button>
-    <button class="bchip icon" type="button" id="barMic" hidden title="Mic (Voicemeeter strip 1): click to mute"></button>
     <span class="bar-mods" id="barModsR"></span>
     <button class="bchip" type="button" id="barVol" data-open="audio" title="Volume (scroll to change)"></button>
     <button class="bchip" type="button" id="barBt" title="Bluetooth"></button>
@@ -165,25 +164,13 @@
       </section>
 
       <section class="view" id="v-audio" data-tab="audio" role="tabpanel" aria-labelledby="tab-audio">
-        <div class="au-head" id="auHead" hidden>
+        <div class="au-head" id="auHead">
           <div class="seg" id="auMode" role="group" aria-label="Mixer">
-            <button type="button" data-mode="win">Windows</button>
-            <button type="button" data-mode="vm">Voicemeeter</button>
+            <button type="button" data-mode="win" aria-pressed="true">Windows</button>
             <button type="button" data-mode="sounds">Sounds</button>
           </div>
-          <span class="grow"></span>
-          <button class="chip" type="button" id="vmRestart" hidden title="Restart Voicemeeter's audio engine (fixes crackling)">Restart engine</button>
-          <button class="chip" type="button" id="vdOpen" hidden>Open VoiceDeck</button>
         </div>
-        <div id="auVm" hidden>
-          <div class="seg vm-side" id="vmSide" role="group" aria-label="Show">
-            <button type="button" data-side="in">Inputs</button>
-            <button type="button" data-side="out">Outputs</button>
-          </div>
-          <div class="vm-list" id="vmStrips"></div>
-          <div class="vm-list" id="vmBuses" hidden></div>
-          <p class="empty" id="vmOff" hidden>Voicemeeter isn't running. Start it (or VoiceDeck) and its mixer shows up here.</p>
-        </div>
+        <div class="mod-views" data-tab="audio"></div>
         <div id="auSnd" hidden>
           <div class="snd-head">
             <button class="chip" type="button" id="sndOn" aria-pressed="true">Notification sounds</button>

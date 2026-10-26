@@ -162,11 +162,6 @@
   "presence_now": "",
   "error": ""
  },
- "vm_state": null,
- "mixer_apps": {
-  "voicedeck": false,
-  "voicemeeter": false
- },
  "clip_list": [
   {
    "id": 3,

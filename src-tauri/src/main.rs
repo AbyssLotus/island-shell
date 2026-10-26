@@ -33,7 +33,6 @@ mod taskmgr;
 mod tray;
 mod updater;
 mod util;
-mod voicemeeter;
 mod wallpaper;
 mod winkey;
 
@@ -643,45 +642,6 @@ async fn tm_startup_set(id: String, on: bool) -> Result<Vec<taskmgr::Startup>, S
     blocking(move || taskmgr::set_startup(&id, on).map(|_| taskmgr::startup())).await?
 }
 
-/// The Voicemeeter mixer (null while Voicemeeter isn't running or installed).
-#[tauri::command]
-fn vm_state() -> Option<vd_vm_core::VmState> {
-    voicemeeter::state()
-}
-
-/// A strip or bus control, e.g. `Strip[2].Gain` or `Bus[0].Mute`.
-#[tauri::command]
-fn vm_set(name: String, value: f32) -> Result<(), String> {
-    voicemeeter::set(&name, value)
-}
-
-#[tauri::command]
-fn vm_levels(on: bool) -> Result<(), String> {
-    voicemeeter::levels(on)
-}
-
-#[tauri::command]
-fn vm_restart() -> Result<(), String> {
-    voicemeeter::restart_engine()
-}
-
-/// Toggles the mic (strip 1); returns whether it's now muted.
-#[tauri::command]
-fn vm_mic() -> Result<bool, String> {
-    voicemeeter::toggle_mic()
-}
-
-/// Which mixer apps are on this PC: { voicedeck, voicemeeter }.
-#[tauri::command]
-fn mixer_apps() -> serde_json::Value {
-    serde_json::json!({ "voicedeck": voicemeeter::voicedeck_installed(), "voicemeeter": voicemeeter::installed() })
-}
-
-#[tauri::command]
-fn voicedeck_open() -> Result<(), String> {
-    voicemeeter::open_voicedeck()
-}
-
 #[tauri::command]
 async fn audio_devices() -> Result<audio::Devices, String> {
     blocking(audio::devices).await
@@ -1202,7 +1162,6 @@ fn main() {
             media_app_volume,
             media_lyrics,
             audio_devices,
-            vm_state,
             discord_status,
             discord_configure,
             discord_action,
@@ -1248,12 +1207,6 @@ fn main() {
             bench_status,
             bench_cancel,
             tm_startup_set,
-            vm_set,
-            vm_levels,
-            vm_restart,
-            vm_mic,
-            mixer_apps,
-            voicedeck_open,
             audio_default,
             audio_mic,
             audio_apps,
@@ -1351,7 +1304,6 @@ fn main() {
 
             island::spawn_cursor(win.clone(), shared.clone());
             applemusic::spawn();
-            voicemeeter::spawn(app.handle().clone());
             discord::spawn(app.handle().clone(), shared.clone());
             embed::spawn_reaper(app.handle().clone());
             gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze, settings.gaze_pause);

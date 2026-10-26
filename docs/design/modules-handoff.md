@@ -140,7 +140,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | Mode | Starts | Stops |
 | --- | --- | --- |
 | `always` | When the island starts, if enabled | When the island exits |
-| `while-process` | When one of `backend.process` is running (from the Task Manager snapshot, checked every 2 s) | 5 s after the last one exits |
+| `while-process` | When one of `backend.process` is running (from the Task Manager snapshot, checked every 2 s), and on a UI call (to open the app, or set it up, while it isn't running) | 5 s after the last one exits; started by a call, after `idle` without calls |
 | `scheduled` | Every `every` for an `island.tick`, and also on a UI call | After the tick or call is answered and 10 s have passed idle |
 | `on-demand` | On the first `mod_call` | After `idle` with no calls |
 
@@ -237,6 +237,7 @@ interface Ctx {
   id: string;
   call(method: string, params?: object): Promise<any>;   // rejects with { code, message }
   on(name: string, fn: (data: any) => void): () => void; // host.emit events; returns unsubscribe
+  backend: { running(): boolean; state(): string; on(fn: (state: string) => void): () => void }; // without starting it, unlike call()
   store: { get<T>(key: string, dflt: T): T; set(key: string, v: unknown): void }; // localStorage "mod.<id>.<key>"
   ui: UiKit;                                             // icon(name), toggle(), row(), sparkline(), fmt.*
   tabs:     { register(def: { id: string; mount(root: ShadowRoot): void; show?(): void; hide?(): void }): void };
@@ -625,6 +626,7 @@ Extra conditions:
 | D8 | The base updates itself through the same signed catalog (a `base` entry: version, installer link, sha256, size, notes); its update waits for a click, modules update by themselves while daily checks are on | owner, 2026-10-25 |
 | D9 | One branch for the whole modularization instead of one PR per package; the built-in "M0.5" steps are skipped, each integration goes straight to its module | owner, 2026-10-25 |
 | D10 | Backends speak JSON-RPC over their stdin/stdout (anonymous pipes, made non-inheritable) rather than a named pipe: nothing else on the PC can reach them, with no DACL or PID check needed | implementation, 2026-10-25 |
+| D11 | A `while-process` module also starts for a UI call, so it can open its app or be set up while the app isn't running; started that way it stops after its idle time. The Audio tab takes module views like Wallpaper (Voicemeeter's mixer) | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -642,7 +644,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M0.5c | Built-in: wallpaper-engine | M0.5b | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5d | Built-in: vpn | M0.5c | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5e | Built-in: games | M0.5d | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M0.5f | Built-in: voicemeeter | M0.5e | todo | |
+| M0.5f | Built-in: voicemeeter | M0.5e | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M0.5g | Built-in: discord | M0.5f | todo | |
 | M0.5h | Built-in: music | M0.5g | todo | |
 | M0.5i | Built-in: gaze | M0.5h | todo | |
@@ -657,7 +659,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M2.2 | Module: wallpaper-engine | M2.1, M0.5c | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.3 | Module: vpn | M2.2, M0.5d | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.4 | Module: games | M2.3, M0.5e | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
-| M2.5 | Module: voicemeeter | M2.4, M0.5f | todo | |
+| M2.5 | Module: voicemeeter | M2.4, M0.5f | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M2.6 | Module: discord | M2.5, M0.5g | todo | |
 | M2.7 | Module: music | M2.6, M0.5h | todo | |
 | M2.8 | Module: gaze | M2.7, M0.5i | todo | |

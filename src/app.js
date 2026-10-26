@@ -175,7 +175,6 @@ function setMode(m) {
   S.mode = m; island.dataset.mode = m;
   if (m !== 'toast') S.toastTop = false;
   if (m !== 'toast' && S.urgent) { S.urgent = false; island.classList.toggle('fs-hidden', !!S.fullscreen && m !== 'panel'); }
-  syncVmLevels();
   for (const [k, el] of Object.entries(L)) el.classList.toggle('on', k === m);
   L.pill.setAttribute('aria-expanded', m === 'panel');
   layout(); mediaTick(); syncModViews();
@@ -265,7 +264,7 @@ function switchView(t, instant) {
   if (!instant) { nv.style.transition = 'none'; nv.style.setProperty('--dx', `${28 * dir}px`); void nv.offsetWidth; nv.style.transition = ''; }
   nv.style.setProperty('--dx', '0px'); nv.classList.add('on');
   S.tab = t; store.set('tab', t); syncTabs();
-  syncVmLevels(); syncModViews();
+  syncModViews();
 }
 function setTab(t) {
   if (S.mode !== 'panel') { openPanel(t); return; }
@@ -278,7 +277,7 @@ function onTabShown(t) {
   if (t === 'network') { renderNetNow(); layout(); }
   if (t === 'discord') loadDc();
   if (t === 'wallpaper') showWallpapers();
-  if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } syncVmLevels(); }
+  if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } }
   if (t === 'clipboard') renderClip();
   if (t === 'today') { renderWeek(); tickClock(); }
   if (t === 'apps') {
@@ -708,7 +707,7 @@ $('#muLyricsBtn').addEventListener('click', () => {
 
 /* ---------- audio: master volume, devices, microphone, per-app mixer ---------- */
 S.audioDev = null; S.audioApps = []; S.auDevT = 0; S.auAppsT = 0;
-const audioShowing = () => S.mode === 'panel' && S.tab === 'audio' && S.auMode !== 'sounds' && !(S.auMode === 'vm' && S.vm);
+const audioShowing = () => S.mode === 'panel' && S.tab === 'audio' && auView() === 'win';
 /** Devices every 3 s, the mixer (with its live meters) 4 times a second, only while the tab shows. */
 function audioDevLoop() {
   clearTimeout(S.auDevT);
@@ -824,134 +823,34 @@ $('#auApps').addEventListener('click', e => {
   invoke('audio_app_set', { pid: a.pid, muted: a.muted }).catch(err => note('#auNote', String(err)));
 });
 
-/* ---------- Voicemeeter, through VoiceDeck's engine ---------- */
-S.vm = null; S.vdInstalled = false; S.vmInstalled = false; S.vmLevelsOn = false;
-S.auMode = store.get('auMode', 'vm'); S.vmSide = store.get('vmSide', 'in');
-const VIRTUAL_NAMES = ['Voicemeeter VAIO', 'Voicemeeter AUX', 'Voicemeeter VAIO3'];
-function stripName(s) {
-  if (s.label) return s.label;
-  if (s.physical) return s.device || `Input ${s.index + 1}`;
-  const v = S.vm.strips.filter(x => !x.physical).indexOf(s);
-  return VIRTUAL_NAMES[v] || `Virtual ${v + 1}`;
-}
-/** Meters (and the engine's level reads) only while the Voicemeeter view is on screen. */
-function syncVmLevels() {
-  const want = !!(S.vm && S.auMode === 'vm' && S.mode === 'panel' && S.tab === 'audio');
-  if (want !== S.vmLevelsOn) { S.vmLevelsOn = want; quiet(invoke('vm_levels', { on: want })); }
+/* ---------- audio views ----------
+   Module sections with `view` (Voicemeeter's mixer) sit between the tab's own Windows mixer and its
+   notification sounds, picked in the tab's header. Until one is picked, the first module view shows
+   (the mixer it was installed for), else the Windows mixer. */
+S.auMode = store.get('auMode', '');
+if (S.auMode === 'vm') S.auMode = ''; // 0.1.x, when Voicemeeter was built in
+const auViews = () => R.sections.all().filter(s => s.tab === 'audio' && s.view).sort((a, b) => a.order - b.order);
+/** 'win', 'sounds', or a module view's section id. */
+function auView() {
+  if (S.auMode === 'win' || S.auMode === 'sounds') return S.auMode;
+  const v = auViews();
+  return v.some(x => x.id === S.auMode) ? S.auMode : v.length ? v[0].id : 'win';
 }
 function renderAudioHead() {
-  const installed = S.vmInstalled || !!S.vm;
-  $('#auHead').hidden = false; // Sounds is always there
-  $('#auMode [data-mode="vm"]').hidden = !installed;
-  const vmView = installed && S.auMode === 'vm', sndView = S.auMode === 'sounds';
-  $$('#auMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === (vmView ? 'vm' : sndView ? 'sounds' : 'win')));
-  $('#auVm').hidden = !vmView; $('#auWin').hidden = vmView || sndView; $('#auSnd').hidden = !sndView;
-  if (sndView) renderSounds();
-  $('#vmRestart').hidden = !(vmView && S.vm);
-  $('#vdOpen').hidden = !S.vdInstalled;
-  $$('#vmSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.side === S.vmSide));
-  $('#vmStrips').hidden = S.vmSide !== 'in' || !S.vm; $('#vmBuses').hidden = S.vmSide !== 'out' || !S.vm;
-  $('#vmSide').hidden = !S.vm; $('#vmOff').hidden = !!S.vm;
+  const cur = auView();
+  setHtml($('#auMode'), [['win', 'Windows'], ...auViews().map(x => [x.id, x.title]), ['sounds', 'Sounds']].map(([id, t]) => `<button type="button" data-mode="${esc(id)}" aria-pressed="${id === cur}">${esc(t)}</button>`).join(''));
+  $('#auWin').hidden = cur !== 'win'; $('#auSnd').hidden = cur !== 'sounds';
+  if (cur === 'sounds') renderSounds();
+  syncSections();
   if (S.mode === 'panel' && S.tab === 'audio') layout();
 }
-const gainPct = g => clamp((g + 60) / 72 * 100, 0, 100);
-const levelPct = v => clamp((20 * Math.log10(Math.max(v, 1e-6)) + 60) / 72, 0, 1);
-function vmRowHtml(kind, i) {
-  const route = kind === 'strip'
-    ? `<div class="vm-route">${S.vm.busNames.map((n, b) => `<button type="button" class="${n.startsWith('B') ? 'b' : ''}" data-route="${b}" title="Send to ${esc(n)}">${esc(n)}</button>`).join('')}</div>` : '';
-  return `<div class="vm-row${kind === 'bus' ? ' bus' : ''}" data-kind="${kind}" data-i="${i}">
-    <div class="vm-name"><b></b><small></small></div>
-    <div class="vm-fader"><span class="vm-meter"><i></i></span><input type="range" min="-60" max="12" step="0.1" aria-label="Gain"></div>
-    <span class="vm-db"></span>
-    <button type="button" class="vm-btn" data-mute aria-pressed="false" title="Mute">M</button>${route}</div>`;
-}
-/** Builds the rows when the mixer's shape changes, then only updates values (a dragged fader is left alone). */
-function renderVm(full) {
-  renderAudioHead();
-  if (!S.vm) { S.vmShape = ''; return; }
-  const shape = `${S.vm.strips.length}/${S.vm.buses.length}/${S.vm.busNames.join()}`;
-  if (full || shape !== S.vmShape) {
-    S.vmShape = shape;
-    $('#vmStrips').innerHTML = S.vm.strips.map((_, i) => vmRowHtml('strip', i)).join('');
-    $('#vmBuses').innerHTML = S.vm.buses.map((_, i) => vmRowHtml('bus', i)).join('');
-    S.vmMeters = null;
-  }
-  const now = performance.now();
-  const paint = (row, item, name, sub, route) => {
-    txt(row.querySelector('.vm-name b'), name); txt(row.querySelector('.vm-name small'), sub);
-    const input = row.querySelector('input');
-    if (document.activeElement !== input && !(now - (+row.dataset.setAt || -1e9) < 1200)) input.value = item.gain;
-    input.style.setProperty('--p', gainPct(+input.value) + '%');
-    txt(row.querySelector('.vm-db'), (+input.value > 0 ? '+' : '') + (+input.value).toFixed(1));
-    row.classList.toggle('muted', item.mute);
-    row.querySelector('[data-mute]').setAttribute('aria-pressed', item.mute);
-    if (route) row.querySelectorAll('[data-route]').forEach(b => b.setAttribute('aria-pressed', !!route[+b.dataset.route]));
-  };
-  $$('#vmStrips .vm-row').forEach((row, i) => { const s = S.vm.strips[i]; if (s) paint(row, s, stripName(s), s.physical ? (s.device || 'Hardware input') : 'Virtual input', s.routing); });
-  $$('#vmBuses .vm-row').forEach((row, i) => { const b = S.vm.buses[i]; if (b) paint(row, b, b.name, b.device || (b.name.startsWith('B') ? 'Virtual output' : 'No device'), null); });
-  if (full && S.mode === 'panel' && S.tab === 'audio') layout();
-}
-function applyVmDelta(d) {
-  if (!S.vm || !d) return;
-  for (const x of d.strips || []) { const s = S.vm.strips[x.index]; if (s) for (const k of ['label', 'device', 'gain', 'mute', 'solo', 'routing', 'fx']) if (x[k] !== undefined) s[k] = x[k]; }
-  for (const x of d.buses || []) { const b = S.vm.buses[x.index]; if (b) for (const k of ['name', 'device', 'gain', 'mute']) if (x[k] !== undefined) b[k] = x[k]; }
-}
-function paintVmLevels(l) {
-  if (!S.vmMeters) S.vmMeters = { strips: $$('#vmStrips .vm-meter i'), buses: $$('#vmBuses .vm-meter i') };
-  // Reveal the full-width green→red gradient up to the level (scaling it would squeeze the colors).
-  const set = (els, vals) => { if (vals) vals.forEach((lr, i) => { const el = els[i]; if (el) el.style.clipPath = `inset(0 ${((1 - levelPct(Math.max(lr[0], lr[1]))) * 100).toFixed(1)}% 0 0)`; }); };
-  if (S.vmSide === 'in') set(S.vmMeters.strips, l.strips); else set(S.vmMeters.buses, l.buses);
-}
-function renderVmChip() {
-  const chip = $('#barMic'), s = S.vm && S.vm.strips[0];
-  chip.hidden = !s;
-  if (!s) return;
-  setHtml(chip, icon(s.mute ? 'micoff' : 'mic'));
-  chip.classList.toggle('mic-off', s.mute);
-  chip.title = `${stripName(s)}: ${s.mute ? 'muted (click to unmute)' : 'live (click to mute)'}`;
-}
-listen('vm:state', e => { S.vm = e.payload; renderVm(true); renderVmChip(); syncVmLevels(); });
-listen('vm:delta', e => { applyVmDelta(e.payload); renderVm(false); renderVmChip(); });
-listen('vm:levels', e => paintVmLevels(e.payload));
-invoke('vm_state').then(s => { S.vm = s; renderVm(true); renderVmChip(); }).catch(() => {});
-invoke('mixer_apps').then(a => { S.vdInstalled = a.voicedeck; S.vmInstalled = a.voicemeeter; renderAudioHead(); }).catch(() => {});
-
-function vmParam(row, field) { return `${row.dataset.kind === 'strip' ? 'Strip' : 'Bus'}[${row.dataset.i}].${field}`; }
-function vmItem(row) { return row.dataset.kind === 'strip' ? S.vm.strips[+row.dataset.i] : S.vm.buses[+row.dataset.i]; }
-function vmGain(row, g) {
-  const item = vmItem(row); if (!item) return;
-  g = Math.round(clamp(g, -60, 12) * 10) / 10;
-  item.gain = g; row.dataset.setAt = performance.now();
-  const input = row.querySelector('input'); input.value = g;
-  input.style.setProperty('--p', gainPct(g) + '%'); txt(row.querySelector('.vm-db'), (g > 0 ? '+' : '') + g.toFixed(1));
-  clearTimeout(row._t); row._t = setTimeout(() => invoke('vm_set', { name: vmParam(row, 'Gain'), value: g }).catch(err => note('#auNote', String(err))), 30);
-}
-$('#auVm').addEventListener('input', e => { const row = e.target.closest('.vm-row'); if (row && e.target.matches('input')) vmGain(row, +e.target.value); });
-$('#auVm').addEventListener('dblclick', e => { const row = e.target.closest('.vm-fader') && e.target.closest('.vm-row'); if (row) vmGain(row, 0); });
-$('#auVm').addEventListener('wheel', e => {
-  const row = e.target.closest('.vm-fader') && e.target.closest('.vm-row'); if (!row) return;
-  e.preventDefault(); e.stopPropagation();
-  vmGain(row, vmItem(row).gain + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.1 : 1));
-}, { passive: false });
-$('#auVm').addEventListener('click', e => {
-  const row = e.target.closest('.vm-row'); if (!row || !S.vm) return;
-  const item = vmItem(row); if (!item) return;
-  if (e.target.closest('[data-mute]')) {
-    item.mute = !item.mute; renderVm(false); renderVmChip();
-    invoke('vm_set', { name: vmParam(row, 'Mute'), value: item.mute ? 1 : 0 }).catch(err => note('#auNote', String(err)));
-  }
-  const r = e.target.closest('[data-route]');
-  if (r && item.routing) {
-    const b = +r.dataset.route; item.routing[b] = !item.routing[b]; renderVm(false);
-    invoke('vm_set', { name: vmParam(row, S.vm.busNames[b]), value: item.routing[b] ? 1 : 0 }).catch(err => note('#auNote', String(err)));
-  }
-});
 $('#auMode').addEventListener('click', e => {
   const b = e.target.closest('[data-mode]'); if (!b) return;
   S.auMode = b.dataset.mode; store.set('auMode', S.auMode);
-  renderAudioHead(); syncVmLevels();
+  renderAudioHead();
   if (audioShowing()) { audioDevLoop(); audioAppsLoop(); }
 });
+R.sections.on(() => renderAudioHead());
 /* ---------- notification sounds (Audio → Sounds) ---------- */
 function renderSounds() {
   $('#sndOn').setAttribute('aria-pressed', sounds.on); $('#sndOn').textContent = sounds.on ? 'Notification sounds on' : 'Notification sounds off';
@@ -991,18 +890,6 @@ $('#sndOn').addEventListener('click', () => { sounds.set({ on: !sounds.on }); if
 $('#sndFs').addEventListener('click', () => { sounds.set({ fsMute: !sounds.fsMute }); renderSounds(); });
 $('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; });
 $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('mention') !== 'none' ? sounds.choice('mention') : 'glass', 'mention'); renderControls(); });
-$('#vmSide').addEventListener('click', e => {
-  const b = e.target.closest('[data-side]'); if (!b) return;
-  S.vmSide = b.dataset.side; store.set('vmSide', S.vmSide); renderAudioHead();
-});
-$('#vmRestart').addEventListener('click', () => invoke('vm_restart').then(() => note('#auNote', 'Restarting Voicemeeter’s audio engine…')).catch(err => note('#auNote', String(err))));
-$('#vdOpen').addEventListener('click', () => invoke('voicedeck_open').then(() => closePanel(true)).catch(err => note('#auNote', String(err))));
-$('#barMic').addEventListener('click', e => {
-  e.stopPropagation();
-  const s = S.vm && S.vm.strips[0]; if (!s) return;
-  s.mute = !s.mute; renderVmChip(); renderVm(false);
-  invoke('vm_mic').catch(() => { s.mute = !s.mute; renderVmChip(); });
-});
 
 /* ---------- eye tracking (Tobii) ---------- */
 // The backend only reports whether your eyes are on the island (gaze:island) and tracker status.
@@ -1906,8 +1793,12 @@ function wpView() {
   if (S.wpMode === 'island' || !v.length) return 'island';
   return v.some(x => x.id === S.wpMode) ? S.wpMode : v[0].id;
 }
-/** The tab's current view: a module section's id, or '' for the tab's own content. */
-const viewOf = tab => (tab === 'wallpaper' && wpView() !== 'island' ? wpView() : '');
+/** A tab's current view: a module section's id, or '' for the tab's own content (Wallpaper and Audio have views). */
+function viewOf(tab) {
+  if (tab === 'wallpaper') return wpView() !== 'island' ? wpView() : '';
+  if (tab === 'audio') { const v = auView(); return v === 'win' || v === 'sounds' ? '' : v; }
+  return '';
+}
 function showWallpapers() { renderWpMode(); }
 function renderWpMode() {
   const v = wpViews(), cur = wpView(), has = v.length > 0;

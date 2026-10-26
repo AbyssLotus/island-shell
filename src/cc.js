@@ -214,10 +214,6 @@ export function createCommandCenter(ctx) {
       add(S.media.playing ? 'Pause the music' : 'Play the music', S.media.playing ? 'pause' : 'play', `${S.media.app || 'Music'} · ${S.media.title}`, 'apple music media play pause song', () => invoke('media_cmd', { action: 'toggle' }));
       add('Next track', 'next', `${S.media.app || 'Music'}`, 'skip song music', () => invoke('media_cmd', { action: 'next' }));
     }
-    if (S.vm) {
-      add('Mute or unmute my mic', 'mic', 'Voicemeeter · strip 1', 'voicemeeter microphone', () => invoke('vm_mic'));
-      add('Restart the audio engine', 'restart', 'Voicemeeter', 'voicemeeter audio engine fix sound', () => invoke('vm_restart'));
-    }
     if (st.wifi && st.wifi.present) add(st.wifi.on ? 'Turn Wi-Fi off' : 'Turn Wi-Fi on', 'wifi', 'Wireless', 'wifi wireless internet', () => invoke('set_radio', { kind: 'wifi', on: !st.wifi.on }));
     if (st.bluetooth && st.bluetooth.present) add(st.bluetooth.on ? 'Turn Bluetooth off' : 'Turn Bluetooth on', 'bt', 'Wireless', 'bluetooth', () => invoke('set_radio', { kind: 'bluetooth', on: !st.bluetooth.on }));
     add(st.taskbar_hidden ? 'Show the taskbar' : 'Hide the taskbar', 'taskbar', 'Island Shell', 'taskbar windows', () => invoke('set_taskbar', { hidden: !st.taskbar_hidden }));

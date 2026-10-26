@@ -63,7 +63,8 @@ pub struct Backend {
 pub enum RunMode {
     /// From island start to exit, while enabled.
     Always,
-    /// While one of `process` runs, and 5 s after.
+    /// While one of `process` runs, and 5 s after. A UI call also starts it (to open the app, or
+    /// set it up); started that way, it exits after `idle` without calls once no process runs.
     WhileProcess,
     /// Woken every `every` for `island.tick`, and for UI calls; exits when idle.
     Scheduled,
@@ -182,7 +183,7 @@ pub struct Setup {
 }
 
 /// Base tabs with a switch for module views (`sections[].view`).
-pub const VIEW_TABS: [&str; 1] = ["wallpaper"];
+pub const VIEW_TABS: [&str; 2] = ["wallpaper", "audio"];
 
 /// Letters the base keeps for itself (§4.13).
 pub const BASE_HOTKEYS: [&str; 4] = ["A", "V", "N", "W"];

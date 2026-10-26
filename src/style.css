@@ -598,30 +598,9 @@ li.done .lbl { color: var(--muted); text-decoration: line-through; }
 .au-app .ib.muted { color: var(--bad); }
 .au-apps .empty { padding: 10px; }
 
-/* ---------- Voicemeeter (Audio tab) ---------- */
+/* ---------- Audio tab header (its view switch) ---------- */
 .au-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; }
-.vm-side { margin-bottom: 8px; }
-.vm-list { display: grid; gap: 2px; }
-.vm-row { display: grid; grid-template-columns: 128px minmax(0, 1fr) 46px 30px auto; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: var(--ink-2); }
-.vm-row.bus { grid-template-columns: 128px minmax(0, 1fr) 46px 30px; }
-.vm-name { min-width: 0; }
-.vm-name b { display: block; font: 600 12.5px/1.25 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vm-name small { display: block; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vm-fader { position: relative; height: 22px; display: flex; align-items: center; }
-.vm-meter { position: absolute; left: 0; right: 0; top: 50%; height: 8px; margin-top: -4px; border-radius: 4px; background: var(--ink-3); overflow: hidden; pointer-events: none; }
-.vm-meter i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--good) 0 70%, #ffd166 82%, var(--bad) 96%); clip-path: inset(0 100% 0 0); opacity: .55; }
-.vm-fader input { position: relative; -webkit-appearance: none; appearance: none; width: 100%; height: 22px; margin: 0; background: none; cursor: pointer; --p: 83%; }
-.vm-fader input::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--fg) var(--p), transparent var(--p)); opacity: .9; }
-.vm-fader input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--fg); box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
-.vm-row.muted .vm-fader input::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--faint) var(--p), transparent var(--p)); }
-.vm-db { font: 500 11px/1 var(--f-mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-.vm-btn { width: 30px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: var(--ink-3); color: var(--muted); font: 700 11px/1 var(--f-body); cursor: pointer; transition: background .2s, color .2s; }
-.vm-btn[aria-pressed="true"] { background: var(--bad); color: #1a0b0b; }
-.vm-route { display: flex; gap: 3px; }
-.vm-route button { width: 25px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: var(--ink-3); color: var(--muted); font: 700 9.5px/1 var(--f-mono); cursor: pointer; transition: background .2s, color .2s; }
-.vm-route button.b { border-radius: 11px; }
-.vm-route button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
-.vm-route button.b[aria-pressed="true"] { background: color-mix(in oklab, var(--accent) 55%, var(--good)); }
+/* A module's mic chip on the top bar (Voicemeeter's strip 1), while muted. */
 .bchip.mic-off { color: var(--bad); }
 
 /* ---------- Discord ---------- */
