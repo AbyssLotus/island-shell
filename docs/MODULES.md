@@ -51,7 +51,7 @@ Everything in the folder except `src/`, `Cargo.toml` and dotfiles goes into the 
 }
 ```
 
-`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio`, `wallpaper` and `today`, where `"view": true` makes it an alternative the tab's header switches to, and `"replaces": "focus"` puts it in place of Today's Focus card), `cubes` (with `slot`, `size` and an optional docked `site`), `sites` (`url`, `hosts`, `skin`, `default`, `split`), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
+`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio`, `wallpaper` and `today`, where `"view": true` makes it an alternative the tab's header switches to, and `"replaces": "focus"` puts it in place of Today's Focus card), `cubes` (with `slot`, `size` and an optional docked `site`), `sites` (`url`, `hosts`, `skin`, `default`, `split`, and a `reader` with its `readPage`: see [Reading a docked site](#reading-a-docked-site)), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
 
 ## The backend
 
@@ -121,7 +121,8 @@ export function deactivate() {}
   - `store` is localStorage under `mod.<id>.`.
   - `ui` has the island's helpers: `icon`, `esc`, `setHtml`, `txt`, `note`, `ago`…
   - Registering things: `tabs`, `sections`, `cubes` (a stat line and an optional full sheet), `tiles`, `chips`, `search`, `commands`, `activity`, `notify`, `settings.mount` (your page in the Modules cube) and `setup.card`.
-  - Getting around: `open('tab:…' | 'cube:…')` and `openWeb(url)`, which never opens in Edge.
+  - Getting around: `open('tab:…' | 'cube:…' | 'cube:…:web')` (`:web` opens the cube on its docked site) and `openWeb(url)`, which never opens in Edge.
+  - `sites.read(site, args)` runs the site's reader (below).
   - The island's own services through `island`: `presence()` and `on('presence')` (the eye tracker: looking, present, away, off, or '' without one), `quiet(on, label)` (holds module notifications, all but urgent ones, until the module lets go), `layout()`, `showing(tab)`, `closePanel()`, `state()`, `on('panel' | 'tab' | 'skin' | 'activities' | 'level')`, `apps`, `focusApp({ id, exe, hwnd })` (the island is in front when the user asks, so it can bring an app forward), and `audio.appVolume(exe)` / `setAppVolume(exe, level)`.
 - **Activities the island draws itself:**
   - A `timer` activity (`text`, `ends_at` in Unix ms while it runs or `left` in seconds with `paused`, `total`, `tone: 'break'`) becomes the ring and time left on the pill; Today's own timer is one too.
@@ -129,6 +130,20 @@ export function deactivate() {}
   - A `media` activity (title, artist, art, position, `exe`, `lyric`, `run(action)`) becomes the pill's cover and equalizer, the peek, the Controls card and the bar chip.
   - A `call` activity with `avatars` becomes faces on the pill.
 - **Module UI isn't a security boundary.** It runs in the island's page; trust comes from the signed catalog.
+
+## Reading a docked site
+
+A service with no API a module can use (Canvas at a school that turns access tokens off) can still be read the way its own website reads it. A site in the manifest can name a **reader**, a script of the module's:
+
+```jsonc
+"sites": [{ "id": "web", "label": "Canvas website", "url": "https://{settings.domain}/", "hosts": ["{settings.domain}"],
+            "reader": "readers/canvas-reader.js", "readPage": "/api/v1/users/self" }]
+```
+
+- `ctx.sites.read('web', args)` opens a hidden copy of the site at `readPage` (a path; the start page if there's none). It has the docked site's sign-in, since they share one browser profile. Once a page of the site's own `hosts` has loaded, the reader runs in it as `(reader)(args)`, and the call resolves to what it resolves to (anything JSON can hold). Then the copy is closed. If the site sends the copy to a sign-in page elsewhere, the call fails with "Sign in to … first" and the reader never runs there.
+- The reader's file is one function expression, `async function name(args) { … }`, with the page's `fetch`, `document` and cookies. Its sha256 is checked against the manifest like a skin's. A light `readPage` loads faster: Canvas's reader uses a small JSON page.
+- The copy has no access to the island, like a docked site. The island asks, and takes the answer back by evaluating a script in the page, so treat the answer as the site's data.
+- Reads are a few seconds each and at most three run at once. The backend can't start one (it can't reach the site's sign-in), so a backend that wants regular reads emits an event its UI answers. Canvas's tick emits `read`, and its UI (`ui.eager`) reads and hands the result to the backend's `ingest`.
 
 ## Topics
 

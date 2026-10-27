@@ -41,7 +41,7 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 | :---: | --- | --- |
 | 🎵 | **Music** | Apple Music, Spotify, Amazon Music, YouTube Music and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
 | 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), @mentions on the island, and the Discord web app docked in the Command Center with an island skin. |
-| 🎓 | **Canvas** | Due dates, grades, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. |
+| 🎓 | **Canvas** | Due dates, grades, recent scores, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. Sign in there once: no access token needed. |
 | ⭐ | **Destiny 2 (with DIM)** | Your Guardians, loadouts, current activity, Xûr and the weekly reset through the Bungie API, and Destiny Item Manager docked in the Command Center in the island's look. |
 | 🎮 | **Steam & games** | Your library with your custom artwork, playtime, Play / Update, your other launchers, and Win + G. |
 | 👁️ | **Tobii eye tracker** | The island notices when you look at it, notifications wait until you've seen them, and your music can pause when you step away. |

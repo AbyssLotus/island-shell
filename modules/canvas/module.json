@@ -1,20 +1,20 @@
 {
   "id": "canvas",
   "name": "Canvas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
-  "description": "Due dates, grades and announcements from your school's Canvas, with reminders before things are due and Canvas itself docked in the Command Center.",
+  "description": "Due dates, grades and announcements from your school's Canvas, with reminders before things are due and Canvas itself docked in the Command Center. Sign in there once and no access token is needed.",
   "icon": "ui/icon.svg",
   "backend": { "exe": "canvas-module.exe", "run": "scheduled", "every": "10m", "idle": "150s" },
-  "ui": { "entry": "ui/canvas.js", "css": ["ui/canvas.css"] },
+  "ui": { "entry": "ui/canvas.js", "css": ["ui/canvas.css"], "eager": true },
   "contributes": {
     "tabs": [{ "id": "canvas", "title": "Canvas", "icon": "cap", "order": 50 }],
     "cubes": [{ "id": "canvas", "title": "Canvas", "icon": "cap", "size": "S", "slot": "canvas", "site": "web" }],
-    "sites": [{ "id": "web", "label": "Canvas website", "url": "https://{settings.domain}/", "hosts": ["*.instructure.com", "{settings.domain}"], "skin": "skins/canvas-skin.css" }],
+    "sites": [{ "id": "web", "label": "Canvas website", "url": "https://{settings.domain}/", "hosts": ["*.instructure.com", "{settings.domain}"], "skin": "skins/canvas-skin.css", "reader": "readers/canvas-reader.js", "readPage": "/api/v1/users/self" }],
     "calendar": [{ "source": "canvas", "name": "Canvas", "color": "#f5c26b" }],
     "setup": { "card": true }
   },
-  "talksTo": ["Your school's Canvas (the address you enter), with your own access token or calendar feed link"],
+  "talksTo": ["Your school's Canvas (the address you enter): through the Canvas website where you sign in, or with your own access token or calendar feed link"],
   "hosts": ["{settings.domain}"],
   "keywords": ["canvas", "school", "homework", "assignment", "due", "grades", "class", "course"],
   "legacy": ["canvas.json", "canvas-seen.json", "canvas-done.json"]

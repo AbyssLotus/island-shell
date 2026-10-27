@@ -2105,10 +2105,12 @@ listen('island:activities', e => {
   for (const a of e.payload || []) R.activities.set({ ...a, id: `${a.module}:${a.id}`, aid: a.id, backend: true });
   islandEvents.dispatchEvent(new CustomEvent('activities'));
 });
+/** 'tab:<id>', 'cube:<id>', or 'cube:<id>:web' for a cube's docked site (signing in to Canvas). */
 function openTarget(target) {
-  const [kind, id] = String(target || '').split(':');
+  const [kind, id, mode] = String(target || '').split(':');
+  const how = mode === 'web' || mode === 'island' ? mode : undefined;
   if (kind === 'tab' && R.tabs.has(id)) { if (cmdCenter.isOpen()) cmdCenter.close(() => openPanel(id, true), true); else openPanel(id); }
-  else if (kind === 'cube') { if (!cmdCenter.isOpen()) cmdCenter.open().then(() => cmdCenter.openSheet(id)); else cmdCenter.openSheet(id); }
+  else if (kind === 'cube') { if (!cmdCenter.isOpen()) cmdCenter.open().then(() => cmdCenter.openSheet(id, null, how)); else cmdCenter.openSheet(id, null, how); }
 }
 /** Controls tiles from modules, after the base's own. */
 function renderModTiles() {

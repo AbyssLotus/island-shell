@@ -33,8 +33,10 @@
 //                                   `call` (see app.js), `timer` { text, ends_at | left, total, tone }
 //                                   and `custom` { icon, text, sub } (a short tag beside the clock)
 //   notify({ title, body, icon, img, round, urgent, action, sound, ms })
-//   open('tab:<id>' | 'cube:<id>')
+//   open('tab:<id>' | 'cube:<id>' | 'cube:<id>:web')   ':web' opens the cube on its docked site
 //   openWeb(url)                    a link in the default browser (never Edge)
+//   sites.read(site, args)          runs the site's reader (manifest sites[].reader) in a hidden copy
+//                                   of that docked site, signed in like it; resolves to its answer
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
 //                                   focusApp({ id, exe, hwnd }), audio.appVolume(exe) / .setAppVolume(exe, level),
 //                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
@@ -228,6 +230,7 @@ export function createModuleHost(env) {
       notify: n => env.notify(id, n),
       open: target => env.open(target),
       openWeb: url => invoke('open_link', { url }),
+      sites: { read: (site, args) => invoke('mod_site_read', { site: `${id}/${site}`, args: args === undefined ? null : args }) },
       // The island's services, plus holding notifications, which is the module's own until it lets go.
       island: { ...env.island, quiet: (on, label) => env.quiet(id, !!on, label || m.man.name) },
       settings: { mount(fn) { m.settings = fn; } },
