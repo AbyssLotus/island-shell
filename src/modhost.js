@@ -20,7 +20,8 @@
 //   imageUrl(file)                  an image in a folder its backend shared (host.images)
 //   ui                              the island's helpers: icon(), esc(), setHtml(), txt(), clip(), grad(), glyph(), ago(), note()
 //   tabs.register({ id, mount(root), show(), hide() })        an island tab from its manifest
-//   sections.register({ id, mount(root), show(), hide() })    a section of a base tab
+//   sections.register({ id, mount(root), show(), hide() })    a section of a base tab (in place of
+//                                   one of its cards with the manifest's `replaces`)
 //   cubes.register({ id, stat(), sheet?: { mount(root), unmount(), key(e) } })
 //     (each root is an element in a shadow root of the module's own, with the kit and its CSS)
 //   tiles.set({ id, icon, title, sub, pressed, hidden, run }), tiles.remove(id)    Controls tiles
@@ -28,14 +29,19 @@
 //     (with in: 'net', an icon badge on the bar's network chip instead)
 //   search.register({ id, kind, label, icon, items() })        Command Center results
 //   commands.set([{ id, title, icon, sub, keys, run, stay }])  quick commands (replaces its own)
-//   activity.set({ id, kind, … }), activity.clear(id)         live things on the pill
+//   activity.set({ id, kind, … }), activity.clear(id)         live things on the pill: `media` and
+//                                   `call` (see app.js), `timer` { text, ends_at | left, total, tone }
+//                                   and `custom` { icon, text, sub } (a short tag beside the clock)
 //   notify({ title, body, icon, img, round, urgent, action, sound, ms })
 //   open('tab:<id>' | 'cube:<id>')
 //   openWeb(url)                    a link in the default browser (never Edge)
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
 //                                   focusApp({ id, exe, hwnd }), audio.appVolume(exe) / .setAppVolume(exe, level),
 //                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
-//                                   apps.list() / .open(id) / .menu(id, x, y): the Start menu's apps
+//                                   apps.list() / .open(id) / .menu(id, x, y): the Start menu's apps,
+//                                   presence(): 'looking' | 'present' | 'away' | 'off' | '' (no eye
+//                                   tracker), with on('presence'), and quiet(on, label): hold
+//                                   notifications (all but urgent ones) until it's let go
 //   settings.mount(fn(root))        its page in the Modules sheet
 //   setup.card(fn() → { state })    its card in the setup guide, and how it's doing ('Connected')
 
@@ -75,7 +81,7 @@ export function shadowFor(host, id, css, version) {
 
 /**
  * env, from app.js: { R, invoke, listen, log, ui, island, addView(tab), removeView(tab), notify(module, n),
- * open(target), setTiles(), setChips(), activitiesChanged() }
+ * quiet(module, on, label), open(target), setTiles(), setChips(), activitiesChanged() }
  */
 export function createModuleHost(env) {
   const { R, invoke, listen, log } = env;
@@ -92,7 +98,7 @@ export function createModuleHost(env) {
       if (R.tabs.has(t.id)) { log(`modules: ${id} wants tab ${t.id}, which is taken`); continue; }
       R.tabs.add({ id: t.id, title: t.title, icon: iconFor(id, t.icon, man.version), order: t.order, width: t.width || 760, module: id });
     }
-    for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name, view: !!s.view });
+    for (const s of c.sections || []) R.sections.add({ id: `${id}:${s.id}`, sid: s.id, tab: s.tab, order: s.order, module: id, title: s.title || man.name, view: !!s.view, replaces: s.replaces || '' });
     for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, split: !!s.split, module: id });
     for (const cube of c.cubes || []) {
       if (R.cubes.has(cube.id)) { log(`modules: ${id} wants cube ${cube.id}, which is taken`); continue; }
@@ -222,7 +228,8 @@ export function createModuleHost(env) {
       notify: n => env.notify(id, n),
       open: target => env.open(target),
       openWeb: url => invoke('open_link', { url }),
-      island: env.island,
+      // The island's services, plus holding notifications, which is the module's own until it lets go.
+      island: { ...env.island, quiet: (on, label) => env.quiet(id, !!on, label || m.man.name) },
       settings: { mount(fn) { m.settings = fn; } },
       setup: { card(fn) { R.setup.set({ id, module: id, order: 100, render: fn }); } }
     };

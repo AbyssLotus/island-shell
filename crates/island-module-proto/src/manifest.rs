@@ -162,6 +162,10 @@ pub struct Section {
     /// switch take one: `wallpaper`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub view: bool,
+    /// A card of the base tab this section takes the place of while it's installed (the Focus
+    /// module's timer in place of Today's own): one of [`REPLACEABLE`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -187,6 +191,9 @@ pub struct Setup {
 
 /// Base tabs with a switch for module views (`sections[].view`).
 pub const VIEW_TABS: [&str; 2] = ["wallpaper", "audio"];
+
+/// Base cards a section may take the place of (`sections[].replaces`), as (tab, card).
+pub const REPLACEABLE: [(&str, &str); 1] = [("today", "focus")];
 
 /// Letters the base keeps for itself (§4.13).
 pub const BASE_HOTKEYS: [&str; 4] = ["A", "V", "N", "W"];
@@ -276,6 +283,12 @@ impl Manifest {
             }
             if s.view && !VIEW_TABS.contains(&s.tab.as_str()) {
                 return Err(ctx(&format!("section {}: only {} can take a view", s.id, VIEW_TABS.join(", "))));
+            }
+            if let Some(card) = &s.replaces {
+                if s.view || !REPLACEABLE.contains(&(s.tab.as_str(), card.as_str())) {
+                    let list: Vec<String> = REPLACEABLE.iter().map(|(t, c)| format!("{c} in {t}")).collect();
+                    return Err(ctx(&format!("section {}: it can only take the place of {}", s.id, list.join(", "))));
+                }
             }
         }
         for cal in &c.calendar {
@@ -496,6 +509,13 @@ mod tests {
         assert!(broken(|v| v["files"] = serde_json::json!({ "module.json": format!("sha256-{}", "A".repeat(44)) })).contains("module.json itself"));
         assert!(broken(|v| v["files"] = serde_json::json!({ "ui/canvas.js": "abc" })).contains("sha256"));
         assert!(broken(|v| { v.as_object_mut().unwrap().remove("talksTo"); }).contains("talksTo"));
+        // A section can take the place of a card the base lets go of, and only that.
+        let section = |tab: &str, card: &str| serde_json::json!([{ "tab": tab, "id": "timer", "order": 1, "replaces": card }]);
+        assert!(broken(|v| v["contributes"]["sections"] = section("today", "todo")).contains("focus in today"));
+        assert!(broken(|v| v["contributes"]["sections"] = section("audio", "focus")).contains("take the place"));
+        let mut v: serde_json::Value = serde_json::from_str(canvas()).unwrap();
+        v["contributes"]["sections"] = section("today", "focus");
+        assert_eq!(Manifest::parse(&serde_json::to_vec(&v).unwrap()).unwrap().contributes.sections[0].replaces.as_deref(), Some("focus"));
     }
 
     #[test]

@@ -1,0 +1,14 @@
+{
+  "id": "focus",
+  "name": "Focus timer",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Focus stretches and breaks, Pomodoro style, on the pill and in Today. Notifications wait while you focus, and with the eye tracker it pauses when you step away.",
+  "icon": "ui/icon.svg",
+  "ui": { "entry": "ui/focus.js", "css": ["ui/focus.css"], "eager": true },
+  "contributes": {
+    "sections": [{ "tab": "today", "id": "timer", "order": 0, "title": "Focus", "replaces": "focus" }]
+  },
+  "talksTo": [],
+  "keywords": ["focus", "pomodoro", "timer", "study", "break", "concentrate", "do not disturb", "productivity"]
+}
