@@ -1,0 +1,99 @@
+# Builds a release for the built-in updater (docs/BUILDING.md, "Releases and updates"): the one-click
+# installer, every module's package and the signed catalog (tools/pack-modules), as a DRAFT release
+# the owner reviews and publishes. Run it by hand from the Actions tab.
+#
+# Signing needs two repository secrets, ISLAND_SIGNING_KEY (the key file's text) and, if it has one,
+# ISLAND_SIGNING_KEY_PASSWORD. Without them it's a dry run: everything is built and packed, the
+# catalog is left unsigned, nothing is released, and the files are attached to the run instead.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "One or two sentences for the update prompt (what's new)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, pack and draft
+    runs-on: windows-latest
+    env:
+      CARGO_TERM_COLOR: always
+      ISLAND_SIGNING_KEY: ${{ secrets.ISLAND_SIGNING_KEY }}
+      ISLAND_SIGNING_KEY_PASSWORD: ${{ secrets.ISLAND_SIGNING_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+      # Through the environment, never pasted into a script.
+      NOTES: ${{ inputs.notes }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargo = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($v -ne $cargo) { Write-Output "::error::tauri.conf.json says $v but src-tauri/Cargo.toml says $cargo; the updater compares the latter, so they must match"; exit 1 }
+          if (gh release view "v$v" 2>$null) { Write-Output "::error::A release v$v already exists; bump the version first"; exit 1 }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          if ($env:ISLAND_SIGNING_KEY) { "signed=true" >> $env:GITHUB_OUTPUT } else { "signed=false" >> $env:GITHUB_OUTPUT; Write-Output "::warning::DRY RUN: ISLAND_SIGNING_KEY isn't set, so the catalog won't be signed and nothing will be released" }
+          $global:LASTEXITCODE = 0
+
+      - name: Build the installer
+        run: npx --yes @tauri-apps/cli@2 build
+
+      - name: Build the modules
+        run: cargo build --release --locked --workspace --bins --exclude island-shell --exclude pack-modules
+
+      - name: Last release's catalog (unchanged modules keep their packages)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force prev | Out-Null
+          gh release download --pattern modules.json --dir prev 2>$null
+          if (-not (Test-Path prev/modules.json)) { Write-Output "No earlier catalog: every module is packed new." }
+          $global:LASTEXITCODE = 0
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $installer = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $packArgs = @("pack", "--out", "dist", "--version", $v, "--release-url", "https://github.com/${{ github.repository }}/releases/download/v$v", "--installer", $installer.FullName, "--notes", $env:NOTES)
+          if (Test-Path prev/modules.json) { $packArgs += @("--previous", "prev/modules.json") }
+          if ("${{ steps.version.outputs.signed }}" -ne "true") { $packArgs += "--unsigned" }
+          cargo run --release --locked -p pack-modules -- @packArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The key built into the app must be the one the catalog is signed with, or no one could update.
+      - name: Verify against the built-in key
+        if: steps.version.outputs.signed == 'true'
+        run: cargo run --release --locked -p pack-modules -- verify dist --key src-tauri/catalog.pub
+
+      - name: Draft the release
+        if: steps.version.outputs.signed == 'true'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $notes = if ($env:NOTES) { $env:NOTES } else { "Island Shell $v" }
+          gh release create "v$v" (Get-ChildItem dist/*).FullName --draft --target "${{ github.sha }}" --title "Island Shell $v" --notes $notes
+
+      - name: Keep the dry run's files
+        if: steps.version.outputs.signed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-unsigned
+          path: dist/

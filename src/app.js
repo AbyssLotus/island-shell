@@ -1,10 +1,13 @@
 import { WALLS, drawWall } from './engine.js';
 import { createCommandCenter } from './cc.js';
 import { createSounds } from './sounds.js';
+import { createRegistry, topActivity, restWeather, restDate } from './registry.js';
+import { createModuleHost } from './modhost.js';
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI.core.invoke;
-const assetUrl = p => TAURI.core.convertFileSrc(p);
+/** A file on disk as a URL the page can load (URLs, like a module's images, pass through). */
+const assetUrl = p => (/^(https?|data|blob):/.test(p) ? p : TAURI.core.convertFileSrc(p));
 const listen = TAURI.event.listen;
 const appWin = TAURI.window.getCurrentWindow();
 
@@ -60,6 +63,7 @@ const IC = {
   restart: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   cloudsun: '<path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.95 12.65a4 4 0 0 0-5.93-4.13"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
@@ -105,9 +109,20 @@ const IC = {
 const icon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
 
+/* ---------- tabs (src/registry.js) ---------- */
+const R = createRegistry();
+// The base's own tabs, [id, title, icon, panel width, order]. Modules add theirs from their manifests
+// (src/modhost.js), slotting in by order: Music's 20, Canvas's 50, Discord's 70, Games' 80 and Destiny's 90 keep their old places.
+[['controls', 'Controls', 'gear', 600, 10], ['audio', 'Audio', 'speaker', 680, 30], ['today', 'Today', 'calendar', 760, 40],
+  ['network', 'Network', 'wifi', 680, 60],
+  ['stats', 'Stats', 'pulse', 720, 100], ['clipboard', 'Clipboard', 'clip', 760, 110], ['apps', 'Apps', 'grid', 640, 120],
+  ['wallpaper', 'Wallpaper', 'image', 660, 130], ['power', 'Power', 'power', 600, 140]]
+  .forEach(([id, title, ic, width, order]) => R.tabs.add({ id, title, icon: ic, width, order }));
+/** Tab ids in strip order, kept current as modules come and go. */
+let TABS = R.tabs.ids();
+const tabW = t => (R.tabs.get(t) || {}).width || 700;
+
 /* ---------- state ---------- */
-const TABS = ['controls', 'music', 'audio', 'today', 'canvas', 'network', 'discord', 'games', 'destiny', 'stats', 'clipboard', 'apps', 'wallpaper', 'power'];
-const TAB_W = { controls: 600, music: 700, audio: 680, today: 760, canvas: 760, network: 680, discord: 700, games: 760, destiny: 760, stats: 720, clipboard: 760, apps: 640, wallpaper: 660, power: 600 };
 const TOP = 8;
 let BAR_H = 40; // 48 for the tall bar
 /** Either top-bar layout: the regular bar or the taller one. */
@@ -118,8 +133,7 @@ const gradFor = s => { const g = GRADS[hashStr(s) % GRADS.length]; return `linea
 
 const S = {
   mode: 'boot', tab: TABS.includes(store.get('tab', '')) ? store.get('tab', '') : 'controls', hover: false,
-  status: null, media: null, mediaKey: '', thumb: null, thumbTry: 0, mediaHold: null, seek: null, scrubbing: false, scrubVal: 0, appVolAt: 0, tickRaf: 0,
-  lyricsOn: store.get('lyrics', true), ly: { key: '', state: 'idle', data: null, idx: -1 }, lyWant: '', lyWantAt: 0, lyFollowPause: 0,
+  status: null, media: null, mediaKey: '', meterFor: '', tickRaf: 0,
   audio: null, volSetAt: -1e9, // when the user last moved a volume slider (nothing yet)
   dark: store.get('dark', true),
   wall: store.get('wall', -1), wallSel: 0, follow: store.get('follow', false), applying: false,
@@ -145,38 +159,35 @@ function syncAccentMode() { document.documentElement.classList.toggle('accent-ta
 const island = $('#island');
 const L = { pill: $('#L-pill'), peek: $('#L-peek'), toast: $('#L-toast'), panel: $('#L-panel') };
 const views = Object.fromEntries(TABS.map(t => [t, $(`.view[data-tab="${t}"]`)]));
+/** The tab strip, built from the registry (an icon name, or a module's own .svg). */
+function tabIcon(t) { return /\.svg$/.test(t.icon) ? `<img class="i" src="${esc(t.icon)}" alt="">` : icon(t.icon); }
+function renderTabs() {
+  const nav = $('.tabs'), ink = $('.tab-ink');
+  nav.replaceChildren(ink);
+  nav.insertAdjacentHTML('beforeend', R.tabs.all().map(t => `<button class="tab" type="button" role="tab" id="tab-${esc(t.id)}" data-tab="${esc(t.id)}" aria-controls="v-${esc(t.id)}">${tabIcon(t)}<span>${esc(t.title)}</span></button>`).join(''));
+  TABS = R.tabs.ids(); tabLabelW = null;
+}
 const pillW = () => (S.timer.running ? 236 : 200) + callW();
 const maxW = () => Math.max(240, innerWidth - 24);
 
-/** Drops heavy, image-filled views a moment after they stop showing, so their decoded images
- * (the Games covers, some animated) don't sit in memory while the island rests. */
-function releaseHidden() {
-  clearTimeout(S.releaseT);
-  S.releaseT = setTimeout(() => {
-    if (!(S.mode === 'panel' && S.tab === 'games')) setHtml($('#gShelf'), '');
-    if (!(S.mode === 'panel' && S.tab === 'wallpaper')) clearWeGrid();
-  }, 900);
-}
 function setMode(m) {
   S.mode = m; island.dataset.mode = m;
   if (m !== 'toast') S.toastTop = false;
   if (m !== 'toast' && S.urgent) { S.urgent = false; island.classList.toggle('fs-hidden', !!S.fullscreen && m !== 'panel'); }
-  if (m !== 'panel') releaseHidden();
-  syncVmLevels();
   for (const [k, el] of Object.entries(L)) el.classList.toggle('on', k === m);
   L.pill.setAttribute('aria-expanded', m === 'panel');
-  layout(); mediaTick();
+  layout(); mediaTick(); syncModViews();
 }
 let lastRect = '';
 function layout() {
   const mw = maxW(); let w = 36, h = 36, r = 18;
   L.pill.style.width = pillW() + 'px';
   L.peek.style.width = Math.min(400, mw) + 'px';
-  for (const t of TABS) views[t].style.width = Math.min(TAB_W[t], mw) + 'px';
+  for (const t of TABS) if (views[t]) views[t].style.width = Math.min(tabW(t), mw) + 'px';
   if (S.mode === 'pill') { w = pillW(); h = 38; r = 19; }
   else if (S.mode === 'peek') { w = Math.min(400, mw); h = 84; r = 30; }
   else if (S.mode === 'toast') { w = Math.min($('#toast').offsetWidth, mw); h = 52; r = 26; }
-  else if (S.mode === 'panel') { w = Math.min(TAB_W[S.tab], mw); h = 54 + views[S.tab].offsetHeight; r = 30; }
+  else if (S.mode === 'panel') { w = Math.min(tabW(S.tab), mw); h = 54 + views[S.tab].offsetHeight; r = 30; }
   island.style.width = w + 'px'; island.style.height = h + 'px'; island.style.borderRadius = r + 'px';
   // Bar style: the island is only the dropdown under the chip that opened it (or a notification).
   const bar = isBar();
@@ -202,9 +213,10 @@ function layout() {
    fact, so the strip, the highlight and the island all move together on the same spring. */
 const TAB_MIN = 9.5 + 15 + 9.5, TAB_LABEL_GAP = 6, TABS_GAP = 2, TABS_PAD = 3;
 let tabLabelW = null; // each label's natural width (re-measured once the fonts are in)
+renderTabs();
 function tabWidths(active) {
   if (!tabLabelW) tabLabelW = Object.fromEntries(TABS.map(t => [t, $(`#tab-${t} span`).offsetWidth]));
-  const room = Math.min(TAB_W[active], maxW()) - 20 - TABS_PAD * 2 - TABS_GAP * (TABS.length - 1);
+  const room = Math.min(tabW(active), maxW()) - 20 - TABS_PAD * 2 - TABS_GAP * (TABS.length - 1);
   const w = Object.fromEntries(TABS.map(t => [t, TAB_MIN]));
   let used = TAB_MIN * TABS.length;
   const i0 = TABS.indexOf(active), order = [i0];
@@ -226,7 +238,7 @@ function moveInk() {
     if (t === S.tab) at = x;
     x += w[t] + TABS_GAP;
   }
-  const ink = $('.tab-ink'), nav = $('.tabs'), total = x - TABS_GAP + TABS_PAD, fits = total <= Math.min(TAB_W[S.tab], maxW()) - 20;
+  const ink = $('.tab-ink'), nav = $('.tabs'), total = x - TABS_GAP + TABS_PAD, fits = total <= Math.min(tabW(S.tab), maxW()) - 20;
   ink.style.width = w[S.tab] + 'px'; ink.style.transform = `translateX(${at}px)`;
   nav.classList.toggle('over', !fits);
   if (!fits) nav.scrollTo({ left: at - nav.clientWidth / 2 + w[S.tab] / 2, behavior: reduced ? 'auto' : 'smooth' });
@@ -251,8 +263,7 @@ function switchView(t, instant) {
   if (!instant) { nv.style.transition = 'none'; nv.style.setProperty('--dx', `${28 * dir}px`); void nv.offsetWidth; nv.style.transition = ''; }
   nv.style.setProperty('--dx', '0px'); nv.classList.add('on');
   S.tab = t; store.set('tab', t); syncTabs();
-  if (from === 'games' || from === 'wallpaper') releaseHidden();
-  syncVmLevels();
+  syncModViews();
 }
 function setTab(t) {
   if (S.mode !== 'panel') { openPanel(t); return; }
@@ -260,15 +271,11 @@ function setTab(t) {
   switchView(t, false); layout(); moveInk(); onTabShown(t);
 }
 function onTabShown(t) {
-  if (t === 'music' || t === 'controls') { S.ly.idx = -2; syncLyric(curPos(), true); mediaTick(); }
+  if (t === 'controls') mediaTick();
   if (t === 'stats') statsLoop();
-  if (t === 'network') { renderVpn(); vpnLoop(); }
-  if (t === 'discord') loadDc();
-  if (t === 'destiny') d2Loop();
-  if (t === 'canvas') cvLoop();
-  if (t === 'games') gamesLoop();
+  if (t === 'network') { renderNetNow(); layout(); }
   if (t === 'wallpaper') showWallpapers();
-  if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } syncVmLevels(); }
+  if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } }
   if (t === 'clipboard') renderClip();
   if (t === 'today') { renderWeek(); tickClock(); }
   if (t === 'apps') {
@@ -278,8 +285,8 @@ function onTabShown(t) {
 }
 /** In bar style, where a panel opened by hotkey drops down from. */
 function anchorFor(tab) {
-  const sel = { apps: '#barApps', controls: '#barGear', audio: '#barVol', music: '#barMedia', network: '#barNet', discord: '#barDc', games: '#barGames', today: '#barClock', stats: '#barCpu', power: '#barPower' }[tab];
-  const el = sel && $(sel);
+  const sel = { apps: '#barApps', controls: '#barGear', audio: '#barVol', music: '#barMedia', network: '#barNet', games: '#barGames', today: '#barClock', stats: '#barCpu', power: '#barPower' }[tab];
+  const el = sel ? $(sel) : $(`[data-mchip][data-opens="tab:${CSS.escape(tab)}"]`);
   if (!el || el.hidden) return innerWidth / 2;
   const r = el.getBoundingClientRect();
   return r.left + r.width / 2;
@@ -323,7 +330,7 @@ island.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') on
 island.addEventListener('pointerleave', onLeave);
 L.pill.addEventListener('click', () => openPanel());
 L.pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPanel(null, true); } });
-L.peek.addEventListener('click', e => { if (!e.target.closest('[data-act]')) openPanel(S.media ? 'music' : null); });
+L.peek.addEventListener('click', e => { if (e.target.closest('[data-act]')) return; if (S.media && S.media.action) openTarget(S.media.action); else openPanel(null); });
 L.toast.addEventListener('click', () => openPanel(S.toastTab || undefined));
 
 let wheelAcc = 0, wheelX = 0, wheelT, wheelLock = 0;
@@ -363,7 +370,7 @@ document.addEventListener('pointerdown', e => {
   const inCc = e.target.closest && e.target.closest('#cc');
   if (S.mode === 'panel' && !island.contains(e.target) && !inMenu && !inBar && !inCc) closePanel();
 });
-$$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+$('.tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab); });
 
 /* toast */
 let toastT;
@@ -390,213 +397,135 @@ function toast(title, sub, ic, opts = {}) {
   } else toastT = setTimeout(hide, ms);
 }
 
-/* ---------- status: media, audio, radios ---------- */
+/* ---------- status: audio, radios ---------- */
 const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 async function pollStatus() {
   try { applyStatus(await invoke('get_status')); } catch (e) {}
   setTimeout(pollStatus, 1000);
 }
-/** What the user just changed wins over the next status polls (players report changes late). */
-function holdMedia(fields, ms = 1800) {
-  S.mediaHold = { ...fields, until: performance.now() + ms };
-  if (S.media) Object.assign(S.media, fields);
-}
 function applyStatus(st) {
   S.status = st;
-  const m = st.media, hold = S.mediaHold;
-  if (m && hold && performance.now() < hold.until) for (const k in hold) if (k !== 'until') m[k] = hold[k];
-  const changed = !!m !== !!S.media || !!(m && m.key !== S.mediaKey);
-  S.media = m;
-  if (!m) { S.mediaKey = ''; setThumb(null); setTint(null); }
-  else if (m.key !== S.mediaKey || (!S.thumb && Date.now() - S.thumbTry > 5000)) {
-    if (m.key !== S.mediaKey) { setThumb(null); S.seek = null; }
-    S.mediaKey = m.key; S.thumbTry = Date.now();
-    const key = m.key;
-    // The artwork arrives as raw bytes and lives as one blob URL (no base64 copies in the page).
-    invoke('media_thumb').then(buf => {
-      if (S.mediaKey !== key || !buf || !buf.byteLength) return;
-      setThumb(URL.createObjectURL(new Blob([buf]))); renderMedia(); tintFrom(S.thumb);
-    }).catch(() => {});
-  }
   if (st.audio && performance.now() - S.volSetAt > 1500) S.audio = st.audio;
-  maybeLyrics(m);
+  renderMediaSource(); renderControls(); renderBar();
+  if (S.mode === 'panel' && S.tab === 'network') renderNetNow();
+}
+
+/* ---------- now playing (a module's `media` activity: the Music module's) ----------
+   What's playing shows on the pill (cover and equalizer), the peek, the Controls card and the top
+   bar, all drawn from the highest `media` activity; their buttons go back to its run(action). The
+   equalizer follows the player's own sound: the activity's image names (`exe`), metered here.
+   With nothing playing, the pill rests on the weather, the date and the clock (renderRest). */
+function mediaOf(a) {
+  if (!a) return null;
+  return {
+    title: a.text || '', artist: a.sub || '', app: a.app || '', playing: !!a.playing, position: +a.position || 0, duration: +a.duration || 0,
+    sampled_at: +a.sampled_at || Date.now(), can_next: !!a.can_next, can_prev: !!a.can_prev, key: a.key || a.text || '',
+    art: a.art || '', exe: a.exe || '', lyric: a.lyric || '', action: a.action || '', run: typeof a.run === 'function' ? a.run : null
+  };
+}
+/** The activities changed: what's playing now, if anything. */
+function syncMedia() {
+  const m = mediaOf(topActivity(R.activities.all().filter(x => x.kind === 'media')));
+  const changed = !!m !== !!S.media || !!(m && m.key !== S.mediaKey);
+  S.media = m; S.mediaKey = m ? m.key : '';
+  // The equalizer meters the player itself while it plays.
+  const meter = m ? `${m.exe}|${m.playing}` : '';
+  if (meter !== S.meterFor) { S.meterFor = meter; quiet(invoke('meter_follow', { exe: m ? m.exe : '', playing: !!(m && m.playing) })); }
   renderMedia(changed); renderControls(); renderBar(); mediaTick();
 }
-function setThumb(url) { if (S.thumb) URL.revokeObjectURL(S.thumb); S.thumb = url; }
+/** A now-playing button (prev, toggle, next), for the activity's module. */
+function mediaAct(action) {
+  const m = S.media; if (!m || !m.run) return;
+  Promise.resolve().then(() => m.run(action)).catch(err => toast(clipTxt(m.app || 'Music', 48), clipTxt(String((err && err.message) || err), 72), 'x', { sound: 'problem' }));
+}
 const artEls = $$('[data-m="art"]'), titleEls = $$('[data-m="title"]'), artistEls = $$('[data-m="artist"]'), sourceEls = $$('[data-m="source"]'), durEls = $$('[data-m="dur"]'), toggleBtns = $$('[data-act="toggle"]');
-function renderMedia(changed) {
+function renderMediaSource() {
+  const m = S.media;
+  sourceEls.forEach(e => txt(e, m ? `${m.app}${S.audio ? ' · ' + S.audio.device : ''}` : (S.audio ? S.audio.device : 'Sound')));
+}
+/** The peek's second line with nothing playing: the weather, when there's a reading. */
+function restLine() {
+  const c = store.get('weather', null), w = restWeather(c, S.city, S.unit);
+  return w ? `${w.temp}°${S.unit} · ${wmo(c.code)[0]}${c.name ? ' · ' + c.name : ''}` : '';
+}
+function renderMedia() {
   const m = S.media;
   island.classList.toggle('no-media', !m);
   island.classList.toggle('playing', !!(m && m.playing));
-  const art = S.thumb ? `url("${S.thumb}") center / cover no-repeat` : m ? gradFor(m.title + m.artist) : 'var(--ink-3)';
-  if (art !== S.artNow) { S.artNow = art; artEls.forEach(e => { e.style.setProperty('--art', art); e.classList.toggle('has-thumb', !!S.thumb); }); }
+  const art = m && m.art ? `url("${m.art}") center / cover no-repeat` : m ? gradFor(m.title + m.artist) : 'var(--ink-3)';
+  if (art !== S.artNow) { S.artNow = art; artEls.forEach(e => { e.style.setProperty('--art', art); e.classList.toggle('has-thumb', !!(m && m.art)); }); }
   const now = new Date();
-  titleEls.forEach(e => txt(e, m ? m.title || 'Unknown title' : 'Nothing playing'));
-  artistEls.forEach(e => txt(e, m ? m.artist || m.app : now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
-  sourceEls.forEach(e => txt(e, m ? `${m.app}${S.audio ? ' · ' + S.audio.device : ''}` : (S.audio ? S.audio.device : 'Sound')));
+  titleEls.forEach(e => txt(e, m ? m.title || 'Unknown title' : now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
+  artistEls.forEach(e => txt(e, m ? m.artist || m.app : restLine()));
+  renderMediaSource();
   durEls.forEach(e => txt(e, fmtT(m && m.duration)));
   toggleBtns.forEach(b => { const p = !!(m && m.playing); setHtml(b, icon(p ? 'pause' : 'play')); b.setAttribute('aria-label', p ? 'Pause' : 'Play'); b.disabled = !m; });
   $$('[data-act="next"]').forEach(b => { b.disabled = !(m && m.can_next); });
   $$('[data-act="prev"]').forEach(b => { b.disabled = !(m && m.can_prev); });
-  renderMusic(changed);
+  // The line being sung, which the module follows in its lyrics.
+  const line = m ? m.lyric : '';
+  $$('[data-m="lyric"]').forEach(e => { if (e.textContent !== line) { e.textContent = line; e.style.animation = 'none'; void e.offsetWidth; e.style.animation = ''; } });
   S.lastSec = -1; paintProgress();
+  renderRest();
 }
-
-/* ---------- music tab ---------- */
-/** Where the song is right now, carried forward from the last measurement. */
+/** Where the song is right now, carried forward from the last reading. */
 function curPos() {
   const m = S.media; if (!m) return 0;
-  const now = performance.now();
-  if (S.seek && now < S.seek.until) return S.seek.pos + (m.playing ? (now - S.seek.at) / 1000 : 0);
   const p = m.position + (m.playing ? Math.max(0, Date.now() - m.sampled_at) / 1000 : 0);
   return m.duration > 0 ? Math.min(p, m.duration) : p;
 }
-const mediaShowing = () => S.mode === 'peek' || (S.mode === 'panel' && (S.tab === 'music' || S.tab === 'controls'));
-/** Runs every frame while a progress bar or the lyrics are on screen and the song is moving. */
+const mediaShowing = () => S.mode === 'peek' || (S.mode === 'panel' && S.tab === 'controls');
+/** Runs every frame while a progress bar is on screen and the song is moving. */
 function mediaTick() {
   if (S.tickRaf) return;
   const step = () => {
     S.tickRaf = 0;
     if (!S.media || !mediaShowing()) return;
     paintProgress();
-    if (S.media.playing || S.scrubbing) S.tickRaf = requestAnimationFrame(step);
+    if (S.media.playing) S.tickRaf = requestAnimationFrame(step);
   };
   S.tickRaf = requestAnimationFrame(step);
 }
-const progBars = $$('[data-m="bar"]'), posTexts = $$('[data-m="pos"]'), seekEl = $('#muSeek');
+const progBars = $$('[data-m="bar"]'), posTexts = $$('[data-m="pos"]');
 function paintProgress() {
-  const m = S.media, dur = m ? m.duration : 0;
-  const pos = S.scrubbing ? S.scrubVal : curPos();
+  const m = S.media, dur = m ? m.duration : 0, pos = curPos();
   const pct = dur > 0 ? clamp(pos / dur * 100, 0, 100) : 0;
   for (const e of progBars) e.style.width = pct.toFixed(2) + '%';
-  if (!S.scrubbing) seekEl.value = Math.round(pct * 10);
-  seekEl.style.setProperty('--p', pct.toFixed(2) + '%');
   const sec = Math.floor(pos);
-  if (sec !== S.lastSec) {
-    S.lastSec = sec;
-    for (const e of posTexts) e.textContent = fmtT(pos);
-    $('#muLeft').textContent = dur > 0 ? '-' + fmtT(dur - Math.floor(pos)) : '';
-  }
-  if (!S.scrubbing) syncLyric(pos);
+  if (sec !== S.lastSec) { S.lastSec = sec; for (const e of posTexts) e.textContent = fmtT(pos); }
 }
-function seekTo(sec) {
-  const m = S.media; if (!m || !m.can_seek) return;
-  sec = clamp(sec, 0, m.duration > 0 ? m.duration - 0.5 : sec);
-  S.seek = { pos: sec, at: performance.now(), until: performance.now() + 2200 };
-  S.ly.idx = -2; S.lyFollowPause = 0; S.lastSec = -1;
-  paintProgress(); mediaTick();
-  invoke('media_cmd', { action: 'seek', value: sec }).catch(err => { S.seek = null; flashNote(String(err)); });
-}
-function flashNote(msg) { note('#muNote', msg); clearTimeout(S.noteT); S.noteT = setTimeout(() => note('#muNote', ''), 4500); }
-seekEl.addEventListener('input', () => {
-  const m = S.media; if (!m || !(m.duration > 0)) return;
-  S.scrubbing = true; S.scrubVal = seekEl.value / 1000 * m.duration; S.lastSec = -1;
-  paintProgress(); mediaTick();
-});
-seekEl.addEventListener('change', () => {
-  const m = S.media; S.scrubbing = false;
-  if (m && m.duration > 0) seekTo(seekEl.value / 1000 * m.duration);
-});
-['pointerup', 'blur'].forEach(ev => seekEl.addEventListener(ev, () => { setTimeout(() => { S.scrubbing = false; }, 0); }));
-
-function renderMusic(changed) {
-  const m = S.media;
-  txt($('#muApp'), m ? m.app : 'Nothing playing');
-  const badge = $('#muBadge');
-  badge.hidden = !(m && m.badge);
-  if (m && m.badge) badge.textContent = m.badge;
-  txt($('#muAlbum'), m && m.album ? m.album : '');
-  if (!m) txt($('#v-music [data-m="artist"]'), 'Play something in Apple Music or Spotify');
-  if (changed) { const t = $('.mu-title'); t.classList.remove('new'); void t.offsetWidth; t.classList.add('new'); }
-  // Shuffle and repeat keep their place (hidden but still taking space) so play stays centered.
-  const tg = (act, show, on, label, keepSpace) => $$(`#v-music [data-act="${act}"]`).forEach(b => {
-    if (keepSpace) b.style.visibility = show ? '' : 'hidden'; else b.hidden = !show;
-    b.setAttribute('aria-pressed', !!on); b.setAttribute('aria-label', label); b.title = label;
-  });
-  tg('shuffle', !!m && m.shuffle != null, m && m.shuffle, m && m.shuffle ? 'Shuffle is on' : 'Shuffle', true);
-  const rep = m ? m.repeat : null;
-  tg('repeat', rep != null, rep && rep !== 'off', rep === 'one' ? 'Repeating this song' : rep === 'all' ? 'Repeating all' : 'Repeat', true);
-  setHtml($('#v-music [data-act="repeat"]'), icon('repeat') + (rep === 'one' ? '<b class="rep1">1</b>' : ''));
-  tg('favorite', !!m && m.favorite != null, m && m.favorite, m && m.favorite ? 'Favorited' : 'Favorite', false);
-  const vw = $('#muVolWrap'), vol = $('#muVol');
-  vw.hidden = !(m && m.app_volume != null);
-  if (m && m.app_volume != null && performance.now() - S.appVolAt > 1500) { const v = Math.round(m.app_volume * 100); vol.value = v; vol.style.setProperty('--p', v + '%'); }
-  vw.title = m ? `${m.app} volume (just this app)` : '';
-  const open = $('#muOpen'); open.hidden = !m; if (m) txt(open, `Open ${m.app}`);
-  seekEl.disabled = !(m && m.can_seek && m.duration > 0);
-  const ss = (m && m.sessions) || [];
-  setHtml($('#muSources'), ss.length > 1 || (m && m.pinned)
-    ? `<button type="button" class="chip" data-src="" aria-pressed="${!(m && m.pinned)}" title="Show whatever is playing">Auto</button>` +
-      ss.map(x => `<button type="button" class="chip${x.playing ? ' live' : ''}" data-src="${esc(x.id)}" aria-pressed="${!!(m && m.pinned && m.id === x.id)}" title="${esc(x.title || x.app)}">${esc(x.app)}</button>`).join('')
-    : '');
-  $('#lyLines').classList.toggle('no-seek', !(m && m.can_seek));
-}
-$('#muSources').addEventListener('click', e => {
-  const b = e.target.closest('[data-src]'); if (!b) return;
-  quiet(invoke('media_source', { id: b.dataset.src }).then(() => setTimeout(async () => { try { applyStatus(await invoke('get_status')); } catch (err) {} }, 1100)));
-});
-$('#muVol').addEventListener('input', e => {
-  const el = e.target; el.style.setProperty('--p', el.value + '%'); S.appVolAt = performance.now();
-  clearTimeout(S.volT); S.volT = setTimeout(() => invoke('media_app_volume', { level: el.value / 100 }).catch(err => flashNote(String(err))), 40);
-});
-$('#v-controls .card.media').addEventListener('click', e => { if (!e.target.closest('[data-act]') && S.media) setTab('music'); });
-
+$('#v-controls .card.media').addEventListener('click', e => { if (!e.target.closest('[data-act]') && S.media && S.media.action) openTarget(S.media.action); });
+// The island's own now-playing buttons (a module's views handle theirs inside their shadow roots).
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
-  const action = b.dataset.act, m = S.media;
-  if (m) {
-    if (action === 'toggle') holdMedia({ playing: !m.playing }, 1500);
-    if (action === 'shuffle' && m.shuffle != null) holdMedia({ shuffle: !m.shuffle });
-    if (action === 'repeat' && m.repeat != null) holdMedia({ repeat: { off: 'all', all: 'one', one: 'off' }[m.repeat] || 'off' });
-    if (action === 'favorite' && m.favorite != null) holdMedia({ favorite: !m.favorite }, 2500);
-    if (action === 'next' || action === 'prev') S.seek = null;
-    renderMedia();
-  }
-  invoke('media_cmd', { action }).catch(err => { S.mediaHold = null; flashNote(String(err)); });
-  if (action === 'open') closePanel(true);
-  else if (S.mode !== 'panel' && !S.ccOpen) quiet(invoke('release_focus'));
+  mediaAct(b.dataset.act);
+  if (S.mode !== 'panel' && !S.ccOpen) quiet(invoke('release_focus'));
 });
 
-/* album-art tint for the music tab */
-function tintFrom(url) {
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas'); c.width = c.height = 24;
-    const g = c.getContext('2d', { willReadFrequently: true });
-    g.drawImage(img, 0, 0, 24, 24);
-    const px = g.getImageData(0, 0, 24, 24).data;
-    let r = 0, gr = 0, b = 0, sum = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      const R = px[i], G = px[i + 1], B = px[i + 2], mx = Math.max(R, G, B), mn = Math.min(R, G, B);
-      const w = (mx ? (mx - mn) / mx : 0) ** 2 * (mx / 255) + 0.015; // favor vivid, bright pixels
-      r += R * w; gr += G * w; b += B * w; sum += w;
-    }
-    setTint([r / sum, gr / sum, b / sum]);
-  };
-  img.src = url;
-}
-function setTint(rgb) {
-  if (!rgb) { island.style.removeProperty('--tint'); island.style.removeProperty('--on-tint'); S.tint = null; return; }
-  S.tint = rgb;
-  let [r, g, b] = rgb.map(v => v / 255);
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0;
-  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h = Math.round(h * 60 + 360) % 360;
-  const l0 = (mx + mn) / 2, s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0;
-  // Keep it readable on the island: lighter on the dark skin, deeper on the light one.
-  const sat = Math.round(clamp(s0 * 100, d ? 38 : 0, 85));
-  const lig = Math.round(S.dark ? clamp(l0 * 100, 58, 72) : clamp(l0 * 100, 36, 48));
-  island.style.setProperty('--tint', `hsl(${h} ${sat}% ${lig}%)`);
-  island.style.setProperty('--on-tint', lig > 55 ? '#141218' : '#ffffff');
+/* ---------- the pill at rest (§4.11) ----------
+   Nothing playing, no call and no timer: the weather's icon and temperature, the date and the
+   clock. With no city (or no reading in 3 hours), just the date and the clock. */
+function renderRest() {
+  const rest = !S.media && !island.classList.contains('in-call') && !S.timer.running;
+  const w = rest ? restWeather(store.get('weather', null), S.city, S.unit) : null;
+  island.classList.toggle('resting', rest);
+  island.classList.toggle('rest-wx', !!w);
+  const pr = $('#pillRest'), pd = $('#pillDate');
+  pr.hidden = !w;
+  if (w) setHtml(pr, `${icon(w.icon)}<span>${w.temp}°</span>`);
+  pd.hidden = !rest;
+  if (rest) txt(pd, restDate(new Date()));
+  // The peek's square shows the weather too.
+  const peekArt = $('.peek .art'), wx = !S.media && !!w;
+  setHtml(peekArt, wx ? icon(w.icon) : '');
+  peekArt.classList.toggle('wx', wx);
 }
 
 /* live levels from the player's audio session drive the equalizer bars */
-// Only the bars themselves (and the cover art while the Music tab shows) are restyled, 30 times a
-// second. Variables on <body> restyled every element on the page each time, which piled up
-// hundreds of MB of garbage between collections.
+// Only the bars themselves are restyled, 30 times a second. Variables on <body> restyled every
+// element on the page each time, which piled up hundreds of MB of garbage between collections.
+// Module views that glow with the music (the Music tab) hear the island's `level` event.
 let lvl = 0, lvlOffT = 0;
-const muArt = $('.mu-art');
 function eqBars() { if (!S.eqBars || !S.eqBars.every(b => b.isConnected)) S.eqBars = $$('.eq i'); return S.eqBars; }
 listen('media:level', e => {
   lvl = Math.max(Math.pow(clamp(+e.payload || 0, 0, 1), 0.7), lvl * 0.8); // quick attack, smooth release
@@ -605,188 +534,22 @@ listen('media:level', e => {
     const k = i % 4, h = lvl * (0.5 + 0.5 * Math.abs(Math.sin(t * (2.3 + k * 1.4) + k * 1.9)));
     bars[i].style.transform = `scaleY(${(0.16 + 0.84 * h).toFixed(3)})`;
   }
-  if (S.mode === 'panel' && S.tab === 'music') muArt.style.setProperty('--lvl', lvl.toFixed(3));
+  islandEvents.dispatchEvent(new CustomEvent('level', { detail: lvl }));
   if (!S.eqLive) { S.eqLive = true; document.body.classList.add('live-eq'); }
   if (!S.eqLogged && e.payload > 0.02) { S.eqLogged = true; log(`equalizer is following the music (peak ${(+e.payload).toFixed(2)})`); }
   clearTimeout(lvlOffT);
   lvlOffT = setTimeout(() => {
     S.eqLive = false; document.body.classList.remove('live-eq');
     for (const b of eqBars()) b.style.transform = '';
-    muArt.style.setProperty('--lvl', '0'); lvl = 0;
+    lvl = 0; islandEvents.dispatchEvent(new CustomEvent('level', { detail: 0 }));
   }, 500);
 });
 
-/* lyrics (LRCLIB, looked up by the backend) */
-function maybeLyrics(m) {
-  const key = m ? m.key : '';
-  if (key !== S.lyWant) { S.lyWant = key; S.lyWantAt = Date.now(); }
-  if (S.ly.key && S.ly.key !== key) { S.ly = { key: '', state: 'idle', data: null, idx: -1 }; renderLyrics(); }
-  if (!m || !S.lyricsOn || S.ly.key === key) return;
-  // Wait a moment for the song length: it makes the match exact.
-  if (!(m.duration > 0) && Date.now() - S.lyWantAt < 2500) return;
-  S.ly = { key, state: 'loading', data: null, idx: -1 };
-  renderLyrics();
-  invoke('media_lyrics', { title: m.title, artist: m.artist, album: m.album || '', duration: m.duration || 0 })
-    .then(d => { if (S.ly.key === key) { S.ly.state = d ? 'ok' : 'none'; S.ly.data = d; renderLyrics(); } })
-    .catch(err => {
-      if (S.ly.key !== key) return;
-      S.ly.state = 'error'; renderLyrics(); log(`lyrics: ${err}`);
-      setTimeout(() => { if (S.ly.key === key && S.ly.state === 'error') S.ly.key = ''; }, 30000); // try again later
-    });
-}
-function renderLyrics() {
-  const box = $('#lyrics'), lines = $('#lyLines'), d = S.ly.data, st = S.ly.state;
-  box.hidden = !S.lyricsOn || !S.media;
-  $('#muLyricsBtn').setAttribute('aria-pressed', S.lyricsOn);
-  let html = '', msg = '', foot = '';
-  if (st === 'loading') msg = 'Looking for lyrics…';
-  else if (st === 'error') msg = 'Couldn’t reach the lyrics service. Trying again in a bit.';
-  else if (st === 'none' || !d) msg = st === 'idle' ? '' : 'No lyrics found for this song.';
-  else if (d.lines.length) {
-    html = d.lines.map((l, i) => `<button type="button" class="ly-line${l.text ? '' : ' gap'}" data-i="${i}">${l.text ? esc(l.text) : '♪'}</button>`).join('');
-    foot = 'Lyrics from LRCLIB';
-  } else if (d.plain) {
-    html = d.plain.split('\n').map(t => `<p class="ly-line">${esc(t) || '&nbsp;'}</p>`).join('');
-    foot = 'Not time-synced · LRCLIB';
-  } else msg = 'Instrumental ♪';
-  box.classList.toggle('msg', !html);
-  lines.classList.toggle('plain', !!(d && !d.lines.length && d.plain));
-  lines.innerHTML = html || esc(msg);
-  $('#lyNote').textContent = foot;
-  lines.scrollTop = 0; S.ly.idx = -2;
-  syncLyric(curPos(), true);
-  if (S.mode === 'panel') layout();
-}
-/** Highlights the line being sung and keeps it in the middle of the box. */
-function syncLyric(pos, instant) {
-  const d = S.ly.data, timed = !!(d && d.lines.length);
-  let idx = -1;
-  if (timed) {
-    const t = pos + 0.3; // a beat early, like Apple Music
-    let lo = 0, hi = d.lines.length - 1;
-    while (lo <= hi) { const mid = (lo + hi) >> 1; if (d.lines[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
-  }
-  if (idx === S.ly.idx) return;
-  const first = S.ly.idx === -2;
-  S.ly.idx = idx;
-  const lines = $('#lyLines');
-  if (timed) {
-    const els = lines.children;
-    for (let i = 0; i < els.length; i++) { els[i].classList.toggle('on', i === idx); els[i].classList.toggle('past', i < idx); }
-    const el = els[Math.max(idx, 0)];
-    if (el && performance.now() > S.lyFollowPause && S.mode === 'panel' && S.tab === 'music') {
-      lines.scrollTo({ top: el.offsetTop - lines.clientHeight / 2 + el.offsetHeight / 2, behavior: instant || first || reduced ? 'auto' : 'smooth' });
-    }
-  }
-  const text = timed && idx >= 0 ? d.lines[idx].text : '';
-  $$('[data-m="lyric"]').forEach(e => { if (e.textContent !== text) { e.textContent = text; e.style.animation = 'none'; void e.offsetWidth; e.style.animation = ''; } });
-}
-$('#lyLines').addEventListener('click', e => {
-  const b = e.target.closest('.ly-line[data-i]'); if (!b || !S.ly.data) return;
-  const l = S.ly.data.lines[+b.dataset.i]; if (l) seekTo(l.t);
-});
-// Scrolling the lyrics yourself pauses the auto-follow for a few seconds.
-['wheel', 'pointerdown'].forEach(ev => $('#lyLines').addEventListener(ev, () => { S.lyFollowPause = performance.now() + 4000; }, { passive: true }));
-$('#muLyricsBtn').addEventListener('click', () => {
-  S.lyricsOn = !S.lyricsOn; store.set('lyrics', S.lyricsOn);
-  S.ly = { key: '', state: 'idle', data: null, idx: -1 };
-  renderLyrics(); maybeLyrics(S.media);
-});
 
-/* ---------- games: Steam covers + other launchers ---------- */
-S.games = null; S.gamesT = 0;
-// Other launchers, shown as app icons under the covers (matched against Start menu names).
-const LAUNCHERS = [/^steam$/i, /^epic games launcher$/i, /^ea( app)?$/i, /^ubisoft connect$/i, /^riot client$/i, /^rockstar games launcher$/i, /^rsi launcher$/i,
-  /^hytale launcher$/i, /^battle\.net$/i, /^gog galaxy/i, /^xbox$/i, /^minecraft launcher$/i, /^prism launcher$/i, /^modrinth app$/i, /^kyber launcher$/i, /^roblox player$/i];
-/** The other game launchers that are installed (Start menu apps), in LAUNCHERS order. */
-function launcherApps() {
-  const seen = new Set();
-  return LAUNCHERS.map(re => (S.apps || []).find(a => re.test(a.name.trim()) && !seen.has(a.id) && seen.add(a.id))).filter(Boolean);
-}
-async function loadGames() {
-  try { S.games = await invoke('games_list'); } catch (e) { note('#gNote', String(e)); }
-  renderGames();
-}
-/** Refreshes every 6 s while the tab is open, so a game you start shows as playing. */
-function gamesLoop() {
-  clearTimeout(S.gamesT);
-  loadGames().finally(() => { if (S.mode === 'panel' && S.tab === 'games') S.gamesT = setTimeout(gamesLoop, 6000); });
-}
-function coverHtml(g, i, running) {
-  const img = g.cover || g.header;
-  const art = img ? `<img src="${esc(assetUrl(img))}" alt="" loading="${i < 8 ? 'eager' : 'lazy'}" draggable="false">` : `<span class="cv-name">${esc(g.name)}</span>`;
-  const tag = running ? '<span class="cv-tag">Playing</span>' : g.needs_update ? '<span class="cv-tag up">Update</span>' : '';
-  return `<button type="button" role="listitem" class="cover${i === 0 ? ' big' : ''}${running ? ' playing' : ''}${!g.cover && g.header ? ' wide' : ''}" data-appid="${g.appid}" title="${esc(g.name)}" aria-label="Play ${esc(g.name)}"${img ? '' : ` style="background:${gradFor(g.name)}"`}>${art}${tag}<span class="cv-play">${icon('play')}</span></button>`;
-}
-function renderGames() {
-  const lib = S.games;
-  if (!lib) return;
-  const shelf = $('#gShelf');
-  // Covers (some animated) are only in the page while the tab shows; see releaseHidden().
-  if (!(S.mode === 'panel' && S.tab === 'games')) setHtml(shelf, '');
-  else if (!lib.installed) setHtml(shelf, '<p class="empty">Steam isn’t installed.</p>');
-  else if (!lib.games.length) setHtml(shelf, '<p class="empty">No Steam games installed yet.</p>');
-  else {
-    // A running game goes first, then most recently played.
-    const games = [...lib.games].sort((a, b) => (b.appid === lib.running) - (a.appid === lib.running));
-    setHtml(shelf, games.map((g, i) => coverHtml(g, i, g.appid === lib.running)).join(''));
-  }
-  setHtml($('#gLaunchers'), launcherApps().map(appTile).join(''));
-  if (S.mode === 'panel' && S.tab === 'games') layout();
-}
-function playGame(g) {
-  closePanel(true);
-  invoke('game_action', { appid: g.appid, what: 'play' })
-    .then(() => setTimeout(() => toast(g.name, 'Starting through Steam…', null, g.cover ? { img: assetUrl(g.cover), ms: 2600, sound: 'small' } : { glyph: glyphOf(g.name), bg: gradFor(g.name), ms: 2600, sound: 'small' }), 260))
-    .catch(e => setTimeout(() => toast(`Couldn't start ${g.name}`, String(e), 'x', { sound: 'problem' }), 260));
-}
-const gameOf = el => S.games && S.games.games.find(g => String(g.appid) === el.dataset.appid);
-$('#v-games').addEventListener('click', e => {
-  const c = e.target.closest('.cover[data-appid]');
-  if (c) { const g = gameOf(c); if (g) playGame(g); return; }
-  const tile = e.target.closest('.app[data-id]');
-  if (tile) { const a = appOf(tile.dataset.id); if (a) openPinned(a); }
-});
-$('#v-games').addEventListener('contextmenu', e => {
-  const c = e.target.closest('.cover[data-appid]'), tile = e.target.closest('.app[data-id]');
-  if (!c && !tile) return;
-  e.preventDefault();
-  if (tile) { const a = appOf(tile.dataset.id); if (a) appMenu(a, e.clientX, e.clientY); return; }
-  const g = gameOf(c); if (!g) return;
-  const act = what => invoke('game_action', { appid: g.appid, what }).then(() => closePanel(true)).catch(err => note('#gNote', String(err)));
-  showCtx(e.clientX, e.clientY, [
-    { heading: g.name },
-    { label: 'Play', icon: 'play', action: () => playGame(g) },
-    { label: 'Show in Steam', icon: 'gamepad', action: () => act('library') },
-    { label: 'Open install folder', icon: 'folder', action: () => act('folder') }
-  ]);
-});
-// The mouse wheel scrolls the covers and launchers sideways (and doesn't switch tabs or close the panel).
-// A cover that won't load falls back to the wide header art, then to a name card.
-$('#gShelf').addEventListener('error', e => {
-  const img = e.target; if (img.tagName !== 'IMG') return;
-  const c = img.closest('.cover'), g = c && gameOf(c); if (!g) return;
-  if (g.header && !img.dataset.fallback) { img.dataset.fallback = '1'; c.classList.add('wide'); img.src = assetUrl(g.header); }
-  else { c.style.background = gradFor(g.name); img.replaceWith(Object.assign(document.createElement('span'), { className: 'cv-name', textContent: g.name })); }
-}, true);
-// Load the library shortly after start so the tab opens instantly, and note once whether covers load.
-setTimeout(async () => {
-  await loadGames();
-  const first = S.games && S.games.games.find(g => g.cover);
-  if (!first) return;
-  const img = new Image();
-  img.onload = () => log(`games: ${S.games.games.length} Steam games; covers load (${img.naturalWidth}x${img.naturalHeight})`);
-  img.onerror = () => log(`games: a cover didn't load (${first.cover})`);
-  img.src = assetUrl(first.cover);
-}, 7000);
-['#gShelf', '#gLaunchers'].forEach(sel => $(sel).addEventListener('wheel', e => {
-  e.preventDefault(); e.stopPropagation();
-  e.currentTarget.scrollLeft += (Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * 1.1;
-}, { passive: false }));
 
 /* ---------- audio: master volume, devices, microphone, per-app mixer ---------- */
 S.audioDev = null; S.audioApps = []; S.auDevT = 0; S.auAppsT = 0;
-const audioShowing = () => S.mode === 'panel' && S.tab === 'audio' && S.auMode !== 'sounds' && !(S.auMode === 'vm' && S.vm);
+const audioShowing = () => S.mode === 'panel' && S.tab === 'audio' && auView() === 'win';
 /** Devices every 3 s, the mixer (with its live meters) 4 times a second, only while the tab shows. */
 function audioDevLoop() {
   clearTimeout(S.auDevT);
@@ -902,134 +665,34 @@ $('#auApps').addEventListener('click', e => {
   invoke('audio_app_set', { pid: a.pid, muted: a.muted }).catch(err => note('#auNote', String(err)));
 });
 
-/* ---------- Voicemeeter, through VoiceDeck's engine ---------- */
-S.vm = null; S.vdInstalled = false; S.vmInstalled = false; S.vmLevelsOn = false;
-S.auMode = store.get('auMode', 'vm'); S.vmSide = store.get('vmSide', 'in');
-const VIRTUAL_NAMES = ['Voicemeeter VAIO', 'Voicemeeter AUX', 'Voicemeeter VAIO3'];
-function stripName(s) {
-  if (s.label) return s.label;
-  if (s.physical) return s.device || `Input ${s.index + 1}`;
-  const v = S.vm.strips.filter(x => !x.physical).indexOf(s);
-  return VIRTUAL_NAMES[v] || `Virtual ${v + 1}`;
-}
-/** Meters (and the engine's level reads) only while the Voicemeeter view is on screen. */
-function syncVmLevels() {
-  const want = !!(S.vm && S.auMode === 'vm' && S.mode === 'panel' && S.tab === 'audio');
-  if (want !== S.vmLevelsOn) { S.vmLevelsOn = want; quiet(invoke('vm_levels', { on: want })); }
+/* ---------- audio views ----------
+   Module sections with `view` (Voicemeeter's mixer) sit between the tab's own Windows mixer and its
+   notification sounds, picked in the tab's header. Until one is picked, the first module view shows
+   (the mixer it was installed for), else the Windows mixer. */
+S.auMode = store.get('auMode', '');
+if (S.auMode === 'vm') S.auMode = ''; // 0.1.x, when Voicemeeter was built in
+const auViews = () => R.sections.all().filter(s => s.tab === 'audio' && s.view).sort((a, b) => a.order - b.order);
+/** 'win', 'sounds', or a module view's section id. */
+function auView() {
+  if (S.auMode === 'win' || S.auMode === 'sounds') return S.auMode;
+  const v = auViews();
+  return v.some(x => x.id === S.auMode) ? S.auMode : v.length ? v[0].id : 'win';
 }
 function renderAudioHead() {
-  const installed = S.vmInstalled || !!S.vm;
-  $('#auHead').hidden = false; // Sounds is always there
-  $('#auMode [data-mode="vm"]').hidden = !installed;
-  const vmView = installed && S.auMode === 'vm', sndView = S.auMode === 'sounds';
-  $$('#auMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === (vmView ? 'vm' : sndView ? 'sounds' : 'win')));
-  $('#auVm').hidden = !vmView; $('#auWin').hidden = vmView || sndView; $('#auSnd').hidden = !sndView;
-  if (sndView) renderSounds();
-  $('#vmRestart').hidden = !(vmView && S.vm);
-  $('#vdOpen').hidden = !S.vdInstalled;
-  $$('#vmSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.side === S.vmSide));
-  $('#vmStrips').hidden = S.vmSide !== 'in' || !S.vm; $('#vmBuses').hidden = S.vmSide !== 'out' || !S.vm;
-  $('#vmSide').hidden = !S.vm; $('#vmOff').hidden = !!S.vm;
+  const cur = auView();
+  setHtml($('#auMode'), [['win', 'Windows'], ...auViews().map(x => [x.id, x.title]), ['sounds', 'Sounds']].map(([id, t]) => `<button type="button" data-mode="${esc(id)}" aria-pressed="${id === cur}">${esc(t)}</button>`).join(''));
+  $('#auWin').hidden = cur !== 'win'; $('#auSnd').hidden = cur !== 'sounds';
+  if (cur === 'sounds') renderSounds();
+  syncSections();
   if (S.mode === 'panel' && S.tab === 'audio') layout();
 }
-const gainPct = g => clamp((g + 60) / 72 * 100, 0, 100);
-const levelPct = v => clamp((20 * Math.log10(Math.max(v, 1e-6)) + 60) / 72, 0, 1);
-function vmRowHtml(kind, i) {
-  const route = kind === 'strip'
-    ? `<div class="vm-route">${S.vm.busNames.map((n, b) => `<button type="button" class="${n.startsWith('B') ? 'b' : ''}" data-route="${b}" title="Send to ${esc(n)}">${esc(n)}</button>`).join('')}</div>` : '';
-  return `<div class="vm-row${kind === 'bus' ? ' bus' : ''}" data-kind="${kind}" data-i="${i}">
-    <div class="vm-name"><b></b><small></small></div>
-    <div class="vm-fader"><span class="vm-meter"><i></i></span><input type="range" min="-60" max="12" step="0.1" aria-label="Gain"></div>
-    <span class="vm-db"></span>
-    <button type="button" class="vm-btn" data-mute aria-pressed="false" title="Mute">M</button>${route}</div>`;
-}
-/** Builds the rows when the mixer's shape changes, then only updates values (a dragged fader is left alone). */
-function renderVm(full) {
-  renderAudioHead();
-  if (!S.vm) { S.vmShape = ''; return; }
-  const shape = `${S.vm.strips.length}/${S.vm.buses.length}/${S.vm.busNames.join()}`;
-  if (full || shape !== S.vmShape) {
-    S.vmShape = shape;
-    $('#vmStrips').innerHTML = S.vm.strips.map((_, i) => vmRowHtml('strip', i)).join('');
-    $('#vmBuses').innerHTML = S.vm.buses.map((_, i) => vmRowHtml('bus', i)).join('');
-    S.vmMeters = null;
-  }
-  const now = performance.now();
-  const paint = (row, item, name, sub, route) => {
-    txt(row.querySelector('.vm-name b'), name); txt(row.querySelector('.vm-name small'), sub);
-    const input = row.querySelector('input');
-    if (document.activeElement !== input && !(now - (+row.dataset.setAt || -1e9) < 1200)) input.value = item.gain;
-    input.style.setProperty('--p', gainPct(+input.value) + '%');
-    txt(row.querySelector('.vm-db'), (+input.value > 0 ? '+' : '') + (+input.value).toFixed(1));
-    row.classList.toggle('muted', item.mute);
-    row.querySelector('[data-mute]').setAttribute('aria-pressed', item.mute);
-    if (route) row.querySelectorAll('[data-route]').forEach(b => b.setAttribute('aria-pressed', !!route[+b.dataset.route]));
-  };
-  $$('#vmStrips .vm-row').forEach((row, i) => { const s = S.vm.strips[i]; if (s) paint(row, s, stripName(s), s.physical ? (s.device || 'Hardware input') : 'Virtual input', s.routing); });
-  $$('#vmBuses .vm-row').forEach((row, i) => { const b = S.vm.buses[i]; if (b) paint(row, b, b.name, b.device || (b.name.startsWith('B') ? 'Virtual output' : 'No device'), null); });
-  if (full && S.mode === 'panel' && S.tab === 'audio') layout();
-}
-function applyVmDelta(d) {
-  if (!S.vm || !d) return;
-  for (const x of d.strips || []) { const s = S.vm.strips[x.index]; if (s) for (const k of ['label', 'device', 'gain', 'mute', 'solo', 'routing', 'fx']) if (x[k] !== undefined) s[k] = x[k]; }
-  for (const x of d.buses || []) { const b = S.vm.buses[x.index]; if (b) for (const k of ['name', 'device', 'gain', 'mute']) if (x[k] !== undefined) b[k] = x[k]; }
-}
-function paintVmLevels(l) {
-  if (!S.vmMeters) S.vmMeters = { strips: $$('#vmStrips .vm-meter i'), buses: $$('#vmBuses .vm-meter i') };
-  // Reveal the full-width green→red gradient up to the level (scaling it would squeeze the colors).
-  const set = (els, vals) => { if (vals) vals.forEach((lr, i) => { const el = els[i]; if (el) el.style.clipPath = `inset(0 ${((1 - levelPct(Math.max(lr[0], lr[1]))) * 100).toFixed(1)}% 0 0)`; }); };
-  if (S.vmSide === 'in') set(S.vmMeters.strips, l.strips); else set(S.vmMeters.buses, l.buses);
-}
-function renderVmChip() {
-  const chip = $('#barMic'), s = S.vm && S.vm.strips[0];
-  chip.hidden = !s;
-  if (!s) return;
-  setHtml(chip, icon(s.mute ? 'micoff' : 'mic'));
-  chip.classList.toggle('mic-off', s.mute);
-  chip.title = `${stripName(s)}: ${s.mute ? 'muted (click to unmute)' : 'live (click to mute)'}`;
-}
-listen('vm:state', e => { S.vm = e.payload; renderVm(true); renderVmChip(); syncVmLevels(); });
-listen('vm:delta', e => { applyVmDelta(e.payload); renderVm(false); renderVmChip(); });
-listen('vm:levels', e => paintVmLevels(e.payload));
-invoke('vm_state').then(s => { S.vm = s; renderVm(true); renderVmChip(); }).catch(() => {});
-invoke('mixer_apps').then(a => { S.vdInstalled = a.voicedeck; S.vmInstalled = a.voicemeeter; renderAudioHead(); }).catch(() => {});
-
-function vmParam(row, field) { return `${row.dataset.kind === 'strip' ? 'Strip' : 'Bus'}[${row.dataset.i}].${field}`; }
-function vmItem(row) { return row.dataset.kind === 'strip' ? S.vm.strips[+row.dataset.i] : S.vm.buses[+row.dataset.i]; }
-function vmGain(row, g) {
-  const item = vmItem(row); if (!item) return;
-  g = Math.round(clamp(g, -60, 12) * 10) / 10;
-  item.gain = g; row.dataset.setAt = performance.now();
-  const input = row.querySelector('input'); input.value = g;
-  input.style.setProperty('--p', gainPct(g) + '%'); txt(row.querySelector('.vm-db'), (g > 0 ? '+' : '') + g.toFixed(1));
-  clearTimeout(row._t); row._t = setTimeout(() => invoke('vm_set', { name: vmParam(row, 'Gain'), value: g }).catch(err => note('#auNote', String(err))), 30);
-}
-$('#auVm').addEventListener('input', e => { const row = e.target.closest('.vm-row'); if (row && e.target.matches('input')) vmGain(row, +e.target.value); });
-$('#auVm').addEventListener('dblclick', e => { const row = e.target.closest('.vm-fader') && e.target.closest('.vm-row'); if (row) vmGain(row, 0); });
-$('#auVm').addEventListener('wheel', e => {
-  const row = e.target.closest('.vm-fader') && e.target.closest('.vm-row'); if (!row) return;
-  e.preventDefault(); e.stopPropagation();
-  vmGain(row, vmItem(row).gain + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.1 : 1));
-}, { passive: false });
-$('#auVm').addEventListener('click', e => {
-  const row = e.target.closest('.vm-row'); if (!row || !S.vm) return;
-  const item = vmItem(row); if (!item) return;
-  if (e.target.closest('[data-mute]')) {
-    item.mute = !item.mute; renderVm(false); renderVmChip();
-    invoke('vm_set', { name: vmParam(row, 'Mute'), value: item.mute ? 1 : 0 }).catch(err => note('#auNote', String(err)));
-  }
-  const r = e.target.closest('[data-route]');
-  if (r && item.routing) {
-    const b = +r.dataset.route; item.routing[b] = !item.routing[b]; renderVm(false);
-    invoke('vm_set', { name: vmParam(row, S.vm.busNames[b]), value: item.routing[b] ? 1 : 0 }).catch(err => note('#auNote', String(err)));
-  }
-});
 $('#auMode').addEventListener('click', e => {
   const b = e.target.closest('[data-mode]'); if (!b) return;
   S.auMode = b.dataset.mode; store.set('auMode', S.auMode);
-  renderAudioHead(); syncVmLevels();
+  renderAudioHead();
   if (audioShowing()) { audioDevLoop(); audioAppsLoop(); }
 });
+R.sections.on(() => renderAudioHead());
 /* ---------- notification sounds (Audio → Sounds) ---------- */
 function renderSounds() {
   $('#sndOn').setAttribute('aria-pressed', sounds.on); $('#sndOn').textContent = sounds.on ? 'Notification sounds on' : 'Notification sounds off';
@@ -1069,25 +732,17 @@ $('#sndOn').addEventListener('click', () => { sounds.set({ on: !sounds.on }); if
 $('#sndFs').addEventListener('click', () => { sounds.set({ fsMute: !sounds.fsMute }); renderSounds(); });
 $('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; });
 $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('mention') !== 'none' ? sounds.choice('mention') : 'glass', 'mention'); renderControls(); });
-$('#vmSide').addEventListener('click', e => {
-  const b = e.target.closest('[data-side]'); if (!b) return;
-  S.vmSide = b.dataset.side; store.set('vmSide', S.vmSide); renderAudioHead();
-});
-$('#vmRestart').addEventListener('click', () => invoke('vm_restart').then(() => note('#auNote', 'Restarting Voicemeeter’s audio engine…')).catch(err => note('#auNote', String(err))));
-$('#vdOpen').addEventListener('click', () => invoke('voicedeck_open').then(() => closePanel(true)).catch(err => note('#auNote', String(err))));
-$('#barMic').addEventListener('click', e => {
-  e.stopPropagation();
-  const s = S.vm && S.vm.strips[0]; if (!s) return;
-  s.mute = !s.mute; renderVmChip(); renderVm(false);
-  invoke('vm_mic').catch(() => { s.mute = !s.mute; renderVmChip(); });
-});
 
-/* ---------- eye tracking (Tobii) ---------- */
-// The backend only reports whether your eyes are on the island (gaze:island) and tracker status.
-S.gaze = false; S.gazeSt = null; S.toastWait = null;
-const gazeLive = () => !!(S.gazeSt && S.gazeSt.enabled && S.gazeSt.connected && S.gazeSt.present);
-listen('gaze:island', e => {
-  S.gaze = !!e.payload;
+/* ---------- eye tracking: a module's `presence` (the eye tracking module's) ----------
+   Eyes on the island count like hovering it (the pill opens its peek), and while someone is in
+   front of the tracker a notification waits until it has been seen. */
+S.gaze = false; S.presence = ''; S.toastWait = null;
+const gazeLive = () => S.presence === 'present' || S.presence === 'looking';
+function onPresence(p) {
+  S.presence = (p && p.state) || '';
+  const looking = S.presence === 'looking';
+  if (looking === S.gaze) return;
+  S.gaze = looking;
   if (S.gaze) {
     if (S.mode === 'toast' && S.toastWait) S.toastWait();
     else if (S.mode === 'pill' && !isBar()) setMode('peek');
@@ -1095,43 +750,11 @@ listen('gaze:island', e => {
     clearTimeout(hoverT);
     hoverT = setTimeout(() => { if (S.mode === 'peek' && !S.hover && !S.gaze) setMode('pill'); }, 120);
   }
-});
-listen('gaze:status', e => { S.gazeSt = e.payload; if (!gazeLive()) S.gaze = false; renderControls(); });
-invoke('gaze_status').then(st => { S.gazeSt = st; renderControls(); }).catch(() => {});
-function renderGaze() {
-  const g = S.gazeSt, tile = $('.tile[data-tile="eye"]');
-  tile.hidden = !(g && g.available);
-  $('#gazeRow').hidden = !(g && g.available && g.enabled);
-  if (!g || !g.available) return;
-  tile.setAttribute('aria-pressed', g.enabled && g.connected);
-  txt(tile.querySelector('small'), !g.enabled ? 'Off' : !g.connected ? 'Looking for the tracker…' : g.present ? 'On' : 'On · you’re away');
-  $('#gazePause').setAttribute('aria-pressed', !!g.pause_when_away);
 }
-$('#gazePause').addEventListener('click', async () => {
-  if (!S.gazeSt) return;
-  S.gazeSt = await invoke('gaze_set', { pauseWhenAway: !S.gazeSt.pause_when_away });
-  renderControls();
-});
+listen('topic:presence', e => onPresence(e.payload));
+invoke('topic_last', { topic: 'presence' }).then(onPresence).catch(() => {});
 
-/* ---------- network: Tailscale + Radmin VPN ---------- */
-S.vpn = null; S.vpnBusy = ''; S.vpnT = 0;
-async function loadVpn() {
-  try { S.vpn = await invoke('vpn_status'); } catch (e) {}
-  if (S.vpn && !S.vpnLogged) {
-    S.vpnLogged = true;
-    const t = S.vpn.tailscale, r = S.vpn.radmin;
-    log(`network: tailscale ${t ? `${t.state} ${t.ip} ${t.peers.length} devices` : 'not installed'}; radmin ${r ? `${r.running && r.on ? 'on' : 'off'} ${r.ip} ${r.peers.filter(p => p.online).length}/${r.peers.length} online` : 'not installed'}`);
-  }
-  renderVpn(); renderControls(); renderBar();
-}
-/** Every 4 s while the Network tab is open, every 20 s otherwise (for the tiles and the bar). */
-function vpnLoop() {
-  clearTimeout(S.vpnT);
-  loadVpn().finally(() => { S.vpnT = setTimeout(vpnLoop, S.mode === 'panel' && S.tab === 'network' ? 4000 : 20000); });
-}
-const tsOn = () => !!(S.vpn && S.vpn.tailscale && S.vpn.tailscale.state === 'Running');
-const rvOn = () => { const r = S.vpn && S.vpn.radmin; return !!(r && r.running && r.on && r.server); };
-const vpnOn = () => tsOn() || rvOn();
+/* ---------- network ---------- */
 function ago(iso) {
   const t = Date.parse(iso); if (!t || t < 946684800000) return '';
   const m = Math.round((Date.now() - t) / 60000);
@@ -1141,437 +764,17 @@ function ago(iso) {
   if (m < 60 * 48) return 'yesterday';
   return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-const tsName = p => p.name && p.name !== 'localhost' ? p.name : (p.dns || '').split('.')[0] || 'Device';
-const TS_STATE = { Running: 'Connected', Stopped: 'Disconnected', NeedsLogin: 'Signed out', Starting: 'Connecting…', NoState: 'Tailscale app isn’t running', NeedsMachineAuth: 'Waiting for admin approval' };
-function renderVpnTiles() {
-  const t = S.vpn && S.vpn.tailscale, r = S.vpn && S.vpn.radmin;
-  const ts = $('.tile[data-tile="tailscale"]'), rv = $('.tile[data-tile="radmin"]');
-  ts.hidden = !t; rv.hidden = !r;
-  if (t) { ts.setAttribute('aria-pressed', tsOn()); txt(ts.querySelector('small'), S.vpnBusy || (tsOn() ? t.ip || 'Connected' : TS_STATE[t.state] || t.state)); }
-  if (r) {
-    const n = r.peers.filter(p => p.online).length;
-    rv.setAttribute('aria-pressed', rvOn());
-    txt(rv.querySelector('small'), !r.running ? 'Service stopped' : !r.on ? 'Off' : !r.server ? 'Connecting…' : `${n} online`);
-  }
+/** What the PC is connected to, at the top of the Network tab (VPNs come from their module). */
+function renderNetNow() {
+  const st = S.status; if (!st) return;
+  const n = st.net || {};
+  setHtml($('#netNow'), n.kind === 'none' || !n.kind ? `${icon('wifioff')}<span>Offline</span>`
+    : `${icon(n.kind === 'ethernet' ? 'ethernet' : 'wifi')}<span><b>${esc(n.name || (n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'))}</b> · ${n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'}${n.bars != null && n.kind === 'wifi' ? ` · ${n.bars * 20}% signal` : ''}</span>`);
 }
-function renderVpn() {
-  const st = S.status;
-  if (st) {
-    const n = st.net || {};
-    $('#netNow').innerHTML = n.kind === 'none' || !n.kind ? `${icon('wifioff')}<span>Offline</span>`
-      : `${icon(n.kind === 'ethernet' ? 'ethernet' : 'wifi')}<span><b>${esc(n.name || (n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'))}</b> · ${n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'}${n.bars != null && n.kind === 'wifi' ? ` · ${n.bars * 20}% signal` : ''}</span>`;
-  }
-  const v = S.vpn, t = v && v.tailscale, r = v && v.radmin;
-  $('#tsCard').hidden = !t; $('#rvCard').hidden = !r;
-  if (t) {
-    const on = tsOn();
-    $('#tsCard').classList.toggle('on', on);
-    $('#tsState').textContent = S.vpnBusy || (on ? `Connected · ${t.tailnet || 'your tailnet'}` : TS_STATE[t.state] || t.state);
-    const btn = $('#tsToggle');
-    btn.hidden = false; btn.disabled = !!S.vpnBusy;
-    btn.textContent = on ? 'Disconnect' : t.state === 'NeedsLogin' ? 'Sign in' : 'Connect';
-    btn.classList.toggle('primary', !on);
-    const me = $('#tsMe');
-    me.hidden = !t.ip;
-    if (t.ip) { me.dataset.copy = t.ip; setHtml(me, `${icon('copy')}<span>This PC · ${esc(t.name)}</span><b>${esc(t.ip)}</b>`); }
-    const exits = t.peers.filter(p => p.exit_option);
-    $('#tsExitRow').hidden = !on || !exits.length;
-    setHtml($('#tsExit'), `<option value="">None</option>` + exits.map(p => `<option value="${esc(p.ip)}"${p.exit_node ? ' selected' : ''}${p.online ? '' : ' disabled'}>${esc(tsName(p))}${p.online ? '' : ' (offline)'}</option>`).join(''));
-    setHtml($('#tsPeers'), !on ? '' : t.peers.length ? t.peers.map(p => {
-      const sub = p.online ? [p.ip, p.os, p.link === 'direct' ? 'direct' : p.link ? `relay ${p.link}` : ''].filter(Boolean).join(' · ') : `Offline${ago(p.last_seen) ? ' · last seen ' + ago(p.last_seen) : ''}`;
-      return `<button type="button" class="peer${p.online ? ' on' : ''}" data-copy="${esc(p.ip)}" title="Copy ${esc(p.ip)}"><i class="dot"></i><span><b>${esc(tsName(p))}</b><small>${esc(sub)}</small></span>${p.exit_node ? '<span class="tag exit">Exit node</span>' : ''}</button>`;
-    }).join('') : '<p class="empty">No other devices on this tailnet.</p>');
-  }
-  if (r) {
-    const on = rvOn(), online = r.peers.filter(p => p.online);
-    $('#rvCard').classList.toggle('on', on);
-    $('#rvState').textContent = !r.running ? 'Service stopped' : !r.on ? 'Switched off' : !r.server ? 'Connecting to Radmin…' : `${online.length} online${r.networks.length ? ' · ' + r.networks.join(', ') : ''}`;
-    $('#rvOpen').hidden = false;
-    const me = $('#rvMe');
-    me.hidden = !r.ip;
-    if (r.ip) { me.dataset.copy = r.ip; setHtml(me, `${icon('copy')}<span>This PC</span><b>${esc(r.ip)}</b>`); }
-    setHtml($('#rvPeers'), r.peers.length ? r.peers.map(p => {
-      const when = new Date(p.since);
-      const t2 = isNaN(when) ? '' : (Date.now() - when < 864e5 ? when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ago(p.since));
-      const how = p.link === 'Relay' ? 'Through Radmin’s relay' : p.link === 'Direct' ? 'Direct connection' : 'Connected';
-      const sub = p.online ? `${how}${t2 ? ' · since ' + t2 : ''}` : `Offline${t2 ? ' · last seen ' + t2 : ''}`;
-      return `<div class="peer${p.online ? ' on' : ''}"><i class="dot"></i><span><b>${esc(p.name)}</b><small>${esc(sub)}</small></span></div>`;
-    }).join('') : '<p class="empty">Nobody has connected yet.</p>');
-  }
-  if (S.mode === 'panel' && S.tab === 'network') layout();
-}
-async function tsToggle() {
-  const t = S.vpn && S.vpn.tailscale; if (!t || S.vpnBusy) return;
-  const up = !tsOn();
-  S.vpnBusy = up ? 'Connecting…' : 'Disconnecting…';
-  renderVpn(); renderVpnTiles();
-  try { await invoke('vpn_tailscale', { action: up ? 'up' : 'down' }); }
-  finally { S.vpnBusy = ''; await loadVpn(); }
-}
-$('#tsToggle').addEventListener('click', () => { note('#vpnNote', ''); tsToggle().catch(err => note('#vpnNote', String(err))); });
-$('#tsExit').addEventListener('change', e => {
-  note('#vpnNote', '');
-  invoke('vpn_tailscale', { action: 'exit', arg: e.target.value }).catch(err => note('#vpnNote', String(err))).finally(loadVpn);
-});
-$('#rvOpen').addEventListener('click', () => { invoke('vpn_radmin_open').then(() => closePanel(true)).catch(err => note('#vpnNote', String(err))); });
-// Click an address (yours or a device's) to copy it.
-$('#v-network').addEventListener('click', e => {
-  const el = e.target.closest('[data-copy]'); if (!el || !el.dataset.copy) return;
-  invoke('copy_text', { text: el.dataset.copy }).then(() => {
-    el.classList.remove('copied'); void el.offsetWidth; el.classList.add('copied');
-    clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('copied'), 1300);
-  }).catch(err => note('#vpnNote', String(err)));
-});
 
 /* ---------- controls ---------- */
-/* ---------- Discord (voice call, notifications, Rich Presence; see discord.rs) ---------- */
-S.dc = null; S.dcEdit = false; S.dcAutoAuth = false; S.dcOrder = []; S.callW = 0;
-const DC_CDN = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
-const dcImg = (m, cls) => `<img${cls ? ` class="${cls}"` : ''} src="${esc(DC_CDN.test(m.avatar) ? m.avatar : '')}" alt="" data-id="${esc(m.id)}" referrerpolicy="no-referrer">`;
+/** A line of text at most n characters long (for notifications and the like). */
 const clipTxt = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-async function loadDc() {
-  try { S.dc = await invoke('discord_status'); } catch (e) { return; }
-  renderDc(); renderDcCall();
-}
-function dcState(d) {
-  if (!d.connected) return 'Discord isn’t open';
-  if (!d.authorized) return d.has_secret ? 'Connected · not authorized yet' : 'Connected · status only';
-  return 'Signed in';
-}
-function renderDc() {
-  const d = S.dc || {}, setup = !d.configured || S.dcEdit;
-  $('#dcSetup').hidden = !setup; $('#dcMain').hidden = setup;
-  const n = $('#dcNote'); n.textContent = d.error || ''; n.hidden = !d.error;
-  if (setup) {
-    const id = $('#dcId');
-    if (!id.value && d.client_id) id.value = d.client_id;
-    $('#dcSecret').placeholder = d.has_secret ? 'Client Secret (saved; blank keeps it)' : 'Client Secret';
-    $('#dcBack').hidden = !d.configured; $('#dcForget').hidden = !d.configured;
-  } else {
-    const me = d.user, v = d.voice;
-    setHtml($('#dcMe'), `${me ? dcImg(me, 'dc-av') : `<span class="vpn-logo">${icon('chat')}</span>`}<div class="vpn-title"><b>${esc(me ? me.name : 'Discord')}</b><small>${esc(dcState(d))}</small></div>`);
-    $('.dc-side').classList.toggle('on', !!d.authorized);
-    let html;
-    if (!d.connected) html = `<div class="empty">${icon('chat')}<span>Open Discord to see your calls here</span><button class="btn" type="button" data-dc="open">Open Discord</button></div>`;
-    else if (!d.authorized) html = d.has_secret
-      ? `<div class="empty">${icon('headphones')}<span>Let the island see your calls and notifications.<br>Discord will ask you to confirm.</span><button class="btn primary" type="button" data-dc="authorize">Authorize</button></div>`
-      : `<div class="empty">${icon('headphones')}<span>Add your app’s Client Secret to see calls and notifications</span><button class="btn" type="button" data-dc="edit">Add the secret</button></div>`;
-    else if (!v) html = `<div class="empty">${icon('headphones')}<span>You’re not in a voice channel</span></div>`;
-    else html = `<div class="dc-vh"><span class="vpn-logo">${icon('headphones')}</span><div class="vpn-title"><b>${esc(v.name)}</b><small>${esc(v.guild || 'Voice')} · ${v.members.length} ${v.members.length === 1 ? 'person' : 'people'}</small></div></div>`
-      + `<div class="dc-members">${v.members.map(m => `<div class="dc-m">${dcImg(m, 'dc-av')}<b>${esc(m.name)}</b>${m.deaf ? icon('headoff') : m.mute ? icon('micoff') : ''}</div>`).join('')}</div>`;
-    setHtml($('#dcVoice'), html);
-    $('#dcCtl').hidden = !d.authorized;
-    const mute = $('#dcMute'), deaf = $('#dcDeaf');
-    mute.setAttribute('aria-pressed', !!d.mute); deaf.setAttribute('aria-pressed', !!d.deaf);
-    setHtml(mute, `${icon(d.mute ? 'micoff' : 'mic')}<span>${d.mute ? 'Unmute' : 'Mute'}</span>`);
-    setHtml(deaf, `${icon(d.deaf ? 'headoff' : 'headphones')}<span>${d.deaf ? 'Undeafen' : 'Deafen'}</span>`);
-    $('#dcLeave').disabled = !v;
-    $('#dcPresence').checked = !!d.presence; $('#dcNotify').checked = !!d.notify;
-    txt($('#dcNow'), !d.presence || !d.connected ? '' : d.presence_now ? `Showing ${d.presence_now}` : 'Shows while Apple Music plays');
-    dcTalk();
-  }
-  if (S.mode === 'panel' && S.tab === 'discord') layout();
-}
-/** Extra pill width for the call avatars (and the muted mic). */
-function callW() { return S.callW || 0; }
-/** Up to three people for the pill: the order sticks, except someone out of sight who starts talking moves up. */
-function dcVisible(v) {
-  const ids = v.members.map(m => m.id);
-  S.dcOrder = S.dcOrder.filter(id => ids.includes(id));
-  for (const id of ids) if (!S.dcOrder.includes(id)) S.dcOrder.push(id);
-  return S.dcOrder.slice(0, 3).map(id => v.members.find(m => m.id === id));
-}
-function renderDcCall() {
-  const d = S.dc, v = d && d.voice, on = !!(v && v.members.length);
-  island.classList.toggle('in-call', on);
-  const pill = $('#pillCall'), chip = $('#barDc');
-  pill.hidden = !on; chip.hidden = !on;
-  let w = 0;
-  if (on) {
-    const ms = dcVisible(v), self = d.deaf ? icon('headoff') : d.mute ? icon('micoff') : '';
-    const html = `<span class="dc-stack">${ms.map(m => dcImg(m)).join('')}</span>${self}`;
-    setHtml(pill, html); setHtml(chip, html);
-    chip.title = `${v.name}${v.guild ? ' · ' + v.guild : ''} (Discord)`;
-    w = 9 + 18 + (ms.length - 1) * 12 + (self ? 17 : 0);
-    dcTalk();
-  }
-  if (w !== S.callW) { S.callW = w; layout(); }
-}
-/** Green rings on whoever is talking (changes many times a second, so only classes flip). */
-function dcTalk() {
-  const v = S.dc && S.dc.voice; if (!v) return;
-  const talking = new Set(v.members.filter(m => m.speaking).map(m => m.id));
-  for (const img of $$('#pillCall img, #barDc img, #dcVoice .dc-av')) img.classList.toggle('talk', talking.has(img.dataset.id));
-}
-listen('discord:status', e => {
-  const prev = S.dc, was = prev && prev.voice;
-  S.dc = e.payload;
-  const now = S.dc.voice;
-  if (prev && now && (!was || was.channel_id !== now.channel_id)) toast(clipTxt(now.name, 40), 'Joined voice', 'headphones', { sound: 'voice' });
-  else if (prev && was && !now && S.dc.connected) toast(clipTxt(was.name, 40), 'Left voice', 'phoneoff', { sound: 'voice' });
-  if (S.dcAutoAuth && S.dc.connected && !S.dc.authorized && S.dc.has_secret && !S.dc.error) { S.dcAutoAuth = false; dcAction('authorize'); }
-  renderDc(); renderDcCall();
-});
-listen('discord:speaking', e => {
-  const { id, speaking } = e.payload, v = S.dc && S.dc.voice; if (!v) return;
-  const m = v.members.find(x => x.id === id); if (!m) return;
-  m.speaking = speaking;
-  const i = S.dcOrder.indexOf(id);
-  if (speaking && i >= 3) { S.dcOrder.splice(i, 1); S.dcOrder.unshift(id); renderDcCall(); } else dcTalk();
-});
-listen('discord:notify', e => {
-  const n = e.payload || {};
-  if (!S.dc || !S.dc.notify) return;
-  const img = DC_CDN.test(n.icon || '') ? n.icon : '';
-  // Only @mentions of you get here (discord.rs filters), so they're shown on top of everything.
-  toast(clipTxt(n.title || "Discord", 48), clipTxt(n.body, 72), 'chat', { img, round: !!img, ms: 6000, urgent: true, tab: 'discord', sound: 'mention' });
-});
-function dcAction(action) {
-  note('#dcNote', '');
-  return invoke('discord_action', { action }).catch(err => note('#dcNote', String(err)));
-}
-$('#dcPortal').addEventListener('click', () => invoke('discord_open', { what: 'portal' }).catch(err => note('#dcNote', String(err))));
-$('#dcForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const clientId = $('#dcId').value.trim(), secret = $('#dcSecret').value.trim();
-  if (!clientId) { note('#dcNote', 'Paste the Client ID first.'); return; }
-  note('#dcNote', '');
-  invoke('discord_configure', { clientId, secret }).then(() => {
-    $('#dcSecret').value = '';
-    S.dcEdit = false; S.dcAutoAuth = !!secret || !!(S.dc && S.dc.has_secret);
-    loadDc();
-  }).catch(err => note('#dcNote', String(err)));
-});
-$('#dcBack').addEventListener('click', () => { S.dcEdit = false; $('#dcSecret').value = ''; renderDc(); });
-$('#dcEdit').addEventListener('click', () => { S.dcEdit = true; renderDc(); });
-$('#dcOpen').addEventListener('click', () => invoke('discord_open', { what: 'app' }).then(() => closePanel(true)).catch(err => note('#dcNote', String(err))));
-$('#dcForget').addEventListener('click', () => {
-  // Second click within 3 s confirms.
-  const b = $('#dcForget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget this app'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget this app';
-  $('#dcId').value = ''; $('#dcSecret').value = ''; S.dcEdit = false;
-  dcAction('forget').then(loadDc);
-});
-$('#dcVoice').addEventListener('click', e => {
-  const b = e.target.closest('[data-dc]'); if (!b) return;
-  if (b.dataset.dc === 'open') $('#dcOpen').click();
-  else if (b.dataset.dc === 'edit') { S.dcEdit = true; renderDc(); }
-  else dcAction(b.dataset.dc);
-});
-$('#dcMute').addEventListener('click', () => { if (S.dc) { S.dc.mute = !S.dc.mute; renderDc(); renderDcCall(); dcAction(S.dc.mute ? 'mute' : 'unmute'); } });
-$('#dcDeaf').addEventListener('click', () => { if (S.dc) { S.dc.deaf = !S.dc.deaf; renderDc(); renderDcCall(); dcAction(S.dc.deaf ? 'deafen' : 'undeafen'); } });
-$('#dcLeave').addEventListener('click', () => dcAction('leave'));
-$('#dcPresence').addEventListener('change', e => invoke('discord_options', { presence: e.target.checked }).catch(err => note('#dcNote', String(err))));
-$('#dcNotify').addEventListener('change', e => invoke('discord_options', { notify: e.target.checked }).catch(err => note('#dcNote', String(err))));
-
-/* ---------- Destiny 2 (Bungie API with the user's own key; see destiny.rs) ---------- */
-S.d2 = null; S.d2Profile = null; S.d2Xur = null; S.d2Sel = store.get('d2Sel', ''); S.d2Edit = false; S.d2T = 0;
-/** Daily reset is 17:00 UTC; the weekly one is Tuesday's; Xûr arrives at Friday's. */
-function nextReset(day) {
-  const now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17));
-  if (d <= now) d.setUTCDate(d.getUTCDate() + 1);
-  if (day != null) while (d.getUTCDay() !== day) d.setUTCDate(d.getUTCDate() + 1);
-  return d;
-}
-const until = d => { const m = Math.max(0, Math.round((d - Date.now()) / 60000)); const days = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return days ? `${days}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m}m`; };
-/** Playing right now: an activity, started in the last 12 hours. */
-const d2Live = c => !!c.activity && Date.now() - Date.parse(c.activity_since) < 12 * 3600e3;
-async function d2Loop() {
-  clearTimeout(S.d2T);
-  if (S.mode !== 'panel' || S.tab !== 'destiny') return;
-  try { S.d2 = await invoke('destiny_status'); } catch (e) { return; }
-  if (S.d2.configured && !S.d2Edit) {
-    if (!S.d2Profile) { renderD2(); $('#d2Wait').hidden = false; layout(); }
-    const [p, x] = await Promise.allSettled([invoke('destiny_profile'), invoke('destiny_xur')]);
-    $('#d2Wait').hidden = true;
-    if (p.status === 'fulfilled') S.d2Profile = p.value;
-    if (x.status === 'fulfilled') S.d2Xur = x.value;
-    const err = p.status === 'rejected' ? p.reason : x.status === 'rejected' ? x.reason : '';
-    note('#d2Note', err ? String(err) : '');
-  }
-  renderD2();
-  S.d2T = setTimeout(d2Loop, 60000);
-}
-function renderD2() {
-  const st = S.d2 || {}, setup = !st.configured || S.d2Edit;
-  $('#d2Setup').hidden = !setup; $('#d2Main').hidden = setup || !S.d2Profile;
-  if (setup) {
-    const who = $('#d2Who'); if (!who.value && st.name) who.value = st.name;
-    $('#d2Key').placeholder = st.configured ? 'API key (saved; blank keeps it)' : 'API key';
-    $('#d2Back').hidden = !st.configured; $('#d2Forget').hidden = !st.configured;
-    if (S.mode === 'panel' && S.tab === 'destiny') layout();
-    return;
-  }
-  const p = S.d2Profile; if (!p) return;
-  txt($('#d2Title'), p.name.replace(/#\d+$/, ''));
-  txt($('#d2Rank'), p.guardian_rank ? `Guardian Rank ${p.guardian_rank}` : '');
-  setHtml($('#d2Daily'), `Daily reset <b>${until(nextReset())}</b>`);
-  setHtml($('#d2Weekly'), `Weekly <b>${until(nextReset(2))}</b>`);
-  if (!p.characters.some(c => c.id === S.d2Sel)) S.d2Sel = (p.characters.find(d2Live) || p.characters[0] || {}).id || '';
-  setHtml($('#d2Chars'), p.characters.map(c => `<button class="d2-char" type="button" data-id="${esc(c.id)}" aria-pressed="${c.id === S.d2Sel}" style="background-image:url(${esc(JSON.stringify(c.emblem_bg))})"><span><b>${esc(c.class)}</b><small class="${d2Live(c) ? 'd2-now' : ''}">${esc(d2Live(c) ? '● ' + c.activity : [c.race, ago(c.last_played)].filter(Boolean).join(' · '))}</small></span><span class="d2-light">✦${c.light}</span></button>`).join(''));
-  const c = p.characters.find(x => x.id === S.d2Sel);
-  if (c) {
-    const sub = c.items.find(i => i.slot === 'Subclass'), weapons = c.items.filter(i => ['Kinetic', 'Energy', 'Power'].includes(i.slot)), armor = c.items.filter(i => ['Helmet', 'Arms', 'Chest', 'Legs', 'Class item'].includes(i.slot));
-    const ic = i => `<img class="d2-ic${i.exotic ? ' exotic' : ''}" src="${esc(i.icon)}" alt="" loading="lazy">`;
-    setHtml($('#d2Load'), `<header><b>${esc(c.class)} loadout</b><small>${Math.round(c.minutes_played / 60).toLocaleString()} hours played</small></header>`
-      + (sub ? `<div class="d2-sub"><img src="${esc(sub.icon)}" alt=""><div><b>${esc(sub.name)}</b><small>Subclass</small></div></div>` : '')
-      + `<div class="d2-label">Weapons</div><div class="d2-items">${weapons.map(i => `<div class="d2-item" title="${esc(i.name)}">${ic(i)}<div><b>${esc(i.name)}</b><small>${esc(i.slot)} · ${esc(i.kind)}</small></div><em>${i.power || ''}</em></div>`).join('')}</div>`
-      + `<div class="d2-label">Armor</div><div class="d2-armor">${armor.map(i => `<div title="${esc(i.name)} (${esc(i.slot)})">${ic(i)}<em>${i.power || ''}</em></div>`).join('')}</div>`);
-  }
-  const x = S.d2Xur;
-  if (!x) setHtml($('#d2Xur'), '');
-  else if (x.here) {
-    // Bungie's own refresh date when it gives one (Xûr now sells all week); otherwise the weekly reset.
-    const refresh = Date.parse(x.leaves) > Date.now() ? new Date(x.leaves) : nextReset(2);
-    setHtml($('#d2Xur'), `<header><b>Xûr${x.location ? ' · ' + esc(x.location) : ''}</b><small>new stock in ${until(refresh)}</small></header>`
-      + (x.items.length ? `<div class="d2-armor">${x.items.map(i => `<div title="${esc(i.name)} (${esc(i.kind)})">${ic2(i)}</div>`).join('')}</div>` : '<small class="d2-label">Exotics not listed</small>'));
-  }
-  else setHtml($('#d2Xur'), `<header><b>Xûr</b><small>arrives in ${until(nextReset(5))}</small></header>`);
-  if (S.mode === 'panel' && S.tab === 'destiny') layout();
-}
-const ic2 = i => `<img class="d2-ic exotic" src="${esc(i.icon)}" alt="" loading="lazy">`;
-$('#d2Chars').addEventListener('click', e => {
-  const b = e.target.closest('.d2-char'); if (!b) return;
-  S.d2Sel = b.dataset.id; store.set('d2Sel', S.d2Sel); renderD2();
-});
-$('#d2Portal').addEventListener('click', () => invoke('destiny_open').catch(err => note('#d2Note', String(err))));
-$('#d2Form').addEventListener('submit', e => {
-  e.preventDefault();
-  const key = $('#d2Key').value.trim(), name = $('#d2Who').value.trim();
-  if (!name) { note('#d2Note', 'Add your Bungie Name, like Guardian#1234.'); return; }
-  note('#d2Note', ''); $('#d2Save').disabled = true;
-  invoke('destiny_configure', { key, name }).then(st => {
-    $('#d2Key').value = ''; S.d2 = st; S.d2Edit = false; S.d2Profile = null; d2Loop();
-  }).catch(err => note('#d2Note', String(err))).finally(() => { $('#d2Save').disabled = false; });
-});
-$('#d2Edit').addEventListener('click', () => { S.d2Edit = true; renderD2(); });
-$('#d2Back').addEventListener('click', () => { S.d2Edit = false; $('#d2Key').value = ''; renderD2(); });
-$('#d2Forget').addEventListener('click', () => {
-  const b = $('#d2Forget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget';
-  invoke('destiny_forget').then(() => { S.d2Edit = false; S.d2Profile = null; S.d2Xur = null; $('#d2Who').value = ''; d2Loop(); });
-});
-
-/* ---------- Canvas (school LMS, with the user's own token; see canvas.rs) ---------- */
-S.cv = null; S.cvData = null; S.cvEdit = false; S.cvT = 0; S.cvSetup = store.get('cvSetup', 'feed');
-// Courses without a Canvas color (the calendar feed has none) get one from this set.
-const CV_COLORS = ['#4f8cf7', '#e8704a', '#7fd99a', '#c07fe0', '#f5b45b', '#5bc8d8', '#f07aa0', '#a3b86c'];
-const cvCourse = id => (S.cvData && S.cvData.courses.find(c => c.id === id)) || {};
-const cvColor = id => cvCourse(id).color || (id ? CV_COLORS[id % CV_COLORS.length] : 'var(--faint)');
-const KIND = { assignment: 'Assignment', quiz: 'Quiz', discussion_topic: 'Discussion', wiki_page: 'Page', planner_note: 'To-do', calendar_event: 'Event', assessment_request: 'Peer review' };
-async function cvLoop() {
-  clearTimeout(S.cvT);
-  if (S.mode !== 'panel' || S.tab !== 'canvas') return;
-  try { S.cv = await invoke('canvas_status'); } catch (e) { return; }
-  if (S.cv.configured && !S.cvEdit) {
-    if (!S.cvData) { renderCv(); $('#cvWait').hidden = false; layout(); }
-    try { S.cvData = await invoke('canvas_overview'); note('#cvNote', ''); } catch (e) { note('#cvNote', String(e)); }
-    $('#cvWait').hidden = true;
-  }
-  renderCv();
-  S.cvT = setTimeout(cvLoop, 120000);
-}
-function cvStatus(t) {
-  if (t.graded) return ['Graded', 'ok'];
-  if (t.submitted) return [t.late ? 'Submitted late' : 'Submitted', 'ok'];
-  if (t.missing) return ['Missing', 'bad'];
-  const left = Date.parse(t.due) - Date.now();
-  if (left > 0 && left < 864e5 && !t.done) return [left < 36e5 ? `${Math.max(1, Math.round(left / 6e4))} min left` : `${Math.round(left / 36e5)}h left`, 'warn'];
-  return null;
-}
-function cvRow(t, i, list) {
-  const d = new Date(t.due), c = cvCourse(t.course_id), st = cvStatus(t);
-  const when = isNaN(d) ? '' : t.all_day ? 'All day' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const sub = [KIND[t.kind] || '', c.code || c.name || '', list === 'missing' && !isNaN(d) ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : when, t.points ? `${t.points} pts` : ''].filter(Boolean).join(' · ');
-  return `<div class="cv-row${t.done ? ' done' : ''}" data-list="${list}" data-i="${i}" title="${esc(t.title)}"><button class="cv-check" type="button" aria-pressed="${!!t.done}" title="${t.done ? 'Mark not done' : 'Mark done'}${S.cvData && S.cvData.limited ? ' (on this PC)' : ''}" aria-label="Done">${icon('check')}</button><span class="cv-bar" style="background:${esc(cvColor(t.course_id))}"></span><div><b>${esc(t.title)}</b><small>${esc(sub)}</small></div>${st ? `<span class="cv-chip ${st[1]}">${esc(st[0])}</span>` : '<span></span>'}</div>`;
-}
-const dayLabel = d => { const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(d); b.setHours(0, 0, 0, 0); const n = Math.round((b - a) / 864e5); return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : b.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }); };
-function renderCv() {
-  const st = S.cv || {}, setup = !st.configured || S.cvEdit;
-  $('#cvSetup').hidden = !setup; $('#cvMain').hidden = setup || !S.cvData;
-  if (setup) {
-    if (st.configured && st.mode) S.cvSetup = st.mode === 'feed' && !S.cvSetupPicked ? 'feed' : S.cvSetup;
-    $$('#cvMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.cvSetup));
-    $$('#cvSetup [data-cv]').forEach(el => { el.hidden = el.dataset.cv !== S.cvSetup; });
-    const dom = $('#cvDomain'); if (!dom.value && st.domain) dom.value = st.domain;
-    $('#cvFeed').placeholder = st.configured && st.mode === 'feed' ? 'Feed link (saved; paste a new one to replace it)' : 'https://school.instructure.com/feeds/calendars/user_….ics';
-    $('#cvToken').placeholder = st.configured ? 'Access token (saved; blank keeps it)' : 'Access token';
-    $('#cvBack').hidden = !st.configured; $('#cvForget').hidden = !st.configured;
-    if (S.mode === 'panel' && S.tab === 'canvas') layout();
-    return;
-  }
-  const o = S.cvData; if (!o) return;
-  txt($('#cvWho'), [o.name, o.domain, o.limited ? 'calendar feed: due dates only' : ''].filter(Boolean).join(' · '));
-  $('#cvGrades').hidden = $('#cvAnn').hidden = o.limited;
-  $('#cvCourses').hidden = !o.limited;
-  if (o.limited) {
-    // The feed has no grades: show each course's load for the coming week instead.
-    const week = Date.now() + 7 * 864e5;
-    setHtml($('#cvCourses'), `<header><b>Courses</b><small>next 7 days</small></header>` + (o.courses.length ? o.courses.map(c => {
-      const due = o.upcoming.filter(t => t.course_id === c.id && !t.done && Date.parse(t.due) < week), next = due[0];
-      return `<div class="cv-course" data-url="${esc(c.url)}" title="${esc(c.name)}"><span class="cv-bar" style="background:${esc(cvColor(c.id))}"></span><div><b>${esc(c.name)}</b><small>${next ? `next: ${esc(next.title)} · ${esc(dayLabel(next.due))}` : 'nothing due this week'}</small></div><em>${due.length || ''}</em></div>`;
-    }).join('') : '<p class="empty">No courses in the feed.</p>'));
-  }
-  const miss = $('#cvMissing');
-  miss.hidden = !o.missing.length;
-  setHtml(miss, o.missing.length ? `<header><b>Missing</b><small>${o.missing.length}</small></header><div class="cv-scroll">${o.missing.map((t, i) => cvRow(t, i, 'missing')).join('')}</div>` : '');
-  let last = '', rows = '';
-  o.upcoming.forEach((t, i) => { const l = dayLabel(t.due); if (l !== last) { rows += `<div class="cv-day">${esc(l)}</div>`; last = l; } rows += cvRow(t, i, 'upcoming'); });
-  const open = o.upcoming.filter(t => !t.done && !t.submitted && !t.graded).length;
-  setHtml($('#cvUp'), `<header><b>Coming up</b><small>${open ? `${open} to do` : 'All caught up'}</small></header>` + (rows ? `<div class="cv-scroll">${rows}</div>` : '<p class="empty">Nothing due in the next three weeks.</p>'));
-  setHtml($('#cvGrades'), `<header><b>Grades</b><small>current</small></header>` + (o.courses.length ? o.courses.map(c => `<div class="cv-course" data-url="${esc(c.url + '/grades')}" title="${esc(c.name)}"><span class="cv-bar" style="background:${esc(c.color || 'var(--accent)')}"></span><div><b>${esc(c.code || c.name)}</b><small>${esc(c.code ? c.name : '')}</small></div><em>${c.score != null ? `${c.score.toFixed(1)}%` : '–'}${c.grade ? `<small> ${esc(c.grade)}</small>` : ''}</em></div>`).join('') : '<p class="empty">No active courses.</p>'));
-  setHtml($('#cvAnn'), `<header><b>Announcements</b><small>last 3 weeks</small></header>` + (o.announcements.length ? o.announcements.slice(0, 5).map(a => { const c = cvCourse(a.course_id); return `<div class="cv-an" data-url="${esc(a.url)}"><div><i style="background:${esc(c.color || 'var(--accent)')}"></i><b>${esc(a.title)}</b></div><small>${esc(c.code || c.name || '')} · ${esc(ago(a.posted))}</small>${a.preview ? `<p>${esc(a.preview)}</p>` : ''}</div>`; }).join('') : '<p class="empty">No recent announcements.</p>'));
-  if (S.mode === 'panel' && S.tab === 'canvas') layout();
-}
-$('#cvMain').addEventListener('click', e => {
-  const check = e.target.closest('.cv-check'), row = e.target.closest('.cv-row');
-  if (check && row) {
-    const t = S.cvData[row.dataset.list][+row.dataset.i]; if (!t) return;
-    t.done = !t.done; renderCv();
-    invoke('canvas_done', { key: t.key, kind: t.kind, id: t.id, overrideId: t.override_id, done: t.done })
-      .then(id => { if (id) t.override_id = id; }).catch(err => { t.done = !t.done; renderCv(); note('#cvNote', String(err)); });
-    return;
-  }
-  const url = row ? (S.cvData[row.dataset.list][+row.dataset.i] || {}).url : (e.target.closest('[data-url]') || {}).dataset?.url;
-  if (url) invoke('canvas_open', { url }).then(() => closePanel(true)).catch(err => note('#cvNote', String(err)));
-});
-$('#cvForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const domain = $('#cvDomain').value.trim(), token = $('#cvToken').value.trim();
-  if (!domain) { note('#cvNote', 'Add your school’s Canvas address first.'); return; }
-  note('#cvNote', ''); $('#cvSave').disabled = true;
-  invoke('canvas_configure', { domain, token }).then(st => {
-    $('#cvToken').value = ''; S.cv = st; S.cvEdit = false; S.cvData = null; cvLoop();
-  }).catch(err => note('#cvNote', String(err))).finally(() => { $('#cvSave').disabled = false; });
-});
-$('#cvFeedForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const url = $('#cvFeed').value.trim();
-  if (!url) { note('#cvNote', 'Paste the calendar feed link first.'); return; }
-  note('#cvNote', ''); $('#cvFeedSave').disabled = true;
-  invoke('canvas_configure_feed', { url }).then(st => {
-    $('#cvFeed').value = ''; S.cv = st; S.cvEdit = false; S.cvData = null; cvLoop();
-  }).catch(err => note('#cvNote', String(err))).finally(() => { $('#cvFeedSave').disabled = false; });
-});
-$('#cvMode').addEventListener('click', e => {
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  S.cvSetup = b.dataset.mode; S.cvSetupPicked = true; store.set('cvSetup', S.cvSetup); note('#cvNote', ''); renderCv();
-});
-$('#cvEdit').addEventListener('click', () => { S.cvEdit = true; renderCv(); });
-$('#cvBack').addEventListener('click', () => { S.cvEdit = false; $('#cvToken').value = ''; renderCv(); });
-$('#cvForget').addEventListener('click', () => {
-  const b = $('#cvForget');
-  if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Click again to forget'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Forget'; }, 3000); return; }
-  delete b.dataset.sure; b.textContent = 'Forget';
-  invoke('canvas_forget').then(() => { S.cvEdit = false; S.cvData = null; $('#cvDomain').value = ''; $('#cvFeed').value = ''; cvLoop(); });
-});
-// Due-soon reminders show on top of everything (fullscreen games too); grades and announcements above windows.
-listen('canvas:notify', e => {
-  const n = e.payload || {};
-  toast(clipTxt(n.title, 48), clipTxt(n.body, 72), 'cap', { urgent: !!n.urgent, top: true, ms: n.urgent ? 8000 : 5500, tab: 'canvas', sound: n.urgent ? 'urgent' : 'canvas' });
-});
 
 function note(id, msg) { const n = $(id); n.textContent = msg || ''; n.hidden = !msg; layout(); }
 function renderControls() {
@@ -1595,7 +798,7 @@ function renderControls() {
   set('taskbar', st.taskbar_hidden, st.taskbar_hidden ? 'Hidden' : 'Visible');
   set('night', false, 'Opens Settings');
   set('sounds', sounds.on, sounds.on ? `On · ${Math.round(sounds.vol * 100)}%` : 'Off');
-  renderVpnTiles(); renderGaze(); renderAudioMaster();
+  renderAudioMaster();
   if (a) {
     const v = Math.round(a.level * 100), input = $('#vol');
     if (document.activeElement !== input || performance.now() - S.volSetAt > 1500) input.value = v;
@@ -1620,9 +823,6 @@ $$('.tile').forEach(b => b.addEventListener('click', async () => {
     else if (k === 'night') openSettings('ms-settings:nightlight');
     else if (k === 'sounds') { sounds.set({ on: !sounds.on }); if (sounds.on) sounds.sound('glass'); renderControls(); renderSounds(); }
     else if (k === 'dark') { S.dark = !S.dark; store.set('dark', S.dark); applySkin(); renderControls(); }
-    else if (k === 'tailscale') await tsToggle();
-    else if (k === 'eye' && S.gazeSt) { S.gazeSt = await invoke('gaze_set', { enabled: !S.gazeSt.enabled }); renderControls(); }
-    else if (k === 'radmin') setTab('network');
     else if (k === 'taskbar' && st) { st.taskbar_hidden = !st.taskbar_hidden; renderControls(); await invoke('set_taskbar', { hidden: st.taskbar_hidden }); }
   } catch (err) { note('#ctlNote', String(err)); }
 }));
@@ -1670,6 +870,7 @@ function renderWeather(d) {
   $('#wDesc').textContent = label;
   $('#wRange').textContent = `H ${conv(d.hi)}° · L ${conv(d.lo)}°`;
   $('#wCity').textContent = d.name;
+  renderRest(); renderMedia(); renderBar();
 }
 async function loadWeather(force) {
   const cache = store.get('weather', null);
@@ -1711,6 +912,7 @@ function renderTimer() {
   $$('#presets .chip').forEach(b => b.setAttribute('aria-pressed', +b.dataset.min === T.min));
   $('#pillTimer').hidden = !T.running;
   island.classList.toggle('timing', T.running);
+  renderRest();
 }
 const saveTimer = () => store.set('timer', S.timer);
 $('#presets').addEventListener('click', e => {
@@ -2276,98 +1478,41 @@ $('#appSearch').addEventListener('keydown', e => {
 });
 listen('tray:changed', loadTray);
 
-/* ---------- Wallpaper Engine ---------- */
-S.we = null; S.weAt = 0; S.weKind = ''; S.weQ = ''; S.weShown = 0; S.wePaused = false; S.weMuted = false;
+/* ---------- wallpaper views ----------
+   Module sections with `view` (Wallpaper Engine's library) are alternatives to the island's own
+   scenes, picked in the tab's header; the first one shows unless the island's scenes were picked. */
 S.wpMode = store.get('wpMode', 'we');
-const WE_PAGE = 48;
-/** Opens the tab: Wallpaper Engine's library (re-read at most once a minute) or the island's scenes. */
-function showWallpapers() {
-  renderWpMode();
-  if (S.wpMode !== 'we') return;
-  if (S.we && Date.now() - S.weAt < 60000) { renderWeGrid(); return; }
-  invoke('we_library').then(lib => {
-    S.we = lib; S.weAt = Date.now();
-    if (!lib.installed) { S.wpMode = 'island'; renderWpMode(); return; }
-    renderWpMode(); renderWeGrid();
-  }).catch(err => note('#wpNote', String(err)));
+const wpViews = () => R.sections.all().filter(s => s.tab === 'wallpaper' && s.view).sort((a, b) => a.order - b.order);
+function wpView() {
+  const v = wpViews();
+  if (S.wpMode === 'island' || !v.length) return 'island';
+  return v.some(x => x.id === S.wpMode) ? S.wpMode : v[0].id;
 }
+/** A tab's current view: a module section's id, or '' for the tab's own content (Wallpaper and Audio have views). */
+function viewOf(tab) {
+  if (tab === 'wallpaper') return wpView() !== 'island' ? wpView() : '';
+  if (tab === 'audio') { const v = auView(); return v === 'win' || v === 'sounds' ? '' : v; }
+  return '';
+}
+function showWallpapers() { renderWpMode(); }
 function renderWpMode() {
-  const has = !S.we || S.we.installed; // unknown until the first look: offer it
-  const we = has && S.wpMode === 'we';
+  const v = wpViews(), cur = wpView(), has = v.length > 0;
   $('#wpMode').hidden = !has;
-  $$('#wpMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === (we ? 'we' : 'island')));
-  $('#weView').hidden = !we; $('#islandWalls').hidden = we;
-  $('#wpTitle').hidden = has; $('#wpSub').hidden = has && !we;
-  if (we && S.we) txt($('#wpSub'), `${S.we.wallpapers.length} wallpapers`);
-  else if (!has) txt($('#wpSub'), `${WALLS.length} generated scenes`);
-  setHtml($('#wePlay'), icon(S.wePaused ? 'play' : 'pause'));
-  $('#wePlay').title = S.wePaused ? 'Resume the wallpaper' : 'Pause the wallpaper';
-  setHtml($('#weMute'), icon(S.weMuted ? 'mute' : 'speaker'));
-  $('#weMute').title = S.weMuted ? 'Unmute the wallpaper' : 'Mute the wallpaper';
+  if (has) setHtml($('#wpMode'), [...v.map(x => [x.id, x.title]), ['island', 'Island scenes']].map(([id, t]) => `<button type="button" data-mode="${esc(id)}" aria-pressed="${id === cur}">${esc(t)}</button>`).join(''));
+  $('#islandWalls').hidden = cur !== 'island';
+  $('#wpTitle').hidden = has; $('#wpSub').hidden = has;
+  syncSections();
   if (S.mode === 'panel' && S.tab === 'wallpaper') layout();
 }
-/** Current wallpaper first, then recently used, then newest; filtered by type and search. */
-function weList() {
-  const lib = S.we, q = S.weQ.trim().toLowerCase();
-  const rank = w => w.dir === lib.current ? 0 : lib.recent.includes(w.dir) ? 1 + lib.recent.indexOf(w.dir) : 1000;
-  return lib.wallpapers
-    .filter(w => (!S.weKind || w.kind === S.weKind) && (!q || w.title.toLowerCase().includes(q) || w.tags.some(t => t.toLowerCase().includes(q))))
-    .sort((a, b) => rank(a) - rank(b) || b.added - a.added);
-}
-const KIND_ICON = { scene: 'layers', video: 'film', web: 'globe' };
-function weTile(w) {
-  const cur = w.dir === S.we.current, mature = w.rating === 'Mature';
-  const img = w.thumb ? `<img src="${esc(assetUrl(w.thumb))}" alt="" loading="lazy" decoding="async">` : '';
-  return `<button type="button" role="listitem" class="we-tile${cur ? ' on' : ''}${mature ? ' mature' : ''}" data-dir="${esc(w.dir)}" title="${esc(w.title)}${w.tags.length ? ' · ' + esc(w.tags.join(', ')) : ''}"${w.thumb ? '' : ` style="background:${gradFor(w.title)}"`}>${img}${cur ? '<span class="we-badge">On</span>' : mature ? '<span class="we-badge r18">18+</span>' : ''}${KIND_ICON[w.kind] ? `<span class="we-kind">${icon(KIND_ICON[w.kind])}</span>` : ''}<span class="we-t">${esc(w.title)}</span></button>`;
-}
-/** Builds the grid a page at a time as you scroll, so a 600-wallpaper library stays light. */
-function renderWeGrid(more) {
-  if (!S.we || !S.we.installed) return;
-  const list = weList(), grid = $('#weGrid');
-  if (!more) { S.weShown = 0; grid.innerHTML = ''; grid.scrollTop = 0; }
-  const next = list.slice(S.weShown, S.weShown + WE_PAGE);
-  grid.querySelector('.we-more')?.remove();
-  grid.insertAdjacentHTML('beforeend', next.map(weTile).join('') + (S.weShown + next.length < list.length ? '<i class="we-more"></i>' : ''));
-  S.weShown += next.length;
-  const sentinel = grid.querySelector('.we-more');
-  if (sentinel) { S.weObs?.disconnect(); S.weObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) renderWeGrid(true); }, { root: grid, rootMargin: '200px' }); S.weObs.observe(sentinel); }
-  $('#weEmpty').hidden = list.length > 0; txt($('#weEmpty'), S.weQ ? `Nothing matches “${S.weQ}”.` : 'No wallpapers of that type.');
-  if (!more && S.mode === 'panel' && S.tab === 'wallpaper') layout();
-}
-function clearWeGrid() { S.weObs?.disconnect(); S.weObs = null; S.weShown = 0; $('#weGrid').innerHTML = ''; }
-const weOf = el => S.we && S.we.wallpapers.find(w => w.dir === el.dataset.dir);
-// Thumbnails arrive one by one the first time the library is opened.
-listen('we:thumb', e => {
-  const w = S.we && S.we.wallpapers.find(x => x.dir === e.payload.dir); if (!w) return;
-  w.thumb = e.payload.thumb;
-  const tile = $(`#weGrid .we-tile[data-dir="${CSS.escape(w.dir)}"]`);
-  if (tile && !tile.querySelector('img')) { tile.style.background = ''; tile.insertAdjacentHTML('afterbegin', `<img src="${esc(assetUrl(w.thumb))}" alt="" decoding="async">`); }
+$('#wpMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  S.wpMode = b.dataset.mode; store.set('wpMode', S.wpMode); renderWpMode();
 });
-// Hovering plays that one wallpaper's real (often animated) preview; only one at a time.
-$('#weGrid').addEventListener('pointerover', e => {
-  const tile = e.target.closest('.we-tile'); if (!tile || tile === S.weHover) return;
-  weUnhover(); const w = weOf(tile), img = tile.querySelector('img');
-  if (w && w.preview && img && /\.gif$/i.test(w.preview)) { S.weHover = tile; img.src = assetUrl(w.preview); }
-});
-function weUnhover() {
-  const t = S.weHover; S.weHover = null; if (!t) return;
-  const w = weOf(t), img = t.querySelector('img'); if (w && img && w.thumb) img.src = assetUrl(w.thumb);
-}
-$('#weGrid').addEventListener('pointerleave', weUnhover);
-$('#weGrid').addEventListener('click', e => {
-  const tile = e.target.closest('.we-tile'); const w = tile && weOf(tile); if (!w || tile.classList.contains('busy')) return;
-  note('#wpNote', ''); tile.classList.add('busy');
-  invoke('we_apply', { dir: w.dir }).then(() => {
-    S.we.current = w.dir; S.we.recent = [w.dir, ...S.we.recent.filter(d => d !== w.dir)].slice(0, 10);
-    S.wePaused = false; renderWpMode();
-    $$('#weGrid .we-tile.on').forEach(t => { t.classList.remove('on'); t.querySelector('.we-badge:not(.r18)')?.remove(); });
-    tile.classList.add('on'); if (!tile.querySelector('.we-badge')) tile.insertAdjacentHTML('beforeend', '<span class="we-badge">On</span>');
-    if (S.follow && w.thumb) accentFrom(assetUrl(w.thumb));
-  }).catch(err => note('#wpNote', String(err))).finally(() => tile.classList.remove('busy'));
-});
+R.sections.on(() => renderWpMode());
 /** A lively accent from the wallpaper's thumbnail (its most vivid colors, kept readable). */
 function accentFrom(url) {
   const img = new Image();
+  if (url.startsWith('http://mod.localhost/')) img.crossOrigin = 'anonymous'; // a module's image: its pixels are readable with CORS
   img.onload = () => {
     const c = document.createElement('canvas'); c.width = c.height = 24;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, 24, 24);
@@ -2390,25 +1535,6 @@ function accentFrom(url) {
   };
   img.src = url;
 }
-$('#wpMode').addEventListener('click', e => {
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  S.wpMode = b.dataset.mode; store.set('wpMode', S.wpMode);
-  if (S.wpMode === 'we') showWallpapers(); else { clearWeGrid(); renderWpMode(); }
-});
-$('#weKinds').addEventListener('click', e => {
-  const b = e.target.closest('[data-kind]'); if (!b) return;
-  S.weKind = b.dataset.kind; $$('#weKinds .chip').forEach(c => c.setAttribute('aria-pressed', c === b)); renderWeGrid();
-});
-$('#weQ').addEventListener('input', e => { S.weQ = e.target.value; clearTimeout(S.weQT); S.weQT = setTimeout(() => renderWeGrid(), 120); });
-$('#wePlay').addEventListener('click', () => {
-  S.wePaused = !S.wePaused; renderWpMode();
-  invoke('we_control', { cmd: S.wePaused ? 'pause' : 'play' }).catch(err => { S.wePaused = !S.wePaused; renderWpMode(); note('#wpNote', String(err)); });
-});
-$('#weMute').addEventListener('click', () => {
-  S.weMuted = !S.weMuted; renderWpMode();
-  invoke('we_control', { cmd: S.weMuted ? 'mute' : 'unmute' }).catch(err => { S.weMuted = !S.weMuted; renderWpMode(); note('#wpNote', String(err)); });
-});
-
 /* ---------- wallpaper ---------- */
 WALLS.forEach((wl, i) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'wcard'; b.dataset.i = i; b.setAttribute('aria-label', wl.name);
@@ -2479,6 +1605,62 @@ invoke('autostart_get').then(on => { $('#autostart').checked = on; }).catch(() =
 $('#autostart').addEventListener('change', e => quiet(invoke('autostart_set', { on: e.target.checked })));
 $('#quitBtn').addEventListener('click', () => quiet(invoke('quit')));
 
+/* ---------- updates (updater.rs) ---------- */
+const fmtMB = b => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+const updReady = u => !!u.latest && u.latest !== u.current && (u.state === 'available' || u.state === 'error');
+function renderUpdate(u) {
+  if (u) S.upd = u; u = S.upd; if (!u) return;
+  $('#upd').hidden = false;
+  const off = u.state === 'off';
+  txt($('#updTitle'), `Island Shell ${u.current}`);
+  const sub = {
+    off: "Updates aren't set up in this build",
+    checking: 'Checking for updates…',
+    available: `Version ${u.latest} is ready to install${u.size ? ` · ${fmtMB(u.size)}` : ''}`,
+    downloading: `Downloading ${u.latest}… ${Math.round((u.progress || 0) * 100)}%`,
+    installing: 'Installing; the island will be right back',
+    error: u.error || "Couldn't check for updates",
+  }[u.state] || (u.checked ? `Up to date · checked ${ago(new Date(u.checked).toISOString())}` : 'Up to date');
+  // Modules: the one updating now, or the updates waiting (when they don't update by themselves).
+  const mods = u.modules || [];
+  const modLine = u.module_busy ? `Updating ${u.module_busy}…` : mods.length ? `Module updates: ${mods.map(m => `${m.name} ${m.to}`).join(', ')}` : '';
+  txt($('#updSub'), [sub, modLine].filter(Boolean).join(' · '));
+  $('#updSub').title = [u.notes || sub, modLine].filter(Boolean).join('\n');
+  $('#updAuto').checked = !!u.auto; $('#updAuto').disabled = off;
+  const b = $('#updBtn'), modsOnly = !updReady(u) && mods.length > 0;
+  b.hidden = off;
+  b.disabled = ['checking', 'downloading', 'installing'].includes(u.state) || !!u.module_busy;
+  setHtml(b, updReady(u) ? `${icon('download')}Update` : modsOnly ? `${icon('download')}Update modules` : 'Check now');
+  b.classList.toggle('primary', updReady(u) || modsOnly);
+}
+function toastUpdate(u) {
+  toast('Update available', `Island Shell ${u.latest} · open Power to install`, 'download', { tab: 'power', top: true, ms: 6000 });
+}
+$('#updBtn').addEventListener('click', () => {
+  const u = S.upd || {};
+  quiet(invoke(updReady(u) ? 'update_install' : (u.modules || []).length ? 'update_modules' : 'update_check'));
+});
+// A module updated (by itself, or from the button), or installed from the queue, says so once.
+listen('update:module', e => {
+  const m = e.payload || {};
+  if (m.ok) toast(m.installed ? `${m.name} is installed` : `${m.name} updated`, `Version ${m.version}`, 'download', { ms: 4000, sound: 'small' });
+  else toast(m.installed ? `${m.name} didn't install` : `${m.name} didn't update`, m.installed ? `It'll try again later · ${m.error || ''}` : m.error || '', 'x', { ms: 6000, sound: 'problem' });
+});
+$('#updAuto').addEventListener('change', e => invoke('update_auto', { on: e.target.checked }).then(renderUpdate).catch(() => {}));
+invoke('update_status').then(renderUpdate).catch(() => {});
+// A background check that finds a new version says so once per version.
+listen('update:status', e => {
+  const u = e.payload; renderUpdate(u);
+  if (u.state === 'available' && store.get('updToast', '') !== u.latest) { store.set('updToast', u.latest); toastUpdate(u); }
+});
+// "Check for updates" in the tray menu always gets an answer.
+listen('update:asked', e => {
+  const u = e.payload; renderUpdate(u);
+  if (updReady(u) && u.state === 'available') { store.set('updToast', u.latest); toastUpdate(u); }
+  else if (u.state === 'error') toast("Couldn't check for updates", u.error, 'x', { top: true, ms: 5000 });
+  else toast('Island Shell is up to date', `Version ${u.current}`, 'check', { top: true });
+});
+
 /* ---------- top-bar style ---------- */
 S.style = 'island'; S.anchor = 0;
 const barEl = $('#bar');
@@ -2488,7 +1670,7 @@ const htmlNow = new WeakMap();
 function setHtml(el, html) { if (htmlNow.get(el) === html) return false; htmlNow.set(el, html); el.innerHTML = html; return true; }
 /** Same for plain text. */
 function txt(el, s) { s = String(s); if (el.textContent !== s) el.textContent = s; }
-function applySkin() { island.dataset.skin = barEl.dataset.skin = S.dark ? 'dark' : 'light'; if (S.tint) setTint(S.tint); }
+function applySkin() { island.dataset.skin = barEl.dataset.skin = S.dark ? 'dark' : 'light'; }
 function applyStyle(style) {
   S.style = style === 'bar' || style === 'tall' ? style : 'island';
   const bar = isBar();
@@ -2530,7 +1712,9 @@ function renderBar() {
   if (!isBar()) return;
   const st = S.status || { wifi: {}, bluetooth: {}, net: {}, battery: {}, desktops: null, cpu: 0 };
   const d = new Date();
-  setHtml($('#barClock'), `<span>${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ${d.toLocaleDateString(undefined, { weekday: 'short' })}</span>`);
+  // The weather's icon and temperature just left of the clock (§4.11).
+  const wx = restWeather(store.get('weather', null), S.city, S.unit);
+  setHtml($('#barClock'), `${wx ? `<span class="bar-wx">${icon(wx.icon)}${wx.temp}°</span>` : ''}<span>${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ${d.toLocaleDateString(undefined, { weekday: 'short' })}</span>`);
   const a = S.audio;
   setHtml($('#barVol'), `${icon(a && (a.muted || a.level === 0) ? 'mute' : deviceIcon(a))}<span>${a ? (a.muted ? 'Muted' : Math.round(a.level * 100) + '%') : '–'}</span>`);
   const bt = $('#barBt'); bt.hidden = !st.bluetooth.present; bt.classList.toggle('on', !!st.bluetooth.on);
@@ -2539,7 +1723,8 @@ function renderBar() {
   if (st.wifi.present && st.wifi.on && st.net.kind === 'wifi') net = `${icon('wifi')}<span>${esc(st.net.name || 'Wi-Fi')}${st.net.bars != null ? ` (${st.net.bars * 20}%)` : ''}</span>`;
   else if (st.net.kind === 'ethernet') net = `${icon('ethernet')}<span>${esc(st.net.name || 'Ethernet')}</span>`;
   else net = `${icon('wifioff')}<span>${st.wifi.present && !st.wifi.on ? 'Wi-Fi off' : 'Offline'}</span>`;
-  if (vpnOn()) net += `<span class="vpn-shield" title="VPN connected">${icon('shield')}</span>`;
+  // Badges modules put on the network chip (the VPN module's shield while one is connected).
+  for (const c of R.chips.all()) if (c.module && !c.hidden && c.in === 'net') net += `<span class="net-badge" title="${esc(c.title || '')}">${icon(c.icon || 'dot')}</span>`;
   setHtml($('#barNet'), net);
   const bat = $('#barBat'), b = st.battery || {};
   bat.hidden = !b.present;
@@ -2679,6 +1864,7 @@ function tickClock() {
   $('#tHour').textContent = String(h12).padStart(2, '0'); $('#tMin').textContent = mm;
   $('#tSub').textContent = `${d.getHours() < 12 ? 'AM' : 'PM'} · ${d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}`;
   if (d.getDate() !== weekDay) renderWeek();
+  if (d.getMinutes() !== S.restMin) { S.restMin = d.getMinutes(); renderRest(); }
 }
 setInterval(tickClock, 1000);
 
@@ -2687,6 +1873,7 @@ setInterval(tickClock, 1000);
 // opens that section full size inside it.
 listen('island:toggle', e => {
   if (e.payload === 'cc') { cmdCenter.toggle(); return; }
+  if (String(e.payload).startsWith('cube:')) { openTarget(e.payload); return; }
   if (cmdCenter.isOpen()) { if (!cmdCenter.openSheet(e.payload || 'apps')) cmdCenter.close(() => openPanel(e.payload || 'apps', true), true); return; }
   togglePanel(true, e.payload);
 });
@@ -2702,6 +1889,172 @@ listen('clip:changed', loadClips);
 listen('apps:ready', loadApps);
 appWin.onFocusChanged(({ payload: focused }) => { if (!focused && S.mode === 'panel' && !S.ccOpen) closePanel(true); });
 TABS.forEach(t => new ResizeObserver(() => { if (S.mode === 'panel' && S.tab === t) layout(); }).observe(views[t]));
+
+/* ---------- modules (src/modhost.js) ---------- */
+// Module tabs get a view as soon as they're registered (their UI mounts in it on first show);
+// sections, Controls tiles and bar chips render from the registry; module notifications and
+// activities arrive here from the backend (modules.rs) or the module's own UI.
+const modHost = createModuleHost({
+  R, invoke, listen, log,
+  ui: {
+    icon, esc, setHtml, txt, clip: clipTxt, grad: gradFor, glyph: glyphOf, ago,
+    /** An error line inside a module's view: shown with text, hidden without. */
+    note(el, msg) { if (!el) return; el.textContent = msg || ''; el.hidden = !msg; layout(); }
+  },
+  island: {
+    layout: () => layout(),
+    /** The accent from an image (a module's wallpaper), when the accent follows the wallpaper. */
+    accentFrom: url => { if (S.follow) accentFrom(url); },
+    /** For a module's Command Center sheet: a short message in it, and closing it before `then`. */
+    flash: msg => cmdCenter.flash(msg),
+    closeCommandCenter: then => cmdCenter.close(then, true),
+    /** The Start menu's apps (icons as URLs, `running` when one has a window), to open or offer a menu for. */
+    apps: {
+      list: () => (S.apps || []).map(a => ({ id: a.id, name: a.name, icon: a.icon ? assetUrl(a.icon) : null, running: winsFor(a).length > 0 })),
+      open: id => { const a = appOf(id); if (a) openPinned(a); },
+      menu: (id, x, y) => { const a = appOf(id); if (a) appMenu(a, x, y); }
+    },
+    showing: tab => S.mode === 'panel' && S.tab === tab,
+    closePanel: keep => closePanel(keep),
+    releaseFocus: () => quiet(invoke('release_focus')),
+    /** Brings a module's app forward ({ id, exe, hwnd }): the island does it, being the one in front. */
+    focusApp: app => invoke('focus_app', { id: app.id || '', exe: app.exe || '', hwnd: app.hwnd || null }),
+    /** A program's own volume by its image names (`|`-separated), like the Volume mixer's. */
+    audio: { appVolume: exe => invoke('app_volume_get', { exe }), setAppVolume: (exe, level) => invoke('app_volume_set', { exe, level }) },
+    menu: (x, y, items) => showCtx(x, y, items),
+    state: () => ({ mode: S.mode, tab: S.tab, dark: S.dark, style: S.style, cc: !!S.ccOpen, fullscreen: !!S.fullscreen }),
+    on: (name, fn) => { const h = e => fn(e.detail); islandEvents.addEventListener(name, h); return () => islandEvents.removeEventListener(name, h); }
+  },
+  addView: () => syncViews(), removeView: () => syncViews(),
+  notify: (module, n) => modToast(module, n),
+  open: target => openTarget(target),
+  setTiles: () => renderModTiles(), setChips: () => { renderModChips(); renderBar(); },
+  activitiesChanged: () => islandEvents.dispatchEvent(new CustomEvent('activities')),
+  sectionsChanged: () => syncSections(),
+  tabFailed: (tab, name, e) => { const v = views[tab]; if (v) v.querySelector('.mod-fail').textContent = `${name} couldn't load: ${e && e.message || e}`; layout(); }
+});
+/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities', 'level' (the equalizer's, 0–1). */
+const islandEvents = new EventTarget();
+/* ---------- a call on the pill and the top bar (a module's `call` activity, like Discord's) ----------
+   Who's in it (up to three faces, a green ring on whoever's talking) and your own mute or deafen,
+   beside the clock. Talking flips many times a second, so while the faces stay the same only their
+   rings change, here and on the bar's chips. */
+S.callW = 0;
+/** Extra pill width for the faces (and the muted mic). */
+function callW() { return S.callW || 0; }
+const faces = list => list.map(a => `<img src="${esc(/^https:\/\//.test(a.src || '') ? a.src : '')}" alt="" data-id="${esc(a.id || '')}" referrerpolicy="no-referrer">`).join('');
+function talkRings(box, list) {
+  const t = new Set(list.filter(a => a.talk).map(a => a.id));
+  for (const img of box.querySelectorAll('img[data-id]')) img.classList.toggle('talk', t.has(img.dataset.id));
+}
+function renderPillCall() {
+  const a = topActivity(R.activities.all().filter(x => x.kind === 'call')), av = ((a && a.avatars) || []).slice(0, 3);
+  const pill = $('#pillCall'), on = av.length > 0;
+  island.classList.toggle('in-call', on);
+  pill.hidden = !on;
+  let w = 0;
+  if (on) {
+    setHtml(pill, `<span class="call-stack">${faces(av)}</span>${a.icon ? icon(a.icon) : ''}`);
+    talkRings(pill, av);
+    w = 9 + 18 + (av.length - 1) * 12 + (a.icon ? 17 : 0);
+  }
+  if (w !== S.callW) { S.callW = w; layout(); }
+  renderRest();
+}
+islandEvents.addEventListener('activities', renderPillCall);
+islandEvents.addEventListener('activities', syncMedia);
+/** Views for module tabs come and go with the registry. */
+function syncViews() {
+  const box = $('.views');
+  for (const t of R.tabs.all()) {
+    if (views[t.id]) continue;
+    const v = document.createElement('section');
+    v.className = 'view mod-view'; v.id = `v-${t.id}`; v.dataset.tab = t.id; v.setAttribute('role', 'tabpanel'); v.setAttribute('aria-labelledby', `tab-${t.id}`);
+    v.innerHTML = '<div class="mod-host"></div><p class="note mod-fail"></p>';
+    box.append(v); views[t.id] = v;
+    // Its size settles as its stylesheet and pictures arrive: follow it, like the base's views.
+    new ResizeObserver(() => { if (S.mode === 'panel' && S.tab === t.id) layout(); }).observe(v);
+  }
+  for (const id of Object.keys(views)) if (!R.tabs.has(id)) { views[id].remove(); delete views[id]; if (S.tab === id) { S.tab = 'controls'; views.controls.classList.add('on'); } }
+}
+R.tabs.on(() => { syncViews(); renderTabs(); syncTabs(); syncBarTabs(); if (S.mode === 'panel') { moveInk(); layout(); } });
+/** The bar's Games button opens a module's tab: it shows only while that tab exists. */
+function syncBarTabs() { $('#barGames').hidden = !R.tabs.has('games'); }
+/** Which module tab (and sections) are on screen; the module hears show() and hide(). */
+let modShown = null;
+function syncModViews() {
+  const now = S.mode === 'panel' ? S.tab : null;
+  if (now !== modShown) {
+    if (modShown) modHost.hideTab(modShown);
+    modShown = now;
+    if (now && R.tabs.get(now) && R.tabs.get(now).module) modHost.showTab(now, views[now].querySelector('.mod-host'));
+    islandEvents.dispatchEvent(new CustomEvent('tab', { detail: now }));
+  }
+  syncSections();
+}
+/** Module sections inside base tabs: a host per section, in order, shown while their tab is. */
+function syncSections() {
+  for (const s of R.sections.all()) {
+    const view = views[s.tab]; if (!view) continue;
+    // A view goes in the tab's own .mod-views box and shows only while it's the one picked.
+    let box = s.view ? view.querySelector('.mod-views') : view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
+    if (!box && s.view) continue;
+    if (!box) { box = Object.assign(document.createElement('div'), { className: 'mod-sections' }); box.dataset.tab = s.tab; view.append(box); }
+    let host = box.querySelector(`[data-sec="${CSS.escape(s.id)}"]`);
+    if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section' }); host.dataset.sec = s.id; box.append(host); }
+    const on = S.mode === 'panel' && S.tab === s.tab && (!s.view || viewOf(s.tab) === s.id);
+    host.hidden = !!s.view && viewOf(s.tab) !== s.id;
+    modHost.showSection(s.id, host, on);
+  }
+  $$('.mod-section').forEach(h => { if (!R.sections.has(h.dataset.sec)) h.remove(); });
+}
+function modToast(module, n) {
+  const tab = n.action && n.action.startsWith('tab:') ? n.action.slice(4) : '';
+  toast(clipTxt(n.title || module, 48), clipTxt(n.body || '', 72), n.icon && !/\./.test(n.icon) ? n.icon : 'bellon',
+    { img: n.img || '', round: !!n.round, urgent: !!n.urgent, top: !!(n.urgent || n.top), ms: n.ms || (n.urgent ? 8000 : 5500), tab, sound: n.sound || '' });
+}
+listen('mod:notify', e => modToast(e.payload.module, e.payload));
+/** Activities a module's backend sets (host.activity) sit in the same registry as the UI's own. */
+listen('island:activities', e => {
+  for (const a of R.activities.all()) if (a.backend) R.activities.remove(a.id);
+  for (const a of e.payload || []) R.activities.set({ ...a, id: `${a.module}:${a.id}`, aid: a.id, backend: true });
+  islandEvents.dispatchEvent(new CustomEvent('activities'));
+});
+function openTarget(target) {
+  const [kind, id] = String(target || '').split(':');
+  if (kind === 'tab' && R.tabs.has(id)) { if (cmdCenter.isOpen()) cmdCenter.close(() => openPanel(id, true), true); else openPanel(id); }
+  else if (kind === 'cube') { if (!cmdCenter.isOpen()) cmdCenter.open().then(() => cmdCenter.openSheet(id)); else cmdCenter.openSheet(id); }
+}
+/** Controls tiles from modules, after the base's own. */
+function renderModTiles() {
+  const box = $('#modTiles'); if (!box) return;
+  const list = R.tiles.all().filter(t => t.module && !t.hidden);
+  setHtml(box, list.map(t => `<button class="tile" type="button" data-mtile="${esc(t.id)}" aria-pressed="${!!t.pressed}"><span class="ti">${icon(t.icon || 'grid')}</span><span class="tt"><b>${esc(t.title || '')}</b><small>${esc(t.sub || '')}</small></span></button>`).join(''));
+  box.hidden = !list.length;
+}
+$('#modTiles').addEventListener('click', e => {
+  const b = e.target.closest('[data-mtile]'); const t = b && R.tiles.get(b.dataset.mtile); if (!t || !t.run) return;
+  note('#ctlNote', '');
+  Promise.resolve().then(() => t.run()).catch(err => note('#ctlNote', String(err)));
+});
+/** Top-bar chips from modules (left: after the Games button; right: before the volume). */
+function renderModChips() {
+  for (const side of ['left', 'right']) {
+    const box = $(side === 'left' ? '#barModsL' : '#barModsR'); if (!box) continue;
+    const list = R.chips.all().filter(c => c.module && !c.hidden && !c.in && (c.side || 'right') === side);
+    setHtml(box, list.map(c => {
+      const av = faces(c.avatars || []);
+      return `<button class="bchip${c.icon && !c.text && !av ? ' icon' : ''}${c.tone ? ' ' + esc(c.tone) : ''}" type="button" data-mchip="${esc(c.id)}"${c.opens ? ` data-opens="${esc(c.opens)}"` : ''} title="${esc(c.title || '')}" aria-label="${esc(c.title || c.text || '')}">${av ? `<span class="call-stack">${av}</span>` : ''}${c.icon ? icon(c.icon) : ''}${c.text ? `<span>${esc(c.text)}</span>` : ''}</button>`;
+    }).join(''));
+    for (const c of list) if (c.avatars && c.avatars.length) { const b = box.querySelector(`[data-mchip="${CSS.escape(c.id)}"]`); if (b) talkRings(b, c.avatars); }
+  }
+}
+barEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-mchip]'); const c = b && R.chips.get(b.dataset.mchip); if (!c) return;
+  e.stopPropagation();
+  if (c.opens) { const [kind, id] = c.opens.split(':'); if (kind === 'tab') openFromBar(id, b); else openTarget(c.opens); }
+  else if (c.run) Promise.resolve().then(() => c.run()).catch(err => toast(c.title || 'Couldn\'t do that', String(err), 'x', { sound: 'problem' }));
+}, true);
 
 /* ---------- boot ---------- */
 setAccent(store.get('accent', TAKEN)); syncAccentMode();
@@ -2734,12 +2087,18 @@ function unhostTab(keepMode) {
   if (!keepMode) setMode('pill');
 }
 const cmdCenter = createCommandCenter({
-  S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel,
+  S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
+  settingsOf: id => modHost.settingsOf(id),
+  // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
+  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
+    const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);
+    let state = '';
+    try { state = String(((card && card.render && card.render()) || {}).state || ''); } catch (e) {}
+    return { id: m.man.id, icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
+  }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },
-  media: { curPos, seekTo, toggleLyrics: () => $('#muLyricsBtn').click() },
-  games: { play: playGame, launchers: launcherApps, openApp: openPinned },
   setDark: on => { S.dark = on; store.set('dark', on); applySkin(); },
   apps: {
     appOf, appForWin, pinIdForWin, launch, openPinned, activate: activateWin,
@@ -2750,7 +2109,12 @@ const cmdCenter = createCommandCenter({
 });
 $('#openTm').addEventListener('click', () => cmdCenter.openTaskManager());
 if (FIRST_RUN) setTimeout(() => cmdCenter.openSetup(), 1800);
-pollStatus(); loadClips(); loadApps(); loadWeather(); vpnLoop(); loadDc();
+// 0.1.x had every integration built in: the first start after the upgrade asks for the modules it
+// was using (modules.rs, mod_migrate); they install in the background.
+else if (!store.get('modulesMigrated', false)) invoke('mod_migrate').then(() => store.set('modulesMigrated', true)).catch(() => {});
+modHost.start();
+
+pollStatus(); loadClips(); loadApps(); loadWeather();
 setInterval(() => loadWeather(), 20 * 60e3);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { tabLabelW = null; moveInk(); layout(); });
 setTimeout(() => log(`ready: apps=${S.apps.length} clips=${S.clips.length} media=${S.media ? S.media.app + ' / ' + S.media.title : 'none'} audio=${S.audio ? S.audio.device + ' ' + Math.round(S.audio.level * 100) + '%' : 'none'} wifi=${JSON.stringify(S.status && S.status.wifi)} net=${JSON.stringify(S.status && S.status.net)}`), 6000);

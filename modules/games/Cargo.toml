@@ -1,0 +1,17 @@
+[package]
+name = "games-module"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Island Shell's Games module: your Steam library with covers, heroes and playtime, and your other launchers."
+
+[[bin]]
+name = "games-module"
+path = "src/main.rs"
+
+[dependencies]
+island-module = { path = "../../crates/island-module" }
+island-win = { path = "../../crates/island-win" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+png = "0.18"

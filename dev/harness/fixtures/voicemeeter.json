@@ -1,0 +1,316 @@
+{
+ "mod_states": {
+  "voicemeeter": "running"
+ },
+ "mod:voicemeeter.state": {
+  "kind": "Potato",
+  "busNames": [
+   "A1",
+   "A2",
+   "A3",
+   "A4",
+   "A5",
+   "B1",
+   "B2",
+   "B3"
+  ],
+  "strips": [
+   {
+    "index": 0,
+    "physical": true,
+    "label": "Mic",
+    "device": "Studio Mic (USB)",
+    "gain": -2.5,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 1,
+    "physical": true,
+    "label": "",
+    "device": "Line In (Realtek)",
+    "gain": -60.0,
+    "mute": true,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 2,
+    "physical": true,
+    "label": "",
+    "device": "",
+    "gain": 0.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 3,
+    "physical": true,
+    "label": "",
+    "device": "",
+    "gain": 0.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 4,
+    "physical": true,
+    "label": "",
+    "device": "",
+    "gain": 0.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 5,
+    "physical": false,
+    "label": "",
+    "device": "",
+    "gain": 0.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 6,
+    "physical": false,
+    "label": "Music",
+    "device": "",
+    "gain": -8.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     true,
+     false,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   },
+   {
+    "index": 7,
+    "physical": false,
+    "label": "",
+    "device": "",
+    "gain": -12.0,
+    "mute": false,
+    "solo": false,
+    "routing": [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "fx": {
+     "comp": null,
+     "gate": null,
+     "denoiser": null,
+     "eqLow": null,
+     "eqMid": null,
+     "eqHigh": null
+    }
+   }
+  ],
+  "buses": [
+   {
+    "index": 0,
+    "name": "A1",
+    "device": "Headphones (USB DAC)",
+    "gain": -3.0,
+    "mute": false
+   },
+   {
+    "index": 1,
+    "name": "A2",
+    "device": "Speakers (Realtek)",
+    "gain": 0.0,
+    "mute": false
+   },
+   {
+    "index": 2,
+    "name": "A3",
+    "device": "",
+    "gain": 0.0,
+    "mute": false
+   },
+   {
+    "index": 3,
+    "name": "A4",
+    "device": "",
+    "gain": 0.0,
+    "mute": false
+   },
+   {
+    "index": 4,
+    "name": "A5",
+    "device": "",
+    "gain": 0.0,
+    "mute": true
+   },
+   {
+    "index": 5,
+    "name": "B1",
+    "device": "",
+    "gain": 0.0,
+    "mute": false
+   },
+   {
+    "index": 6,
+    "name": "B2",
+    "device": "",
+    "gain": 0.0,
+    "mute": false
+   },
+   {
+    "index": 7,
+    "name": "B3",
+    "device": "",
+    "gain": 0.0,
+    "mute": false
+   }
+  ],
+  "recorder": {
+   "record": false,
+   "play": false,
+   "recBus": false,
+   "routing": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ "mod:voicemeeter.apps": {
+  "voicemeeter": true,
+  "voicedeck": true
+ },
+ "mod:voicemeeter.levels": null,
+ "mod:voicemeeter.set": null,
+ "mod:voicemeeter.mic": true
+}

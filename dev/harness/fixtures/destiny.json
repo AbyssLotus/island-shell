@@ -1,0 +1,160 @@
+{
+ "mod:destiny.status": {
+  "configured": true,
+  "name": "Guardian#1234"
+ },
+ "mod:destiny.profile": {
+  "name": "Guardian#1234",
+  "guardian_rank": 7,
+  "characters": [
+   {
+    "id": "1",
+    "race": "Awoken",
+    "light": 1990,
+    "emblem": "/__repo/modules/destiny/ui/icon.svg",
+    "emblem_bg": "",
+    "last_played": "2026-10-23T08:00:00Z",
+    "minutes_played": 61234,
+    "activity": "",
+    "activity_since": "",
+    "items": [
+     {
+      "slot": "Subclass",
+      "name": "Voidwalker",
+      "kind": "Subclass",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": null
+     },
+     {
+      "slot": "Kinetic",
+      "name": "Test Rifle",
+      "kind": "Auto Rifle",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1990
+     },
+     {
+      "slot": "Energy",
+      "name": "Sample Bow",
+      "kind": "Combat Bow",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": true,
+      "power": 1991
+     },
+     {
+      "slot": "Power",
+      "name": "Example Sword",
+      "kind": "Sword",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1989
+     },
+     {
+      "slot": "Helmet",
+      "name": "Helm",
+      "kind": "Helmet",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1988
+     },
+     {
+      "slot": "Arms",
+      "name": "Gloves",
+      "kind": "Gauntlets",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1990
+     },
+     {
+      "slot": "Chest",
+      "name": "Robes",
+      "kind": "Chest Armor",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1987
+     },
+     {
+      "slot": "Legs",
+      "name": "Boots",
+      "kind": "Leg Armor",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1990
+     },
+     {
+      "slot": "Class item",
+      "name": "Bond",
+      "kind": "Warlock Bond",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1990
+     }
+    ],
+    "class": "Warlock"
+   },
+   {
+    "id": "2",
+    "race": "Exo",
+    "light": 1984,
+    "emblem": "/__repo/modules/destiny/ui/icon.svg",
+    "emblem_bg": "",
+    "last_played": "2026-10-20T19:00:00Z",
+    "minutes_played": 12011,
+    "activity": "",
+    "activity_since": "",
+    "items": [
+     {
+      "slot": "Subclass",
+      "name": "Voidwalker",
+      "kind": "Subclass",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": null
+     },
+     {
+      "slot": "Kinetic",
+      "name": "Test Rifle",
+      "kind": "Auto Rifle",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1990
+     },
+     {
+      "slot": "Energy",
+      "name": "Sample Bow",
+      "kind": "Combat Bow",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": true,
+      "power": 1991
+     },
+     {
+      "slot": "Power",
+      "name": "Example Sword",
+      "kind": "Sword",
+      "icon": "/__repo/modules/destiny/ui/icon.svg",
+      "exotic": false,
+      "power": 1989
+     }
+    ],
+    "class": "Hunter"
+   }
+  ],
+  "at": 0
+ },
+ "mod:destiny.xur": {
+  "here": true,
+  "location": "",
+  "leaves": "2026-10-27T17:00:00Z",
+  "items": [
+   {
+    "slot": "Helmet",
+    "name": "Sample Exotic",
+    "kind": "Helmet",
+    "icon": "/__repo/modules/destiny/ui/icon.svg",
+    "exotic": true,
+    "power": null
+   }
+  ]
+ }
+}

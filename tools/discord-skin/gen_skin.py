@@ -1,4 +1,4 @@
-"""Generates island-shell/src-tauri/src/discord-skin.css from Discord's own colour scales.
+"""Generates modules/discord/skins/discord-skin.css (the Discord module's docked-app skin) from Discord's own colour scales.
 
 Usage (from tools/discord-skin): python -I gen_skin.py <discord css with the :root primitives> <google fonts css> <out.css>
 

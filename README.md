@@ -18,25 +18,36 @@ Music with lyrics, Discord calls, sound, your day, your games and your whole PC,
 
 ## Features
 
+Island Shell is the island, the Command Center, the Task Manager and your calendar. Everything else is a **module**: add the ones you want in the setup guide or the Command Center's **Modules** cube, and the rest never touch your PC.
+
+**Built in**
+
 | | Feature | What you get |
 | :---: | --- | --- |
-| 🏝️ | **The island** | A pill at the top of the screen in place of the taskbar. Tap the Windows key to open it, hover to peek. Or use it as a full-width top bar. |
-| 🌑 | **Command Center** | **Win + Space**: one search for apps, windows, files, games, settings, commands and math, with every section as a full-size sheet. |
-| 🎵 | **Music** | Apple Music, Spotify and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
+| 🏝️ | **The island** | A pill at the top of the screen in place of the taskbar. Tap the Windows key to open it, hover to peek. At rest it shows the weather, the date and the clock. Or use it as a full-width top bar. |
+| 🌑 | **Command Center** | **Win + Space**: one search for apps, windows, files, settings, commands and math, with every section as a full-size sheet. |
 | 📊 | **Integrated Task Manager** | Summary, Performance (every logical processor), Processes, System Info, App history, Startup apps, Users, Services, Power & Freq (sensors and SSD health), Connections, Installed Apps, Disk Space and Benchmarks. |
-| 🎓 | **Canvas** | Due dates, grades, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. |
-| 🛡️ | **DIM** | Destiny Item Manager docked in the Command Center, dressed in the island's look. |
-| ⭐ | **Destiny 2** | Your Guardians, loadouts, current activity, Xûr and the weekly reset, through the Bungie API. |
-| 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), notifications on the island, and the Discord web app docked in the Command Center with an island skin. |
-| 👁️ | **Tobii eye tracker** | The island notices when you look at it, and your music pauses when you step away. |
-| 🎮 | **Steam & games** | Your library with your custom artwork, playtime, Play / Update, and your other launchers. |
+| 📅 | **Calendar & weather** | A full calendar with your iCal feeds (Google, Outlook, iCloud) and what modules add (Canvas due dates, Destiny's reset); weather and to-dos in Today. |
 | 🗂️ | **Apps** | Every Start menu app: pinned, opened lately, folders, A to Z, run as administrator, open file location, uninstall. Plus open windows and the tray. |
-| 📅 | **Calendar & weather** | A full calendar with your iCal feeds (Google, Outlook, iCloud), Canvas due dates and Destiny's reset; weather and to-dos in Today. |
-| 🔊 | **Audio** | Output and input devices, per-app volume and levels, and the Voicemeeter mixer (with VoiceDeck). |
-| 🌐 | **Network** | Wi-Fi, Bluetooth, Tailscale and Radmin VPN. |
+| 🔊 | **Audio & network** | Output and input devices, per-app volume and levels; Wi-Fi and Bluetooth. |
 | 📋 | **Clipboard** | Everything you copy, images included, kept across restarts, with pins. |
-| 🖼️ | **Wallpaper** | Procedural wallpapers that set the accent color, and your Wallpaper Engine library. |
-| ⌨️ | **Windows key** | Win opens the island; Win + A / G / V / N open Audio, Games, Clipboard and Today; every other Win shortcut still works. |
+| 🖼️ | **Wallpaper** | Procedural wallpapers that set the accent color. |
+| ⌨️ | **Windows key** | Win opens the island; Win + A / V / N open Audio, Clipboard and Today (modules add more, like Win + G); every other Win shortcut still works. |
+| 🧩 | **Modules** | Install, turn off, update or remove each module, with what it talks to and what it uses, from the Modules cube. |
+
+**Modules** (add only what you want)
+
+| | Module | What you get |
+| :---: | --- | --- |
+| 🎵 | **Music** | Apple Music, Spotify and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
+| 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), @mentions on the island, and the Discord web app docked in the Command Center with an island skin. |
+| 🎓 | **Canvas** | Due dates, grades, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. |
+| ⭐ | **Destiny 2 (with DIM)** | Your Guardians, loadouts, current activity, Xûr and the weekly reset through the Bungie API, and Destiny Item Manager docked in the Command Center in the island's look. |
+| 🎮 | **Steam & games** | Your library with your custom artwork, playtime, Play / Update, your other launchers, and Win + G. |
+| 👁️ | **Tobii eye tracker** | The island notices when you look at it, notifications wait until you've seen them, and your music can pause when you step away. |
+| 🎚️ | **Voicemeeter** | Voicemeeter's mixer in the Audio tab (with VoiceDeck) and a mic switch on the top bar. |
+| 🌄 | **Wallpaper Engine** | Your Wallpaper Engine library in the Wallpaper tab, with the accent following along. |
+| 🛡️ | **VPN** | Tailscale and Radmin VPN in Network, with a switch in Controls. |
 
 ## What it is
 
@@ -76,11 +87,11 @@ Island Shell replaces the Windows taskbar with a pill at the top of your screen 
 
 1. Download **[IslandShellSetup.exe](https://github.com/AbyssLotus/island-shell/releases/latest/download/IslandShellSetup.exe)**.
 2. Run it. It installs in a few seconds, for your account only, and the island appears. If Windows says *"Windows protected your PC"* (Island Shell isn't code-signed yet), click **More info → Run anyway**.
-3. The setup guide walks you through the rest in about a minute.
+3. The setup guide walks you through the rest in about a minute, including which modules to add (they install in the background).
 
 <p align="center"><img src="docs/screenshots/setup-welcome.jpg" width="80%" alt="The setup guide's welcome step"></p>
 
-The **[setup guide](docs/SETUP.md)** has every step, plus how to connect Discord, Canvas, Destiny 2 and calendars.
+The **[setup guide](docs/SETUP.md)** has every step, plus how to set up Discord, Canvas, Destiny 2 and calendars. **[MODULES.md](docs/MODULES.md)** is how modules work, and how to write one.
 
 **Uninstall** from Settings → Apps → Installed apps. Your taskbar comes back as it was. (If it ever stays hidden, run **Restore the taskbar (Island Shell)** from the Start menu.)
 
@@ -97,6 +108,7 @@ There are no accounts, no telemetry and no servers of its own. Everything stays 
 | Your school's Canvas, Bungie, your calendars | Only if you connect them, with the details you enter |
 | [speed.cloudflare.com](https://speed.cloudflare.com) | Only when you run the internet benchmark |
 | Google Fonts | The island's typefaces |
+| GitHub (this repository's releases) | At most once a day, and when you ask: the signed update catalog, and the updates you install (Power → *Check daily* turns the daily check off) |
 
 The docked websites in the Command Center (Discord, DIM, your Canvas) are those websites, opened like a browser would.
 

@@ -140,7 +140,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | Mode | Starts | Stops |
 | --- | --- | --- |
 | `always` | When the island starts, if enabled | When the island exits |
-| `while-process` | When one of `backend.process` is running (from the Task Manager snapshot, checked every 2 s) | 5 s after the last one exits |
+| `while-process` | When one of `backend.process` is running (from the Task Manager snapshot, checked every 2 s), and on a UI call (to open the app, or set it up, while it isn't running) | 5 s after the last one exits; started by a call, after `idle` without calls |
 | `scheduled` | Every `every` for an `island.tick`, and also on a UI call | After the tick or call is answered and 10 s have passed idle |
 | `on-demand` | On the first `mod_call` | After `idle` with no calls |
 
@@ -195,15 +195,17 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | `power` | base | `{ state: "suspend" \| "resume" }` |
 | `theme` | base | `{ dark, accent }` |
 | `media.state` | music | `{ playing, app, source, title, artist, album, duration, position }` |
-| `presence` | gaze | `{ state: "looking" \| "present" \| "away" }` |
+| `presence` | gaze | `{ state: "looking" \| "present" \| "away" \| "off" }`: "away" once nobody has been in front of the tracker for 10 s, "off" without a tracker (or with it turned off). The island follows it too (looking opens the peek; while someone's there, notifications wait to be seen) |
 
 Late subscribers get the last value immediately. Topics are only state, never commands. For example, Music reacts to `presence: away` by pausing itself, if its "pause when I step away" setting is on. That setting moves from the Tobii settings into Music's.
 
 ### 4.8 Activities
 
-`{ id, kind: "media" | "call" | "timer" | "custom", priority, icon?, art?, text, sub?, progress?: 0..1, action?: "tab:<id>" }`
+`{ id, kind: "media" | "call" | "timer" | "custom", priority, icon?, art?, text, sub?, progress?: 0..1, action?: "tab:<id>", avatars?: [{ id, src, talk }] }`
 
 - Priority defaults by kind: call 30, timer 20, media 10, custom 5.
+- A `media` activity is what's playing: `{ text: title, sub: artist, app, art, playing, position, sampled_at, duration, can_next, can_prev, key, exe, lyric, action, run(action) }`. The island draws its pill cover and equalizer, peek, Controls card and top-bar chip from the highest one; their buttons call `run('toggle' | 'next' | 'prev')`, the equalizer meters `exe` (image names, `|`-separated), and `lyric` is the line being sung for the peek. Without one, the pill is at rest (§4.11) and Controls has no now-playing card.
+- A `call` activity with `avatars` draws on the pill beside the clock: up to three faces, a green ring on each `talk`, and `icon` (your own mute or deafen). Only the rings change while the faces stay the same, so talking doesn't redraw anything. Bar chips take the same `avatars`.
 - The pill shows the highest priority, and on a tie the most recent. The base's own Pomodoro timer becomes a base activity.
 
 ### 4.9 Calendar events
@@ -237,6 +239,7 @@ interface Ctx {
   id: string;
   call(method: string, params?: object): Promise<any>;   // rejects with { code, message }
   on(name: string, fn: (data: any) => void): () => void; // host.emit events; returns unsubscribe
+  backend: { running(): boolean; state(): string; on(fn: (state: string) => void): () => void }; // without starting it, unlike call()
   store: { get<T>(key: string, dflt: T): T; set(key: string, v: unknown): void }; // localStorage "mod.<id>.<key>"
   ui: UiKit;                                             // icon(name), toggle(), row(), sparkline(), fmt.*
   tabs:     { register(def: { id: string; mount(root: ShadowRoot): void; show?(): void; hide?(): void }): void };
@@ -622,6 +625,14 @@ Extra conditions:
 | D5 | Modules ship on the same GitHub release as the installer, with a signed catalog | modules.md |
 | D6 | First-party modules only in v1; developer mode for unsigned folders | modules.md |
 | D7 | Port order: destiny → canvas → wallpaper-engine → vpn → games → voicemeeter → discord → music → gaze | modules.md |
+| D8 | The base updates itself through the same signed catalog (a `base` entry: version, installer link, sha256, size, notes); its update waits for a click, modules update by themselves while daily checks are on | owner, 2026-10-25 |
+| D9 | One branch for the whole modularization instead of one PR per package; the built-in "M0.5" steps are skipped, each integration goes straight to its module | owner, 2026-10-25 |
+| D10 | Backends speak JSON-RPC over their stdin/stdout (anonymous pipes, made non-inheritable) rather than a named pipe: nothing else on the PC can reach them, with no DACL or PID check needed | implementation, 2026-10-25 |
+| D11 | A `while-process` module also starts for a UI call, so it can open its app or be set up while the app isn't running; started that way it stops after its idle time. The Audio tab takes module views like Wallpaper (Voicemeeter's mixer) | implementation, 2026-10-26 |
+| D12 | Until the Music module exists, the base publishes `media.state` from its status loop (when the song, play state or position jumps), so Discord's status keeps working. A docked site can be `split` (its module's island view stays beside it), a notification can carry an `img` (`round` for a person), and a module's setup card can report its state (`ctx.setup.card(() => ({ state }))`) | implementation, 2026-10-26 |
+| D13 | The island keeps the now-playing chrome (pill, peek, Controls card, bar chip) and draws it from a `media` activity; the Music module owns the players, lyrics, the Music tab and sheet. Modules get island services for what the island must do itself: `ctx.island.focusApp` (bring an app forward), `ctx.island.audio.appVolume/setAppVolume`, the equalizer meter (the activity's `exe`) and the `level` event. "Pause when I step away" is the Music module's setting; eye tracking only publishes `presence`. With nothing playing, Controls shows no now-playing card | implementation, 2026-10-26 |
+| D14 | The base hears the topics modules publish (the host's `Sink::topic`; the page gets `topic:<name>`, and `topic_last` for the latest), so the island follows `presence` itself. The base publishes `island.geometry` (`{ rect, monitor, scale, visible }`, physical pixels) from its cursor thread when it changes | implementation, 2026-10-26 |
+| D15 | Installs the guide, search and migration ask for go through one background queue (`mod_queue`, modules/queue.json): one at a time, kept until each is in place, retried at the next start or check when offline. Migration runs when the page has `setupDone` from 0.1.x but not `modulesMigrated` (settings.json can't tell, the base writes it every start): it queues Music, plus each module whose 0.1.x file is there or whose app is on the PC. The catalog carries each module's `keywords` and `preselect` | implementation, 2026-10-26 |
 
 ## Progress tracker
 
@@ -630,40 +641,40 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | ID | Title | Depends on | Status | PR |
 | --- | --- | --- | --- | --- |
 | M0.0 | CI on Windows | — | in review | [#1](https://github.com/AbyssLotus/island-shell/pull/1) |
-| M0.1 | Cargo workspace | M0.0 | todo | |
-| M0.2 | Dev harness | M0.0 | todo | |
-| M0.3 | Front-end registries | M0.2 | todo | |
-| M0.4 | UI-kit stylesheet | M0.3 | todo | |
-| M0.5a | Built-in: destiny | M0.4 | todo | |
-| M0.5b | Built-in: canvas | M0.5a | todo | |
-| M0.5c | Built-in: wallpaper-engine | M0.5b | todo | |
-| M0.5d | Built-in: vpn | M0.5c | todo | |
-| M0.5e | Built-in: games | M0.5d | todo | |
-| M0.5f | Built-in: voicemeeter | M0.5e | todo | |
-| M0.5g | Built-in: discord | M0.5f | todo | |
-| M0.5h | Built-in: music | M0.5g | todo | |
-| M0.5i | Built-in: gaze | M0.5h | todo | |
-| M0.6 | Backend event bus | M0.0 | todo | |
-| M0.7 | Rest state | M0.3 | todo | |
-| M1.1 | Protocol and SDK crates | M0.1 | todo | |
-| M1.2 | Supervisor | M1.1 | todo | |
-| M1.3 | Module UI loading | M1.2, M0.4 | todo | |
-| M1.4 | Modules sheet | M1.3 | todo | |
-| M1.5 | Destiny 2 module (pilot) | M1.4, M0.5a, M0.6 | todo | |
-| M2.1 | Module: canvas | M1.5, M0.5b | todo | |
-| M2.2 | Module: wallpaper-engine | M2.1, M0.5c | todo | |
-| M2.3 | Module: vpn | M2.2, M0.5d | todo | |
-| M2.4 | Module: games | M2.3, M0.5e | todo | |
-| M2.5 | Module: voicemeeter | M2.4, M0.5f | todo | |
-| M2.6 | Module: discord | M2.5, M0.5g | todo | |
-| M2.7 | Module: music | M2.6, M0.5h | todo | |
-| M2.8 | Module: gaze | M2.7, M0.5i | todo | |
-| M3.1 | pack-modules | M1.5 | todo | |
-| M3.2 | Install, update, remove | M3.1 | todo | |
-| M3.3 | Release workflow | M3.1 | todo | |
-| M3.4 | Picking modules | M3.2 | todo | |
-| M3.5 | Migration from 0.1.x | M3.2, M2.8 | todo | |
-| M3.6 | Docs | M3.4 | todo | |
+| M0.1 | Cargo workspace | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.2 | Dev harness | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.3 | Front-end registries | M0.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.4 | UI-kit stylesheet | M0.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5a | Built-in: destiny | M0.4 | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5b | Built-in: canvas | M0.5a | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5c | Built-in: wallpaper-engine | M0.5b | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5d | Built-in: vpn | M0.5c | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5e | Built-in: games | M0.5d | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5f | Built-in: voicemeeter | M0.5e | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5g | Built-in: discord | M0.5f | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5h | Built-in: music | M0.5g | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.5i | Built-in: gaze | M0.5h | skipped: ported straight to a module | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.6 | Backend event bus | M0.0 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M0.7 | Rest state | M0.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.1 | Protocol and SDK crates | M0.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.2 | Supervisor | M1.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.3 | Module UI loading | M1.2, M0.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.4 | Modules sheet | M1.3 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M1.5 | Destiny 2 module (pilot) | M1.4, M0.5a, M0.6 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.1 | Module: canvas | M1.5, M0.5b | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.2 | Module: wallpaper-engine | M2.1, M0.5c | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.3 | Module: vpn | M2.2, M0.5d | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.4 | Module: games | M2.3, M0.5e | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.5 | Module: voicemeeter | M2.4, M0.5f | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.6 | Module: discord | M2.5, M0.5g | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.7 | Module: music | M2.6, M0.5h | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M2.8 | Module: gaze | M2.7, M0.5i | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.1 | pack-modules | M1.5 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.2 | Install, update, remove | M3.1 | in review (no Modules sheet yet) | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.3 | Release workflow | M3.1 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.4 | Picking modules | M3.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.5 | Migration from 0.1.x | M3.2, M2.8 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M3.6 | Docs | M3.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 
 ## Starting a session
 

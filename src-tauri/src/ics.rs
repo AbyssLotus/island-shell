@@ -7,10 +7,31 @@
 //! - Wall-clock math goes through Windows' own time-zone rules, so a weekly 9 AM class stays at
 //!   9 AM across daylight-saving changes.
 
+use windows::core::HSTRING;
+use windows::Foundation::Uri;
+use windows::Web::Http::Filters::{HttpBaseProtocolFilter, HttpCacheReadBehavior};
+use windows::Web::Http::HttpClient;
 use windows::Win32::Foundation::SYSTEMTIME;
 use windows::Win32::System::Time::{SystemTimeToTzSpecificLocalTime, TzSpecificLocalTimeToSystemTime};
 
 pub const DAY: i64 = 86_400_000;
+
+/// A feed's text: a plain GET (a private feed's link is its key, so there's no sign-in).
+pub fn fetch(url: &str) -> Result<String, String> {
+    let e = |e: windows::core::Error| e.message().to_string();
+    let filter = HttpBaseProtocolFilter::new().map_err(e)?;
+    let _ = filter.CacheControl().and_then(|c| c.SetReadBehavior(HttpCacheReadBehavior::NoCache));
+    let client = HttpClient::Create(&filter).map_err(e)?;
+    let _ = client.DefaultRequestHeaders().and_then(|h| h.UserAgent()).and_then(|ua| ua.TryParseAdd(&HSTRING::from("IslandShell/0.1 (personal Windows desktop shell)")));
+    let uri = Uri::CreateUri(&HSTRING::from(url)).map_err(e)?;
+    let host = url.split('/').nth(2).unwrap_or("the calendar");
+    let resp = client.GetAsync(&uri).and_then(|op| op.get()).map_err(|err| format!("Couldn't reach {host}: {}", err.message()))?;
+    let status = resp.StatusCode().map_err(e)?.0;
+    if !(200..300).contains(&status) {
+        return Err(if status == 404 || status == 401 { format!("{host} didn't recognize that link (it may have been reset)") } else { format!("{host} answered HTTP {status}") });
+    }
+    resp.Content().and_then(|c| c.ReadAsStringAsync()).and_then(|op| op.get()).map(|s| s.to_string()).map_err(e)
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct VEvent {

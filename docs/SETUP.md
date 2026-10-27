@@ -9,7 +9,7 @@ From download to a working island in about two minutes. Everything after step 3 
 - [2. Install it](#2-install-it)
 - [3. The setup guide](#3-the-setup-guide)
 - [4. Everyday use](#4-everyday-use)
-- [5. Connect your stuff](#5-connect-your-stuff)
+- [5. Modules: add what you want](#5-modules-add-what-you-want)
 - [6. Change the look](#6-change-the-look)
 - [Troubleshooting](#troubleshooting)
 - [Uninstalling](#uninstalling)
@@ -40,7 +40,7 @@ The first time Island Shell starts, it opens the setup guide. It takes about a m
 | ![The Command Center](screenshots/setup-command-center.jpg) | **The Command Center.** **Win + Space** opens a full-screen search for apps, windows, files, games, settings and commands, with every section as a cube. |
 | ![Pick your look](screenshots/setup-look.jpg) | **Pick your look.** The **Island** (a pill that grows) or the **Bar** (a strip across the top), dark or light. |
 | ![Start with Windows](screenshots/setup-start.jpg) | **Start with Windows.** On by default, so the island is there every time you sign in. |
-| ![Connect your stuff](screenshots/setup-connect.jpg) | **Connect your stuff.** Music and Steam work on their own. Discord, Canvas, Destiny 2 and calendars have a **Set up** button that takes you straight to their tab (see [step 5](#5-connect-your-stuff)). |
+| ![Pick your modules](screenshots/setup-connect.jpg) | **Pick your modules.** Everything beyond the island, the Command Center, the Task Manager and your calendar is a module: Music, Discord, Canvas, Destiny 2, Steam & games, Voicemeeter, Wallpaper Engine, VPN and the Tobii eye tracker. **Add** the ones you want (Music is ticked to start with). They install in the background while you finish; the ones that need a key have a **Set up** button (see [step 5](#5-modules-add-what-you-want)). |
 | ![You're all set](screenshots/setup-done.jpg) | **Done.** You can open the guide again any time: search **Setup guide** in the Command Center. |
 
 ## 4. Everyday use
@@ -56,20 +56,25 @@ The first time Island Shell starts, it opens the setup guide. It takes about a m
 | Open the Start menu | **Ctrl + Esc** (the Windows key opens the island now) |
 | Quit | The island's **Power** section, or the tray icon |
 
-The Command Center's cubes open each section full size: your Steam library, every app, music with lyrics, a calendar, Discord, and the **Stats** cube's full Task Manager (processes, performance, sensors, disk space, benchmarks and more).
+The Command Center's cubes open each section full size: every app, a calendar, the **Stats** cube's full Task Manager (processes, performance, sensors, disk space, benchmarks and more), the **Modules** cube, and a cube for each module you've added (your Steam library, music with lyrics, Discord…).
 
-## 5. Connect your stuff
+## 5. Modules: add what you want
 
-These are all optional, and all stay on your PC: keys and tokens you enter are stored encrypted for your Windows account.
+Island Shell itself is the island, the Command Center, the Task Manager and stats, the calendar, apps, the clipboard, sound and network. Everything else is a **module** you add only if you want it; a module you leave out isn't on your PC at all.
+
+- **Add or remove one** in the Command Center's **Modules** cube: **Available** lists what you can add, **Installed** what you have. Each shows what it does, what it talks to, and (while it runs) the memory and CPU it uses. **Turn off** keeps it but stops it; **Remove** deletes it, with or without its keys and data.
+- **Or search for it**: type its name (or what it does, like *lyrics*) in the Command Center and pick **Install …**.
+- **Updates** come by themselves while **Check daily** is on (the island's **Power** section), or from the Modules cube.
+- Modules come from Island Shell's own releases on GitHub, signed, and are checked before anything is unpacked. Keys and tokens you enter are stored encrypted for your Windows account, and stay on your PC.
 
 ### Music
-Nothing to set up. Apple Music, Spotify, your browser and anything else that shows in Windows' media controls appear on the island, with time-synced lyrics from [LRCLIB](https://lrclib.net) when there are some. Apple Music gets extras (album, seek, shuffle, repeat, favorite).
+Nothing to set up. Apple Music, Spotify, your browser and anything else that shows in Windows' media controls appear on the island, with time-synced lyrics from [LRCLIB](https://lrclib.net) when there are some. Apple Music gets extras (album, seek, shuffle, repeat, favorite). Without it, the resting island shows the weather, the date and the clock.
 
-### Steam
-Nothing to set up. Installed games show up in the Games section and cube with your custom artwork, playtime and a Play button. Other launchers (Epic, EA, Ubisoft, Riot, Battle.net…) sit underneath.
+### Steam & games
+Nothing to set up. Installed games show up in the Games section and cube with your custom artwork, playtime and a Play button. Other launchers (Epic, EA, Ubisoft, Riot, Battle.net…) sit underneath. **Win + G** opens it.
 
 ### Discord
-Your call (who's talking, mute, deafen, leave) and your notifications on the island. Discord needs a small "application" of your own, which takes about two minutes:
+Your call (who's talking, mute, deafen, leave) and your @mentions on the island, and Discord docked in the Command Center. Discord needs a small "application" of your own, which takes about two minutes:
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it **Apple Music** if you'd like your status to read "Listening to Apple Music".
 2. On the app's **OAuth2** page, add the redirect `http://localhost` and save.
@@ -83,16 +88,22 @@ Due dates, grades and announcements from your school's Canvas, in the **Canvas**
 - **Access token** (everything): in Canvas, open **Account → Settings**, click **+ New Access Token**, name it "Island Shell", copy the token and paste it in with your school's Canvas address (like `school.instructure.com`).
 
 ### Destiny 2
-Your Guardians, loadouts, Xûr and the weekly reset.
+Your Guardians, loadouts, Xûr and the weekly reset, and DIM docked in the Command Center (DIM needs no key).
 
 1. On [bungie.net/en/Application](https://www.bungie.net/en/Application), click **Create New App**. Any name works; set **OAuth Client Type** to **Not Applicable**.
 2. Copy the app's **API Key** into the island's **Destiny** section, with your Bungie Name (like `Guardian#1234`).
 
-### Calendars
+### Voicemeeter, Wallpaper Engine, VPN
+Nothing to set up: Voicemeeter's mixer appears in **Audio** (with a mic switch on the top bar), your Wallpaper Engine library in **Wallpaper**, and Tailscale and Radmin VPN in **Network**.
+
+### Tobii eye tracker
+With a Tobii tracker, the island opens when you look at it, and notifications wait until you've seen them. Turn on **Pause when I step away** in the Music tab (or the Music module's settings) to pause what's playing while you're away.
+
+### Calendars (built in)
 In the Command Center's **Today** cube, add any calendar's iCal link: Google Calendar (Settings → your calendar → *Secret address in iCal format*), Outlook (Settings → Calendar → Shared calendars → *Publish a calendar*), iCloud, or your school's.
 
-### Also picked up automatically
-Voicemeeter (its mixer in the Audio section), Wallpaper Engine (in Wallpaper), Tailscale and Radmin VPN (in Network), and Tobii eye trackers (pause music when you step away).
+### Upgrading from 0.1
+Version 0.1 had everything built in. The first time 0.2 starts, it adds back the modules you were using (Music, plus the ones you'd set up or whose apps are on your PC), in the background, keeping your keys and settings. The Modules cube shows them coming in.
 
 ## 6. Change the look
 
@@ -106,8 +117,9 @@ Voicemeeter (its mixer in the Audio section), Wallpaper Engine (in Wallpaper), T
 - **The Windows key opens the Start menu instead of the island.** Island Shell isn't running, or another keyboard tool has the key. Start it from the Start menu.
 - **Discord says it can't connect.** The Discord desktop app has to be running (not just the website), and the redirect `http://localhost` has to be saved on your app's OAuth2 page.
 - **A game or app is missing.** Steam games appear once Steam has installed them; apps come from the Start menu's All apps list.
+- **A module didn't install.** Modules download from GitHub; without a connection they wait and try again at the next start. The Modules cube shows what's waiting, and each module's recent log.
 - **Something else.** Island Shell writes a log to `%APPDATA%\league.seaweed.islandshell\island.log`. [Open an issue](https://github.com/AbyssLotus/island-shell/issues) with what happened and the end of that log.
 
 ## Uninstalling
 
-**Settings → Apps → Installed apps → Island Shell → Uninstall.** The uninstaller closes the island properly first, so your taskbar comes back as it was. To also remove your settings and caches, tick **Delete the application data** on the uninstaller's page, or delete `%APPDATA%\league.seaweed.islandshell` afterwards.
+**Settings → Apps → Installed apps → Island Shell → Uninstall.** The uninstaller closes the island properly first, so your taskbar comes back as it was. To also remove your settings, modules and caches, tick **Delete the application data** on the uninstaller's page, or delete `%APPDATA%\league.seaweed.islandshell` and `%LOCALAPPDATA%\league.seaweed.islandshell` afterwards.

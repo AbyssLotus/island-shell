@@ -1,6 +1,6 @@
 [package]
 name = "island-shell"
-version = "0.1.0"
+version = "0.2.0"
 description = "A morphing top island shell for Windows"
 edition = "2021"
 license = "GPL-3.0-only"
@@ -18,13 +18,19 @@ serde_json = "1"
 base64 = "0.22"
 png = "0.18"
 arboard = "3.6"
-# VoiceDeck's Voicemeeter engine (a copy of the VoiceDeck project's vm-core crate, MIT).
-vd-vm-core = { path = "../crates/vd-vm-core" }
+# The signed release catalog: the updater (and later the module installer) reads it.
+island-catalog = { path = "../crates/island-catalog" }
+# Runs module backends (crates/island-host) and speaks their protocol.
+island-host = { path = "../crates/island-host" }
+# Image thumbnails with Windows' decoder (Steam covers), shared with the modules.
+island-win = { path = "../crates/island-win" }
 # Same versions Tauri uses, for WebView2 calls Tauri doesn't wrap (memory usage target).
 webview2-com = "0.39"
 windows-core-wv = { package = "windows-core", version = "0.62" }
 # The `windows` crate's own core, which its #[interface] macro refers to by name.
 windows-core = "0.61"
+# The `windows` crate's async types (progress handlers), which it doesn't re-export.
+windows-future = "0.2"
 
 [dependencies.windows]
 version = "0.61"
@@ -47,6 +53,7 @@ features = [
   "Win32_Foundation",
   "Win32_Devices_Display",
   "Win32_Devices_FunctionDiscovery",
+  "Win32_Globalization",
   "Win32_Graphics_Dwm",
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
@@ -93,8 +100,3 @@ features = [
   "Win32_UI_WindowsAndMessaging",
 ]
 
-[profile.release]
-opt-level = "s"
-lto = true
-codegen-units = 1
-strip = true

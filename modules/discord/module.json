@@ -1,0 +1,31 @@
+{
+  "id": "discord",
+  "name": "Discord",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Your Discord call on the island (who's talking, mute, deafen, leave), @mentions as notifications, what you're listening to on your status, and Discord docked in the Command Center.",
+  "icon": "ui/icon.svg",
+  "backend": {
+    "exe": "discord-module.exe",
+    "run": "while-process",
+    "process": ["Discord.exe", "DiscordPTB.exe", "DiscordCanary.exe"],
+    "idle": "60s"
+  },
+  "ui": { "entry": "ui/discord.js", "css": ["ui/discord.css"], "eager": true },
+  "contributes": {
+    "tabs": [{ "id": "discord", "title": "Discord", "icon": "chat", "order": 70, "width": 700 }],
+    "cubes": [{ "id": "discord", "title": "Discord", "icon": "chat", "size": "M", "slot": "discord", "site": "app" }],
+    "sites": [{ "id": "app", "label": "Discord app", "url": "https://discord.com/app", "hosts": ["discord.com"], "skin": "skins/discord-skin.css", "default": true, "split": true }],
+    "setup": { "card": true }
+  },
+  "subscribes": ["media.state"],
+  "talksTo": [
+    "The Discord app on this PC (its local connection)",
+    "discord.com, to sign in with the Discord application you make",
+    "Apple's iTunes Search, for the album art on your status (title and artist)",
+    "Discord's website, when you open it in the Command Center"
+  ],
+  "hosts": ["discord.com", "itunes.apple.com"],
+  "keywords": ["discord", "voice", "call", "mute", "deafen", "mention", "rich presence", "status"],
+  "legacy": ["discord.json"]
+}

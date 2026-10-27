@@ -1,0 +1,103 @@
+/* Island Shell's UI kit (docs/design/modules-handoff.md, M0.4): the shared look that the island page
+   and every module's shadow root use. The page links this file first (before style.css); a module's
+   shadow root adopts the same rules as a constructable stylesheet (src/modhost.js), so a module looks
+   like the island without copying its CSS. Colors, fonts and the Taken light come from the custom
+   properties on :root and #island (style.css), which reach into shadow roots on their own.
+
+   What's here: resets, icons (svg.i), buttons (.btn, .ib, .chip, .link-btn), segmented controls
+   (.seg), cards (.card, .v-head), fields (.field, .search), switches (.switch), empty and error notes
+   (.empty, .note), and the k- components made for modules: a service card with its header (.k-svc,
+   .k-head, .k-logo, .k-title), a setup card (.k-setup, .k-steps, .k-link, .k-form, .k-fine) and a
+   "copied" flash (.k-copied). Selectors that depend on the skin also match inside a shadow root
+   through :host-context. */
+
+*, *::before, *::after { box-sizing: border-box; }
+input { user-select: text; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+:where(button, input, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+kbd { font: 500 10px/1 var(--f-mono); padding: 3px 6px; border-radius: 6px; background: var(--ink-3); color: var(--fg); }
+.grow { flex: 1; }
+.ib { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; border: 0; padding: 0; background: none; color: var(--fg); cursor: pointer; transition: background .2s, transform .15s, opacity .2s; }
+.ib:hover { background: var(--ink-3); }
+.ib:active { transform: scale(.9); }
+.ib:disabled { opacity: .35; cursor: default; background: none; transform: none; }
+.ib.play { width: 40px; height: 40px; background: var(--accent); color: var(--on-accent); }
+.ib .i { width: 17px; height: 17px; }
+.seg-row { display: flex; align-items: center; gap: 10px; margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--ink-2); }
+.seg button { height: 28px; padding: 0 14px; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 600 12px/1 var(--f-body); cursor: pointer; transition: background .25s, color .25s; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.card { background: var(--ink-2); border-radius: 18px; padding: 12px; min-width: 0; }
+.card header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.card header b { font: 600 13px/1 var(--f-display); }
+.card header small { font-size: 11px; color: var(--muted); }
+.v-head { display: flex; align-items: center; gap: 10px; margin: 2px 2px 10px; flex-wrap: wrap; }
+.v-head b { font: 600 14px/1 var(--f-display); }
+.v-head small { color: var(--muted); font-size: 11.5px; }
+.chip { font: 500 11.5px/1 var(--f-body); padding: 7px 11px; border-radius: 999px; border: 0; background: var(--ink-2); color: var(--muted); cursor: pointer; transition: background .2s, color .2s; }
+.chip:hover { color: var(--fg); }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 12px; border: 0; background: var(--ink-3); color: var(--fg); font: 600 12.5px/1 var(--f-body); cursor: pointer; transition: background .2s, transform .15s, opacity .2s; }
+.btn:active { transform: scale(.96); }
+.btn .i { width: 15px; height: 15px; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
+.link-btn { border: 0; background: none; padding: 4px 6px; border-radius: 8px; color: var(--muted); font: 500 11px/1 var(--f-body); cursor: pointer; }
+.link-btn:hover { color: var(--fg); background: var(--ink-2); }
+.field { flex: 1; min-width: 0; height: 34px; border-radius: 11px; border: 0; background: var(--ink-2); color: var(--fg); padding: 0 11px; font: 400 12.5px var(--f-body); outline: none; }
+.field::placeholder, .search input::placeholder { color: var(--faint); }
+.field:focus-visible { box-shadow: 0 0 0 1.5px var(--accent); outline: none; }
+.search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 12px; background: var(--ink-2); color: var(--muted); }
+.search .i { width: 15px; height: 15px; }
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--fg); font: 400 13px var(--f-body); }
+.search:focus-within { box-shadow: 0 0 0 1.5px var(--accent); }
+.search kbd { opacity: .7; }
+.empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 18px 8px; margin: 0; }
+.note { margin: 8px 2px 0; font-size: 11.5px; color: var(--bad); }
+.switch { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); cursor: pointer; }
+.switch input { -webkit-appearance: none; appearance: none; position: relative; width: 30px; height: 18px; margin: 0; border-radius: 999px; background: var(--ink-3); cursor: pointer; transition: background .25s; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); transition: transform .35s var(--spring), background .25s; }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { transform: translateX(12px); background: var(--on-accent); }
+/* Cards catch the light on their top edge. */
+.card { box-shadow: inset 0 1px 0 rgba(var(--glow), .07), inset 0 0 0 1px rgba(var(--glow), .045); }
+/* Section titles in Destiny's small spaced capitals. */
+.card header b, .v-head b { font: 700 10.5px/1.1 var(--f-body); letter-spacing: .15em; text-transform: uppercase; color: color-mix(in oklab, var(--fg) 86%, transparent); }
+.switch input:checked { box-shadow: 0 0 12px -2px color-mix(in oklab, var(--accent) 60%, transparent); }
+:where(button, input, [tabindex]):focus-visible { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent); }
+::selection { background: rgba(var(--glow), .3); }
+.card header b::before, .v-head b::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 8px 1px 1px; border: 1px solid var(--accent); transform: rotate(45deg); box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 70%, transparent); vertical-align: middle; }
+/* Empty states carry the sigil, faint. */
+.empty::before { content: ""; display: block; width: 22px; height: 22px; margin: 0 auto 9px; background: currentColor; -webkit-mask: var(--sigil) center / contain no-repeat; mask: var(--sigil) center / contain no-repeat; opacity: .5; filter: drop-shadow(0 0 6px rgba(var(--glow), .6)); }
+:is(.chip[aria-pressed="true"], .seg button[aria-pressed="true"], .btn.primary, .ib.play) { box-shadow: 0 0 18px -3px color-mix(in oklab, var(--accent) 55%, transparent); }
+#island[data-skin="light"] :is(.chip[aria-pressed="true"], .seg button[aria-pressed="true"], .btn.primary, .ib.play), :host-context([data-skin="light"]) :is(.chip[aria-pressed="true"], .seg button[aria-pressed="true"], .btn.primary, .ib.play) { box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .45); }
+
+/* ---------- k-: components made for modules ---------- */
+/* A service card: logo, name and state on top, its controls below (Tailscale, Discord, Canvas…). */
+.k-svc { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.k-svc[hidden] { display: none; }
+.k-head { display: flex; align-items: center; gap: 10px; }
+.k-head .btn { height: 30px; padding: 0 12px; font-size: 12px; }
+.k-logo { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; flex: none; background: var(--ink-3); transition: background .4s, color .4s; }
+.k-svc.on .k-logo, .k-logo.on { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 55%, transparent); }
+.k-title { flex: 1; min-width: 0; }
+.k-title b { display: block; font: 600 14px/1.2 var(--f-display); }
+.k-title small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-svc.on .k-title small, .k-title.on small { color: var(--good); }
+/* A setup card: numbered steps, a form, and the fine print. */
+.k-setup { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.k-steps { margin: 0; padding-left: 20px; display: grid; gap: 7px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.k-steps b { color: var(--fg); font-weight: 600; }
+.k-steps code { font: 500 11.5px var(--f-mono); padding: 1px 6px; border-radius: 6px; background: var(--ink-3); color: var(--fg); }
+.k-link { border: 0; padding: 0; background: none; color: var(--accent-text); font: 600 12px var(--f-body); cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 2px; }
+.k-steps .k-link { font-size: 12.5px; }
+.k-form { display: flex; gap: 8px; margin: 0; }
+.k-form .field { background: var(--ink-3); }
+.k-fine { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--faint); }
+/* "Copied" over whatever was just copied (the element needs position: relative). */
+.k-copied::after { content: "Copied"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); padding: 5px 9px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 10.5px/1 var(--f-body); animation: k-copied-in .25s var(--spring); }
+@keyframes k-copied-in { from { opacity: 0; transform: translateY(-50%) scale(.8); } }
+/* A thin scroll area for lists inside cards. */
+.k-scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }

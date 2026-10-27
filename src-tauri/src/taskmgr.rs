@@ -11,7 +11,7 @@
 //! - Each logical processor's kernel and user time come from the same call (processor performance
 //!   information), for the kernel line in the graphs.
 //! - A process joins its parent's group when it runs the same program (Firefox's content
-//!   processes) or is a helper (WebView2, console hosts). A group with a taskbar window is an App;
+//!   processes) or is a helper (WebView2, console hosts, Island Shell's module backends). A group with a taskbar window is an App;
 //!   one that's a service or lives in the Windows folder is a Windows process; the rest are
 //!   Background processes. Groups of one program are then merged (all the Service Hosts are one row).
 //! - Sampling runs once a second, and only while the window keeps asking (tm_snapshot within 4 s).
@@ -721,6 +721,8 @@ fn sample(st: &mut State, c: &Counters) -> Snapshot {
             match parent(r) {
                 Some(p) if lower[p] == lower[r] => r = p,
                 Some(p) if HELPERS.contains(&lower[r].as_str()) && rows[p].2 != 0 => r = p,
+                // Island Shell's module backends (music-module.exe…) sit in its group, like its WebView2.
+                Some(p) if lower[r].ends_with("-module.exe") && lower[p] == "island-shell.exe" => r = p,
                 _ => break,
             }
         }

@@ -1,0 +1,161 @@
+/* The Music module's views, inside their shadow roots (moved from the island's style.css and
+   cc.css): the Music tab (ui/tab.js, .mu) and the Command Center's Music sheet (ui/sheet.js, .mus).
+   The kit (kit.css) brings buttons (.ib), chips, the note and the empty line. The tab's --tint
+   comes from the cover (music.js), --lvl from the equalizer's level. */
+
+/* ---------- the Music tab ---------- */
+.mu { --tint: var(--accent); --on-tint: var(--on-accent); --lvl: 0; }
+.art { position: relative; overflow: hidden; flex: none; border-radius: 8px; background: var(--art, var(--ink-3)); }
+.art::after { content: ""; position: absolute; width: 46%; aspect-ratio: 1; border-radius: 50%; right: 12%; bottom: 14%; background: rgba(255, 255, 255, .3); }
+.art::before { content: ""; position: absolute; left: -20%; right: -20%; bottom: -30%; height: 55%; border-radius: 50%; background: rgba(0, 0, 0, .18); }
+.art.has-thumb::before, .art.has-thumb::after { display: none; }
+.mu-hero { position: relative; isolation: isolate; display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 18px; padding: 14px; border-radius: 22px; overflow: hidden; background: color-mix(in oklab, var(--tint) 14%, var(--ink-2)); transition: background-color .8s ease; }
+.mu-backdrop { position: absolute; inset: -40px; z-index: -1; background: var(--art, none); filter: blur(46px) saturate(1.5); opacity: 0; transform: scale(1.1); transition: opacity .8s ease; }
+.mu-backdrop.has-thumb { opacity: .42; }
+:host-context([data-skin="light"]) .mu-backdrop.has-thumb { opacity: .3; }
+.mu-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 30%, color-mix(in oklab, var(--ink-solid) 55%, transparent)); }
+.mu-art { width: 196px; height: 196px; border-radius: 18px; box-shadow: 0 22px 44px -18px color-mix(in srgb, var(--tint) calc(35% + var(--lvl) * 45%), transparent), 0 0 0 1px var(--line); transform: scale(calc(1 + var(--lvl) * .012)); transition: transform 90ms linear, box-shadow .2s linear; }
+.mu:not(.playing) .mu-art { transform: scale(.94); transition: transform .6s var(--spring), box-shadow .6s ease; }
+.mu-side { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.mu-src { display: flex; align-items: center; gap: 7px; min-height: 24px; margin-bottom: 4px; font-size: 11.5px; color: var(--muted); }
+.mu-app { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mu-app::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .3s; }
+.mu.playing .mu-app::before { background: var(--good); box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 22%, transparent); }
+.mu-badge { padding: 3px 7px; border-radius: 6px; font: 600 10px/1 var(--f-body); letter-spacing: .02em; color: var(--fg); background: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+.mu-sources { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.mu-sources .chip { padding: 5px 9px; font-size: 11px; white-space: nowrap; }
+.mu-sources .chip.live::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 50%; background: var(--good); vertical-align: middle; }
+.mu-title { font: 650 21px/1.2 var(--f-display); letter-spacing: -.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mu-title.new { animation: mu-in .5s var(--glide); }
+.mu-sub { display: flex; gap: 6px; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.mu-sub > span { overflow: hidden; text-overflow: ellipsis; }
+.mu-sub > span:first-child { color: color-mix(in oklab, var(--fg) 82%, var(--muted)); flex: none; max-width: 60%; }
+.mu-album:not(:empty)::before { content: "\00b7"; margin-right: 6px; }
+@keyframes mu-in { from { opacity: 0; transform: translateY(6px); } }
+.mu-prog { display: grid; grid-template-columns: 38px minmax(0, 1fr) 42px; align-items: center; gap: 8px; margin-top: 10px; font: 500 10.5px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mu-prog > span:last-child { text-align: right; }
+.scrub { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 0; background: none; cursor: pointer; --p: 0%; }
+.scrub::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--tint) var(--p), var(--ink-3) var(--p)); transition: height .2s var(--spring); }
+.scrub:hover::-webkit-slider-runnable-track, .scrub:active::-webkit-slider-runnable-track { height: 8px; }
+.scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; margin-top: -4px; border-radius: 50%; background: var(--fg); box-shadow: 0 1px 6px rgba(0, 0, 0, .35); opacity: 0; transform: scale(.4); transition: opacity .2s, transform .25s var(--spring), margin-top .2s var(--spring); }
+.scrub:hover::-webkit-slider-thumb, .scrub:active::-webkit-slider-thumb { opacity: 1; transform: none; margin-top: -2.5px; }
+.scrub:disabled { cursor: default; }
+.scrub:disabled::-webkit-slider-thumb { display: none; }
+.mu-ctl { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+.mu-ctl .ib { width: 40px; height: 40px; }
+.mu-ctl .ib .i { width: 19px; height: 19px; }
+.mu-ctl .ib.play { width: 50px; height: 50px; background: var(--tint); color: var(--on-tint); box-shadow: 0 10px 24px -10px var(--tint); transition: background-color .8s ease, color .8s ease, transform .15s; }
+.mu-ctl .ib.play .i { width: 21px; height: 21px; }
+.ib.tg { position: relative; color: var(--muted); }
+.ib.tg[aria-pressed="true"] { color: var(--tint); background: color-mix(in oklab, var(--tint) 16%, transparent); }
+.mu-ctl .ib.tg .i { width: 17px; height: 17px; }
+.ib.tg .rep1 { position: absolute; right: 7px; bottom: 7px; font: 700 8px/1 var(--f-mono); }
+.mu-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.mu-row .fav[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-soft); }
+.mu-row .fav[aria-pressed="true"] .i { fill: currentColor; }
+.mu-vol { display: flex; align-items: center; gap: 7px; width: 150px; height: 30px; padding: 0 10px; border-radius: 10px; background: var(--ink-2); color: var(--muted); }
+.mu-vol .i { width: 14px; height: 14px; }
+.mu-vol input { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 14px; margin: 0; background: none; cursor: pointer; --p: 100%; }
+.mu-vol input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--fg) var(--p), var(--ink-3) var(--p)); }
+.mu-vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border-radius: 50%; background: var(--fg); }
+.mu .chip { white-space: nowrap; }
+.mu.idle .mu-ctl .ib, .mu.idle .mu-row { opacity: .4; pointer-events: none; }
+
+.lyrics { position: relative; margin-top: 8px; height: 214px; border-radius: 22px; background: var(--ink-2); overflow: hidden; }
+.ly-lines { position: relative; height: 100%; overflow-y: auto; scrollbar-width: none; padding: 84px 22px; -webkit-mask-image: linear-gradient(180deg, transparent, #000 26%, #000 70%, transparent); mask-image: linear-gradient(180deg, transparent, #000 26%, #000 70%, transparent); }
+.ly-lines::-webkit-scrollbar { display: none; }
+.ly-line { display: block; width: 100%; margin: 0; padding: 5px 8px; border: 0; border-radius: 10px; background: none; text-align: left; font: 650 19px/1.3 var(--f-display); letter-spacing: -.01em; color: var(--fg); opacity: .28; filter: blur(.6px); transform-origin: left center; transform: scale(.97); cursor: pointer; transition: opacity .5s ease, transform .6s var(--spring), filter .5s ease, background .2s; }
+.ly-line:hover { background: var(--ink-2); opacity: .55; }
+.ly-line.past { opacity: .42; filter: none; }
+.ly-line.on { opacity: 1; filter: none; transform: none; }
+.ly-line.gap { letter-spacing: .3em; }
+.ly-lines.plain { padding: 18px 22px 30px; }
+.ly-lines.plain .ly-line { font: 500 14px/1.5 var(--f-body); opacity: .8; filter: none; transform: none; cursor: default; padding: 0 8px; }
+.ly-lines.no-seek .ly-line { cursor: default; }
+.ly-note { position: absolute; right: 16px; bottom: 10px; margin: 0; font-size: 10.5px; color: var(--faint); pointer-events: none; }
+.ly-note:empty { display: none; }
+.lyrics.msg .ly-lines { display: grid; place-items: center; padding: 0 20px; text-align: center; -webkit-mask-image: none; mask-image: none; color: var(--muted); font-size: 13px; }
+@container (max-width: 560px) {
+  .mu-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 14px; }
+  .mu-art { width: 120px; height: 120px; }
+}
+/* Taken: a cold corona round the album art that swells with the music; the sung line glows. */
+.mu-art { box-shadow: 0 22px 44px -18px color-mix(in srgb, var(--tint) calc(35% + var(--lvl) * 45%), transparent), 0 0 0 1px rgba(var(--glow), .16), 0 0 calc(26px + var(--lvl) * 30px) -8px rgba(var(--glow), calc(.25 + var(--lvl) * .35)); }
+.ly-line.on { text-shadow: 0 0 20px color-mix(in oklab, var(--tint) 55%, transparent), 0 0 1px rgba(255, 255, 255, .4); }
+.scrub::-webkit-slider-runnable-track { box-shadow: 0 0 10px -2px color-mix(in oklab, var(--tint) 60%, transparent); }
+
+/* ---------- the Command Center's Music sheet ---------- */
+.mus { position: relative; height: 100%; display: grid; grid-template-columns: minmax(420px, 46%) minmax(0, 1fr); gap: 56px; padding: 12px 36px 18px 28px; overflow: hidden; border-radius: 18px; isolation: isolate; --mt: 190, 230, 255; --pp: 0%; --lvl: 0; }
+.mus-bg { position: absolute; inset: -80px; z-index: -2; background: center / cover no-repeat; filter: blur(90px) saturate(1.5); opacity: .3; transform: scale(1.1); }
+.mus::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(60% 80% at 24% 44%, rgba(var(--mt), .14), transparent 70%), linear-gradient(180deg, rgba(5, 6, 10, .25), rgba(5, 6, 10, .72)); }
+.mus-left { min-width: 0; min-height: 0; display: grid; align-content: center; justify-items: center; gap: 20px; }
+.mus-art { position: relative; width: min(100%, 46vh, 620px); aspect-ratio: 1; }
+.mus-glow { position: absolute; inset: 4%; border-radius: 30%; background: center / cover no-repeat; filter: blur(48px) saturate(1.7); opacity: calc(.42 + var(--lvl) * .5); transform: scale(calc(1.04 + var(--lvl) * .1)); }
+.mus-cover { position: relative; display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 22px; box-shadow: 0 34px 90px -24px rgba(0, 0, 0, .85), 0 0 0 1px rgba(255, 255, 255, .08); }
+.mus-ph { position: relative; width: 100%; height: 100%; display: grid; place-items: center; border-radius: 22px; background: radial-gradient(circle at 50% 40%, rgba(var(--mt), .16), rgba(255, 255, 255, .03) 70%); box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); color: rgba(var(--mt), .7); }
+.mus-ph svg.i { width: 28%; height: 28%; stroke-width: 1.2; }
+.mus-ph[hidden], .mus-cover[hidden], .mus-empty[hidden] { display: none; }
+.mus-meta { display: grid; gap: 7px; max-width: 100%; text-align: center; }
+.mus-src { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.mus-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.mus-dot.on { background: #9be38a; box-shadow: 0 0 10px #9be38a; }
+.mus-badge { padding: 3px 7px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(var(--mt), .45); color: rgb(var(--mt)); font: 600 10px/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; }
+.mus-title { margin: 0; font: 600 clamp(24px, 3.2vh, 42px)/1.12 var(--f-display); text-wrap: balance; overflow-wrap: anywhere; text-shadow: 0 0 30px rgba(var(--mt), .3); }
+.mus-artist { margin: 0; color: rgba(238, 246, 255, .8); font-size: clamp(14px, 1.6vh, 18px); overflow-wrap: anywhere; }
+.mus-sub { margin: 0; min-height: 1.3em; color: var(--muted); font-size: 12.5px; }
+.mus-seek { width: min(100%, 620px); display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 12px; color: var(--muted); font: 500 12px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.mus-seek .mus-rem { text-align: right; }
+.mus-bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); cursor: pointer; touch-action: none; }
+.mus-bar::before { content: ""; position: absolute; inset: -10px 0; }
+.mus-bar.off { pointer-events: none; opacity: .5; }
+.mus-fill { position: absolute; left: 0; top: 0; bottom: 0; width: var(--pp); border-radius: 3px; background: rgb(var(--mt)); box-shadow: 0 0 14px rgba(var(--mt), .75); }
+.mus-knob { position: absolute; top: 50%; left: var(--pp); width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px rgba(var(--mt), .9); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.mus-bar:hover .mus-knob, .mus.scrubbing .mus-knob, .mus-bar:focus-visible .mus-knob { opacity: 1; }
+.mus-bar:focus-visible { outline: 2px solid rgba(var(--mt), .8); outline-offset: 6px; }
+.mus-ctl { display: flex; align-items: center; gap: 16px; }
+.mus-b { position: relative; width: 50px; height: 50px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; color: #eef6ff; cursor: pointer; transition: background .15s, transform .15s; }
+.mus-b:hover { background: rgba(255, 255, 255, .08); }
+.mus-b:active { transform: scale(.94); }
+.mus-b:disabled { opacity: .35; cursor: default; background: none; }
+.mus-b svg.i { width: 22px; height: 22px; }
+.mus-b.big svg.i { width: 28px; height: 28px; fill: currentColor; }
+.mus-b.play { width: 78px; height: 78px; background: #f4fbff; color: #05070b; box-shadow: 0 0 44px rgba(var(--mt), calc(.35 + var(--lvl) * .5)); }
+.mus-b.play:hover { background: #fff; }
+.mus-b.play svg.i { width: 32px; height: 32px; fill: currentColor; }
+.mus-b[aria-pressed="true"] { color: rgb(var(--mt)); }
+.mus-b[aria-pressed="true"]::after { content: ""; position: absolute; bottom: 5px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.mus-b[data-act="favorite"][aria-pressed="true"] svg.i { fill: currentColor; }
+.mus-b .rep1 { position: absolute; top: 9px; right: 8px; font: 700 9px/1 var(--f-body); }
+.mus-b.sm { width: 40px; height: 40px; }
+.mus-b.sm svg.i { width: 19px; height: 19px; }
+.mus-row { width: min(100%, 620px); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mus-row .grow { flex: 1; }
+.mus-row .cc-btn svg.i { width: 15px; height: 15px; }
+.mus-row .cc-btn[aria-pressed="true"] { background: rgba(var(--mt), .16); color: #f4fbff; box-shadow: inset 0 0 0 1px rgba(var(--mt), .4); }
+.mus-vol { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.mus-vol[hidden] { display: none; }
+.mus-vol input { width: 130px; accent-color: rgb(var(--mt)); }
+.mus-sources { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.mus-sources:empty { display: none; }
+.mus-right { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.mus-ly { min-height: 0; overflow-y: auto; scrollbar-width: none; padding-right: 24px; -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); }
+.mus-ly::-webkit-scrollbar { display: none; }
+.mus-pad { height: 42%; }
+.mus-line { display: block; width: 100%; padding: 10px 0; border: 0; background: none; text-align: left; color: rgba(238, 246, 255, .36); font: 600 clamp(22px, 3vh, 38px)/1.25 var(--f-display); text-wrap: pretty; cursor: pointer; transform-origin: 0 50%; transition: color .4s, transform .4s var(--spring), text-shadow .4s; }
+.mus-line:hover { color: rgba(238, 246, 255, .7); }
+.mus-line.past { color: rgba(238, 246, 255, .2); }
+.mus-line.on { color: #fff; transform: scale(1.04); text-shadow: 0 0 30px rgba(var(--mt), .7), 0 0 2px rgba(255, 255, 255, .5); }
+.mus-line.gap { color: rgba(var(--mt), .5); }
+.mus-ly.plain .mus-line { color: rgba(238, 246, 255, .78); font-size: clamp(17px, 2.1vh, 24px); cursor: default; }
+.mus-ly.msg { display: grid; place-items: center; -webkit-mask-image: none; mask-image: none; }
+.mus-msg { margin: 0; color: var(--muted); font-size: 18px; }
+.mus-lyfoot { padding-top: 10px; color: var(--faint); font-size: 11px; }
+.mus-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; }
+.mus-empty .mus-ph { width: 170px; height: 170px; margin-bottom: 10px; }
+.mus-empty b { font: 600 22px/1.2 var(--f-display); }
+.mus-empty span { color: var(--muted); }
+.mus.idle .mus-left, .mus.idle .mus-right { visibility: hidden; }
+/* The Command Center's buttons and its Taken diamond before the player's name. */
+.cc-btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 0; border-radius: 11px; background: rgba(255, 255, 255, .055); box-shadow: inset 0 0 0 1px rgba(var(--glow), .12); font-weight: 600; font-size: 12.5px; white-space: nowrap; cursor: pointer; transition: background .15s, box-shadow .2s; }
+.cc-btn:hover { background: rgba(255, 255, 255, .09); }
+.mus-src::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 4px 2px 1px; border: 1px solid #c9e9ff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(var(--glow), .8); vertical-align: middle; }

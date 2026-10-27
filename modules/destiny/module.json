@@ -1,0 +1,21 @@
+{
+  "id": "destiny",
+  "name": "Destiny 2",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Your Guardians, their loadouts, Xûr and the weekly reset, plus DIM docked in the Command Center.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "destiny-module.exe", "run": "on-demand" },
+  "ui": { "entry": "ui/destiny.js", "css": ["ui/destiny.css"] },
+  "contributes": {
+    "tabs": [{ "id": "destiny", "title": "Destiny", "icon": "orbit", "order": 90 }],
+    "cubes": [{ "id": "destiny", "title": "Destiny", "icon": "orbit", "size": "S", "slot": "destiny", "site": "dim" }],
+    "sites": [{ "id": "dim", "label": "DIM", "url": "https://app.destinyitemmanager.com/", "hosts": ["app.destinyitemmanager.com"], "skin": "skins/dim-skin.css" }],
+    "calendar": [{ "source": "destiny", "name": "Destiny 2", "color": "#c79bff" }],
+    "setup": { "card": true }
+  },
+  "talksTo": ["bungie.net, with your own API key", "Destiny Item Manager (app.destinyitemmanager.com), when you open DIM"],
+  "hosts": ["www.bungie.net"],
+  "keywords": ["destiny", "bungie", "guardian", "xur", "dim", "loadout", "reset"],
+  "legacy": ["destiny.json", "destiny-defs.json"]
+}

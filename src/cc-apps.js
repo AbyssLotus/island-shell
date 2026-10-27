@@ -32,11 +32,11 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
 
   function build() {
     el.innerHTML = `<section class="aps-main">
-        <div class="gms-bar aps-bar"><h3>Apps <small></small></h3>
-          <div class="gms-chips" role="group" aria-label="Show">${VIEWS.map(([k, n]) => `<button type="button" data-v="${k}" aria-pressed="${k === view}">${n}</button>`).join('')}</div>
+        <div class="sh-bar aps-bar"><h3>Apps <small></small></h3>
+          <div class="sh-chips" role="group" aria-label="Show">${VIEWS.map(([k, n]) => `<button type="button" data-v="${k}" aria-pressed="${k === view}">${n}</button>`).join('')}</div>
           <span class="grow"></span>
           <button class="aps-newf" type="button" data-a="newfolder" hidden>${ic('plus')}New folder</button>
-          <label class="gms-search">${ic('search')}<input type="text" placeholder="Find an app or window" spellcheck="false" autocomplete="off" aria-label="Find an app or window"></label>
+          <label class="sh-search">${ic('search')}<input type="text" placeholder="Find an app or window" spellcheck="false" autocomplete="off" aria-label="Find an app or window"></label>
         </div>
         <div class="aps-body"><div class="aps-scroll"></div><nav class="aps-az" aria-label="Jump to a letter"></nav></div>
       </section>
@@ -46,7 +46,7 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
         <div class="aps-trayw"><h4>In the tray</h4><div class="aps-tray"></div></div>
       </aside>
       <div class="aps-menu" role="menu" hidden></div>`;
-    const qi = $('.gms-search input');
+    const qi = $('.sh-search input');
     qi.value = q;
     qi.addEventListener('input', () => { q = qi.value; renderMain(); renderWins(); });
     $('.aps-scroll').addEventListener('scroll', () => { cancelAnimationFrame(scrollRaf); scrollRaf = requestAnimationFrame(markLetter); });
@@ -106,7 +106,7 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
     box.innerHTML = html;
     renderAz(letters);
     $('.aps-newf').hidden = view !== 'folders' || !!ql;
-    $$('.gms-chips [data-v]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === view));
+    $$('.sh-chips [data-v]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === view));
     $('.aps-bar small').textContent = list.length ? `${list.length} apps · ${wins.length} window${wins.length === 1 ? '' : 's'}` : '';
     if (!sel || !apps.appOf(sel)) { const first = $('.aps-app[data-id]'); sel = first ? first.dataset.id : null; first && first.classList.add('sel'); }
     renderCard();
@@ -162,10 +162,10 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
       <div class="aps-meta"><h2>${esc(a.name)}</h2><p>${esc(meta)}</p>${desc}</div>
       <div class="aps-acts">
         <button class="aps-go" type="button" data-a="open">${ic('rocket')}Open</button>
-        <button class="gms-ib aps-ib" type="button" data-a="admin" title="Run as administrator" aria-label="Run as administrator"${dis(i && i.admin, 'This app can’t run as administrator')}>${ic('shield')}</button>
-        <button class="gms-ib aps-ib" type="button" data-a="location" title="Open file location" aria-label="Open file location"${dis(i && i.location, 'Nothing to show in File Explorer')}>${ic('folder')}</button>
-        <button class="gms-ib aps-ib" type="button" data-a="pin" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}" aria-label="${pinned ? 'Unpin' : 'Pin'}">${ic('pin')}</button>
-        <button class="gms-ib aps-ib" type="button" data-a="uninstall" title="Uninstall… (opens Settings)" aria-label="Uninstall"${dis(i && i.kind !== 'other', 'Not an installed app')}>${ic('trash')}</button>
+        <button class="sh-ib aps-ib" type="button" data-a="admin" title="Run as administrator" aria-label="Run as administrator"${dis(i && i.admin, 'This app can’t run as administrator')}>${ic('shield')}</button>
+        <button class="sh-ib aps-ib" type="button" data-a="location" title="Open file location" aria-label="Open file location"${dis(i && i.location, 'Nothing to show in File Explorer')}>${ic('folder')}</button>
+        <button class="sh-ib aps-ib" type="button" data-a="pin" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}" aria-label="${pinned ? 'Unpin' : 'Pin'}">${ic('pin')}</button>
+        <button class="sh-ib aps-ib" type="button" data-a="uninstall" title="Uninstall… (opens Settings)" aria-label="Uninstall"${dis(i && i.kind !== 'other', 'Not an installed app')}>${ic('trash')}</button>
       </div>
       <dl class="aps-facts">
         <div><dt>Kind</dt><dd>${i ? KIND[i.kind] : '…'}</dd></div>
@@ -228,7 +228,7 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
     const f = { id: 'f' + Date.now(), name, apps: [] };
     S.folders.push(f); apps.saveFolders();
     if (withApp) apps.moveToFolder(withApp, f.id); else apps.changed();
-    view = 'folders'; store.set('apView', view); q = ''; $('.gms-search input').value = '';
+    view = 'folders'; store.set('apView', view); q = ''; $('.sh-search input').value = '';
     renderMain();
     const inp = $(`[data-fname="${f.id}"]`); if (inp) { inp.scrollIntoView({ block: 'nearest' }); inp.focus(); inp.select(); }
   }
@@ -242,7 +242,7 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
     else if (what === 'copypath') { const i = infos.get(a.id); if (i && i.path) navigator.clipboard.writeText(i.path).then(() => flash('Path copied')).catch(() => {}); }
     else appAction(a, what);
   }
-  function setView(v) { view = v; store.set('apView', v); q = ''; $('.gms-search input').value = ''; renderMain(); renderWins(); $('.aps-scroll').scrollTop = 0; }
+  function setView(v) { view = v; store.set('apView', v); q = ''; $('.sh-search input').value = ''; renderMain(); renderWins(); $('.aps-scroll').scrollTop = 0; }
 
   /* ---------- the right-click menu ---------- */
   function hideMenu() { const m = $('.aps-menu'); if (m) m.hidden = true; }
@@ -353,7 +353,7 @@ export function createApps({ S, invoke, esc, ic, assetUrl, store, flash, close, 
       }
       return false;
     }
-    const qi = $('.gms-search input'), inSearch = e.target === qi, inName = e.target.matches && e.target.matches('[data-fname]');
+    const qi = $('.sh-search input'), inSearch = e.target === qi, inName = e.target.matches && e.target.matches('[data-fname]');
     if (inName) { if (e.key === 'Enter') { e.target.blur(); renderMain(); return true; } return false; }
     if (e.key === 'Escape' && inSearch && qi.value) { qi.value = ''; q = ''; renderMain(); renderWins(); return true; }
     if (['ArrowUp', 'ArrowDown'].includes(e.key) || (!inSearch && ['ArrowLeft', 'ArrowRight'].includes(e.key))) { move(e.key); return true; }

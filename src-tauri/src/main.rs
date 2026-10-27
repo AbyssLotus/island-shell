@@ -1,27 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod applemusic;
 mod apps;
 mod audio;
 mod bar;
 mod bench;
 mod calendar;
-mod canvas;
 mod clipboard;
 mod conns;
-mod destiny;
 mod diskscan;
-mod discord;
 mod embed;
-mod games;
 mod ics;
-mod gaze;
 mod icons;
 mod installed;
 mod island;
-mod lyrics;
-mod media;
-mod music;
+mod modules;
 mod places;
 mod power;
 mod radios;
@@ -33,12 +25,10 @@ mod sysinfo;
 mod taskbar;
 mod taskmgr;
 mod tray;
+mod updater;
 mod util;
-mod voicemeeter;
-mod vpn;
 mod wallpaper;
 mod winkey;
-mod wpe;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
@@ -73,9 +63,8 @@ pub struct Shared {
     pub bar_mode: AtomicBool,
     /// The taller bar ("tall" style).
     pub bar_tall: AtomicBool,
-    /// Media session the user picked in the Music tab (app id); empty = choose automatically.
-    pub media_source: Mutex<String>,
-    /// Process image name of the player being shown, for its volume and level meter.
+    /// The player the equalizer meters (image names, `|`-separated) and whether it plays: a module's
+    /// `media` activity's, through `meter_follow`.
     pub media_exe: Mutex<String>,
     pub media_playing: AtomicBool,
     /// A notification that must be seen is showing: the island is above everything, fullscreen apps too.
@@ -90,7 +79,6 @@ pub struct Shared {
 
 #[derive(Serialize, Clone, Default)]
 pub struct Status {
-    pub media: Option<media::MediaInfo>,
     pub audio: Option<audio::AudioInfo>,
     pub wifi: radios::RadioInfo,
     pub bluetooth: radios::RadioInfo,
@@ -113,13 +101,13 @@ struct Settings {
     /// "island", "bar" or "tall" (a taller bar).
     #[serde(default = "default_style")]
     style: String,
-    /// See `Shared::media_source`.
+    /// 0.1.x's choice of media session; kept for the Music module to read once, then unused.
     #[serde(default)]
     media_source: String,
-    /// Eye-tracking features (only does anything with a Tobii tracker).
+    /// 0.1.x's eye-tracking switch; the eye tracking module reads it once (it's its setting now).
     #[serde(default = "default_true")]
     gaze: bool,
-    /// Pause the music after stepping away from the tracker; resume on return.
+    /// 0.1.x's "pause the music when I step away"; the Music module reads it once (it's its setting now).
     #[serde(default)]
     gaze_pause: bool,
 }
@@ -274,179 +262,53 @@ fn desktop_new() {
     bar::new_desktop();
 }
 
+/// What the equalizer meters (spawn_meter): a module's player, by its image names (`|`-separated),
+/// while it plays. The Music module's `media` activity carries them.
 #[tauri::command]
-async fn media_thumb(shared: Shr<'_>) -> Result<tauri::ipc::Response, String> {
-    let preferred = shared.media_source.lock().unwrap().clone();
-    // Raw bytes (an ArrayBuffer in the page; empty when there's no artwork).
-    let bytes = blocking(move || media::manager().and_then(|m| media::thumbnail(&m, &preferred))).await?;
-    Ok(tauri::ipc::Response::new(bytes.unwrap_or_default()))
+fn meter_follow(exe: String, playing: bool, shared: Shr) {
+    *shared.media_exe.lock().unwrap() = exe;
+    shared.media_playing.store(playing, Ordering::Relaxed);
 }
 
-/// toggle, next, prev, seek (`value` = seconds), shuffle, repeat, favorite, open.
+/// A program's own volume (0–1), by its image names (`|`-separated), like the Volume mixer's.
 #[tauri::command]
-async fn media_cmd(action: String, value: Option<f64>, shared: Shr<'_>) -> Result<(), String> {
-    let preferred = shared.media_source.lock().unwrap().clone();
-    blocking(move || {
-        let m = media::manager().ok_or("Nothing is playing")?;
-        media::command(&m, &preferred, &action, value.unwrap_or(0.0))
-    })
-    .await?
+async fn app_volume_get(exe: String) -> Option<f32> {
+    blocking(move || audio::app_volume(&exe)).await.ok().flatten()
 }
 
-/// Shows this media session instead of choosing automatically ("" = automatic again).
 #[tauri::command]
-fn media_source(id: String, shared: Shr) {
-    *shared.media_source.lock().unwrap() = id.clone();
-    let mut settings = Settings::load(&shared.dir);
-    settings.media_source = id;
-    settings.save(&shared.dir);
-}
-
-/// Sets the volume of the player being shown (not the whole PC).
-#[tauri::command]
-async fn media_app_volume(level: f32, shared: Shr<'_>) -> Result<(), String> {
-    let exe = shared.media_exe.lock().unwrap().clone();
+async fn app_volume_set(exe: String, level: f32) -> Result<(), String> {
     blocking(move || audio::set_app_volume(&exe, level)).await?
 }
 
+/// Brings a module's app forward (the Music module's player): its window when `hwnd` is still one,
+/// else a window of the app (`id` its app id, `exe` its image names), else, for a Store app, starts
+/// it. The island does it because it's the one in front when you ask.
 #[tauri::command]
-async fn media_lyrics(title: String, artist: String, album: String, duration: f64, shared: Shr<'_>) -> Result<Option<lyrics::Lyrics>, String> {
-    let dir = shared.dir.clone();
-    blocking(move || lyrics::fetch(&dir, &title, &artist, &album, duration)).await?
-}
-
-/// Installed Steam games, most recently played first.
-#[tauri::command]
-async fn games_list(app: AppHandle) -> Result<games::Library, String> {
-    let lib = blocking(games::library).await?;
-    // The covers live in Steam's folders (custom artwork and its cache); let the page load them.
-    for dir in &lib.art_dirs {
-        if let Err(e) = app.asset_protocol_scope().allow_directory(dir, true) {
-            util::log_line(&format!("games: couldn't allow {} ({e})", dir.display()));
+async fn focus_app(id: String, exe: String, hwnd: Option<isize>) -> Result<(), String> {
+    blocking(move || {
+        if let Some(h) = hwnd.filter(|h| *h != 0) {
+            if running::activate(h).is_ok() {
+                return Ok(());
+            }
         }
-    }
-    Ok(lib)
-}
-
-/// play | library | folder
-#[tauri::command]
-async fn game_action(appid: u32, what: String) -> Result<(), String> {
-    blocking(move || games::action(appid, &what)).await?
-}
-
-#[tauri::command]
-fn gaze_status() -> gaze::Status {
-    gaze::status()
-}
-
-/// Turns eye tracking on/off and/or the pause-when-away option.
-#[tauri::command]
-fn gaze_set(enabled: Option<bool>, pause_when_away: Option<bool>, app: AppHandle, shared: Shr) -> gaze::Status {
-    let mut settings = Settings::load(&shared.dir);
-    {
-        let mut st = gaze::STATUS.lock().unwrap();
-        if let Some(on) = enabled {
-            st.enabled = on;
-            settings.gaze = on;
+        let exes: Vec<String> = exe.split('|').filter(|e| !e.is_empty()).map(|e| e.to_lowercase()).collect();
+        let windows = running::list(&util::data_dir(), 0);
+        let hit = windows.iter().find(|w| {
+            (!id.is_empty() && w.aumid.as_deref() == Some(id.as_str())) || w.exe.rsplit('\\').next().is_some_and(|e| exes.iter().any(|x| *x == e.to_lowercase()))
+        });
+        match hit {
+            Some(w) => running::activate(w.hwnd),
+            None if id.contains('!') => apps::launch(&id),
+            None => Err("Couldn't find the player's window".into()),
         }
-        if let Some(on) = pause_when_away {
-            st.pause_when_away = on;
-            settings.gaze_pause = on;
-        }
-    }
-    settings.save(&shared.dir);
-    let st = gaze::status();
-    let _ = app.emit("gaze:status", st.clone());
-    st
-}
-
-#[tauri::command]
-async fn vpn_status() -> Result<vpn::Status, String> {
-    blocking(vpn::status).await
-}
-
-/// up | down | exit (arg = exit node IP, "" for none) | open
-#[tauri::command]
-async fn vpn_tailscale(action: String, arg: Option<String>) -> Result<(), String> {
-    blocking(move || vpn::tailscale_cmd(&action, arg.as_deref().unwrap_or(""))).await?
-}
-
-#[tauri::command]
-fn vpn_radmin_open() -> Result<(), String> {
-    vpn::radmin_open()
+    })
+    .await?
 }
 
 #[tauri::command]
 async fn copy_text(text: String) -> Result<(), String> {
     blocking(move || arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string())).await?
-}
-
-/// Wallpaper Engine's wallpapers; missing thumbnails are made in the background (`we:thumb`).
-#[tauri::command]
-async fn we_library(app: AppHandle, shared: Shr<'_>) -> Result<wpe::Library, String> {
-    let dir = shared.dir.clone();
-    let lib = {
-        let dir = dir.clone();
-        blocking(move || wpe::library(&dir)).await?
-    };
-    for d in &lib.dirs {
-        let _ = app.asset_protocol_scope().allow_directory(d, true);
-    }
-    wpe::make_thumbs(app, &lib, dir);
-    Ok(lib)
-}
-
-#[tauri::command]
-async fn we_apply(dir: String) -> Result<(), String> {
-    blocking(move || wpe::apply(&dir)).await?
-}
-
-/// pause | play | mute | unmute | stop | next
-#[tauri::command]
-async fn we_control(cmd: String) -> Result<(), String> {
-    blocking(move || wpe::control(&cmd)).await?
-}
-
-/// Discord: voice call, notifications and Rich Presence (see discord.rs).
-#[tauri::command]
-fn discord_status() -> discord::Status {
-    discord::status()
-}
-
-/// Saves the user's Discord application (the secret is kept only if one is given).
-#[tauri::command]
-fn discord_configure(client_id: String, secret: String) -> Result<(), String> {
-    if !client_id.trim().chars().all(|c| c.is_ascii_digit()) {
-        return Err("The Client ID is a long number (the Application ID in the developer portal)".into());
-    }
-    discord::send(discord::Cmd::Configure { client_id, secret })
-}
-
-/// authorize | mute | unmute | deafen | undeafen | leave | forget
-#[tauri::command]
-fn discord_action(action: String) -> Result<(), String> {
-    use discord::Cmd;
-    discord::send(match action.as_str() {
-        "authorize" => Cmd::Authorize,
-        "mute" => Cmd::Mute(true),
-        "unmute" => Cmd::Mute(false),
-        "deafen" => Cmd::Deaf(true),
-        "undeafen" => Cmd::Deaf(false),
-        "leave" => Cmd::Leave,
-        "forget" => Cmd::Forget,
-        _ => return Err(format!("unknown Discord action {action}")),
-    })
-}
-
-#[tauri::command]
-fn discord_options(presence: Option<bool>, notify: Option<bool>) -> Result<(), String> {
-    discord::send(discord::Cmd::Options { presence, notify })
-}
-
-/// portal | app
-#[tauri::command]
-fn discord_open(what: String) -> Result<(), String> {
-    discord::open(&what)
 }
 
 /// The full-screen Command Center: the island's window covers the whole monitor while it's open,
@@ -483,8 +345,8 @@ fn cc_web(query: String) -> Result<(), String> {
     util::open_web(&format!("https://www.google.com/search?q={}", util::url_encode(query.trim())))
 }
 
-/// Docks a website (discord | canvas | dim) over the given CSS-pixel rectangle of the Command Center.
-/// `skin` (Discord only, default on) dresses Discord in the island skin.
+/// Docks a module's website (`<module>/<site>`, such as discord/app or canvas/web) over the given CSS-pixel
+/// rectangle of the Command Center. `skin` (default on) dresses it in the island skin.
 #[tauri::command]
 async fn cc_embed(site: String, x: f64, y: f64, w: f64, h: f64, skin: Option<bool>, app: AppHandle, shared: Shr<'_>) -> Result<(), String> {
     let p = *shared.place.lock().unwrap();
@@ -549,12 +411,6 @@ fn open_link(url: String) -> Result<(), String> {
         return Err("Not a web link".into());
     }
     util::open_web(&url)
-}
-
-/// The Music sheet's cover, year, genre and Apple Music link for a song (see music.rs).
-#[tauri::command]
-async fn music_info(title: String, artist: String, album: String) -> Result<music::Info, String> {
-    blocking(move || music::info(&title, &artist, &album)).await?
 }
 
 /// The Command Center's Task Manager (see taskmgr.rs): the latest sample, None until the first.
@@ -705,124 +561,6 @@ async fn tm_startup() -> Result<Vec<taskmgr::Startup>, String> {
 #[tauri::command]
 async fn tm_startup_set(id: String, on: bool) -> Result<Vec<taskmgr::Startup>, String> {
     blocking(move || taskmgr::set_startup(&id, on).map(|_| taskmgr::startup())).await?
-}
-
-/// Canvas (school LMS) with the user's own access token (see canvas.rs).
-#[tauri::command]
-fn canvas_status(shared: Shr) -> canvas::Status {
-    canvas::status(&shared.dir)
-}
-
-/// Saves the Canvas address and token (kept if left blank) after checking them with Canvas.
-#[tauri::command]
-async fn canvas_configure(domain: String, token: String, shared: Shr<'_>) -> Result<canvas::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::configure(&dir, &domain, &token)).await?
-}
-
-/// Links Canvas through its calendar feed link instead of a token.
-#[tauri::command]
-async fn canvas_configure_feed(url: String, shared: Shr<'_>) -> Result<canvas::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::configure_feed(&dir, &url)).await?
-}
-
-#[tauri::command]
-async fn canvas_overview(shared: Shr<'_>) -> Result<canvas::Overview, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::overview(&dir)).await?
-}
-
-/// Ticks a planner item off (or back on); returns the planner override's id.
-#[tauri::command]
-async fn canvas_done(key: String, kind: String, id: u64, override_id: Option<u64>, done: bool, shared: Shr<'_>) -> Result<Option<u64>, String> {
-    let dir = shared.dir.clone();
-    blocking(move || canvas::set_done(&dir, &key, &kind, id, override_id, done)).await?
-}
-
-#[tauri::command]
-fn canvas_open(url: String, shared: Shr) -> Result<(), String> {
-    canvas::open(&shared.dir, &url)
-}
-
-#[tauri::command]
-fn canvas_forget(shared: Shr) {
-    canvas::forget(&shared.dir);
-}
-
-/// Destiny 2 through Bungie's API (see destiny.rs).
-#[tauri::command]
-fn destiny_status(shared: Shr) -> destiny::Status {
-    destiny::status(&shared.dir)
-}
-
-/// Saves the API key (kept if left blank) and looks the Bungie Name up.
-#[tauri::command]
-async fn destiny_configure(key: String, name: String, shared: Shr<'_>) -> Result<destiny::Status, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::configure(&dir, &key, &name)).await?
-}
-
-#[tauri::command]
-async fn destiny_profile(shared: Shr<'_>) -> Result<destiny::Profile, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::profile(&dir)).await?
-}
-
-#[tauri::command]
-async fn destiny_xur(shared: Shr<'_>) -> Result<destiny::Xur, String> {
-    let dir = shared.dir.clone();
-    blocking(move || destiny::xur(&dir)).await?
-}
-
-#[tauri::command]
-fn destiny_forget(shared: Shr) {
-    destiny::forget(&shared.dir);
-}
-
-/// Bungie's page for API keys, in the default browser (never Edge).
-#[tauri::command]
-fn destiny_open() -> Result<(), String> {
-    util::open_web("https://www.bungie.net/en/Application")
-}
-
-/// The Voicemeeter mixer (null while Voicemeeter isn't running or installed).
-#[tauri::command]
-fn vm_state() -> Option<vd_vm_core::VmState> {
-    voicemeeter::state()
-}
-
-/// A strip or bus control, e.g. `Strip[2].Gain` or `Bus[0].Mute`.
-#[tauri::command]
-fn vm_set(name: String, value: f32) -> Result<(), String> {
-    voicemeeter::set(&name, value)
-}
-
-#[tauri::command]
-fn vm_levels(on: bool) -> Result<(), String> {
-    voicemeeter::levels(on)
-}
-
-#[tauri::command]
-fn vm_restart() -> Result<(), String> {
-    voicemeeter::restart_engine()
-}
-
-/// Toggles the mic (strip 1); returns whether it's now muted.
-#[tauri::command]
-fn vm_mic() -> Result<bool, String> {
-    voicemeeter::toggle_mic()
-}
-
-/// Which mixer apps are on this PC: { voicedeck, voicemeeter }.
-#[tauri::command]
-fn mixer_apps() -> serde_json::Value {
-    serde_json::json!({ "voicedeck": voicemeeter::voicedeck_installed(), "voicemeeter": voicemeeter::installed() })
-}
-
-#[tauri::command]
-fn voicedeck_open() -> Result<(), String> {
-    voicemeeter::open_voicedeck()
 }
 
 #[tauri::command]
@@ -1027,6 +765,44 @@ fn autostart_set(on: bool, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn update_status() -> updater::Status {
+    updater::status()
+}
+
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<updater::Status, String> {
+    blocking(move || updater::check(&app)).await?
+}
+
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    blocking(move || updater::install(&app)).await?
+}
+
+/// Updates every installed module the last check found a newer version of.
+#[tauri::command]
+async fn update_modules(app: AppHandle) -> Result<Vec<String>, String> {
+    blocking(move || updater::update_modules(&app, false)).await?
+}
+
+/// Installs a module from the release catalog.
+#[tauri::command]
+async fn mod_install(id: String, app: AppHandle) -> Result<(), String> {
+    blocking(move || updater::install_module(&app, &id)).await?
+}
+
+/// The modules the release catalog offers (read by the last check).
+#[tauri::command]
+fn mod_catalog() -> Vec<island_catalog::Module> {
+    updater::catalog_modules()
+}
+
+#[tauri::command]
+fn update_auto(on: bool, app: AppHandle) -> updater::Status {
+    updater::set_auto(&app, on)
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
 }
@@ -1051,7 +827,6 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
     std::thread::spawn(move || {
         util::com_mta();
         let own = island::hwnd_of(&win);
-        let mut mgr = media::manager();
         let mut tick: u64 = 0;
         let (mut wifi, mut bt, mut net) = Default::default();
         let mut battery = bar::Battery::default();
@@ -1059,16 +834,6 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
             if tick % 10 == 0 {
                 battery = bar::battery();
             }
-            if mgr.is_none() && tick % 10 == 0 {
-                mgr = media::manager();
-            }
-            let preferred = shared.media_source.lock().unwrap().clone();
-            let mut media = mgr.as_ref().and_then(|m| media::snapshot(m, &preferred));
-            if let Some(m) = media.as_mut() {
-                m.app_volume = audio::app_volume(&m.exe);
-            }
-            *shared.media_exe.lock().unwrap() = media.as_ref().map(|m| m.exe.clone()).unwrap_or_default();
-            shared.media_playing.store(media.as_ref().is_some_and(|m| m.playing), Ordering::Relaxed);
             let audio = audio::info();
             if tick % 3 == 0 {
                 (wifi, bt) = radios::radios();
@@ -1080,6 +845,7 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
             if fade != shared.fullscreen_hidden.load(Ordering::Relaxed) {
                 shared.fullscreen_hidden.store(fade, Ordering::Relaxed);
                 let _ = win.emit("island:fullscreen", fade);
+                modules::publish(island_host::proto::topic::FULLSCREEN, serde_json::json!({ "active": fade }));
                 util::log_line(&format!("fullscreen fade {fade} ({})", fullscreen.unwrap_or_default()));
             }
             let hidden = shared.taskbar_hidden.load(Ordering::Relaxed);
@@ -1102,7 +868,6 @@ fn spawn_status(win: WebviewWindow, shared: Arc<Shared>) {
                 bar::ensure(h, p.monitor, (height * p.scale).round() as i32, fade && !shared.urgent.load(Ordering::Relaxed));
             }
             *shared.status.lock().unwrap() = Status {
-                media,
                 audio,
                 wifi: wifi.clone(),
                 bluetooth: bt.clone(),
@@ -1159,9 +924,10 @@ fn build_tray(app: &tauri::App, shared: Arc<Shared>) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open island", true, None::<&str>)?;
     let tb = CheckMenuItem::with_id(app, "taskbar", "Hide Windows taskbar", true, shared.taskbar_hidden.load(Ordering::Relaxed), None::<&str>)?;
     let auto = CheckMenuItem::with_id(app, "autostart", "Start with Windows", true, app.autolaunch().is_enabled().unwrap_or(false), None::<&str>)?;
+    let upd = MenuItem::with_id(app, "update", "Check for updates", updater::status().state != "off", None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Island Shell", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &tb, &auto, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &tb, &auto, &upd, &sep, &quit])?;
     *shared.tray_taskbar.lock().unwrap() = Some(tb);
     let mut builder = TrayIconBuilder::with_id("island").tooltip("Island Shell").menu(&menu).show_menu_on_left_click(false);
     if let Some(icon) = app.default_window_icon() {
@@ -1179,6 +945,15 @@ fn build_tray(app: &tauri::App, shared: Arc<Shared>) -> tauri::Result<()> {
             "autostart" => {
                 let m = app.autolaunch();
                 let _ = if m.is_enabled().unwrap_or(false) { m.disable() } else { m.enable() };
+            }
+            "update" => {
+                // The page answers on the island: up to date, or the version that's ready to install.
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    util::com_mta();
+                    let st = updater::check(&app).unwrap_or_else(|_| updater::status());
+                    let _ = app.emit("update:asked", st);
+                });
             }
             "quit" => app.exit(0),
             _ => {}
@@ -1242,7 +1017,6 @@ fn main() {
         raised: AtomicBool::new(false),
         bar_mode: AtomicBool::new(is_bar_style(&settings.style)),
         bar_tall: AtomicBool::new(settings.style == "tall"),
-        media_source: Mutex::new(settings.media_source.clone()),
         media_exe: Mutex::new(String::new()),
         media_playing: AtomicBool::new(false),
         active: AtomicBool::new(false),
@@ -1282,25 +1056,19 @@ fn main() {
                 .build(),
         )
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        // Module UI files (src/modhost.js imports them from http://mod.localhost/<id>/…).
+        .register_asynchronous_uri_scheme_protocol("mod", |_ctx, request, responder| {
+            let path = request.uri().path().to_string();
+            std::thread::spawn(move || responder.respond(modules::serve_ui(&path)));
+        })
         .manage(shared.clone())
         .invoke_handler(tauri::generate_handler![
             get_status,
-            media_thumb,
-            media_cmd,
-            media_source,
-            media_app_volume,
-            media_lyrics,
-            vpn_status,
+            meter_follow,
+            app_volume_get,
+            app_volume_set,
+            focus_app,
             audio_devices,
-            vm_state,
-            we_library,
-            we_apply,
-            we_control,
-            discord_status,
-            discord_configure,
-            discord_action,
-            discord_options,
-            discord_open,
             cc_mode,
             cc_places,
             cc_open,
@@ -1316,9 +1084,7 @@ fn main() {
             calendar_save,
             calendar_delete,
             open_link,
-            canvas_status,
             tm_snapshot,
-            music_info,
             tm_end,
             tm_eco,
             tm_startup,
@@ -1342,34 +1108,10 @@ fn main() {
             bench_status,
             bench_cancel,
             tm_startup_set,
-            canvas_configure,
-            canvas_configure_feed,
-            canvas_overview,
-            canvas_done,
-            canvas_open,
-            canvas_forget,
-            destiny_status,
-            destiny_configure,
-            destiny_profile,
-            destiny_xur,
-            destiny_forget,
-            destiny_open,
-            vm_set,
-            vm_levels,
-            vm_restart,
-            vm_mic,
-            mixer_apps,
-            voicedeck_open,
             audio_default,
             audio_mic,
             audio_apps,
             audio_app_set,
-            games_list,
-            game_action,
-            gaze_status,
-            gaze_set,
-            vpn_tailscale,
-            vpn_radmin_open,
             copy_text,
             set_volume,
             set_mute,
@@ -1402,6 +1144,25 @@ fn main() {
             open_settings,
             autostart_get,
             autostart_set,
+            update_status,
+            update_check,
+            update_install,
+            update_auto,
+            update_modules,
+            mod_install,
+            mod_catalog,
+            modules::mod_list,
+            modules::topic_last,
+            modules::mod_usage,
+            modules::mod_queue,
+            modules::mod_migrate,
+            modules::mod_call,
+            modules::mod_set_enabled,
+            modules::mod_restart,
+            modules::mod_logs,
+            modules::mod_theme,
+            modules::mod_load_folder,
+            modules::mod_remove,
             quit,
             log
         ])
@@ -1445,18 +1206,15 @@ fn main() {
             }
 
             island::spawn_cursor(win.clone(), shared.clone());
-            applemusic::spawn();
-            voicemeeter::spawn(app.handle().clone());
-            discord::spawn(app.handle().clone(), shared.clone());
-            canvas::spawn(app.handle().clone(), shared.dir.clone());
             embed::spawn_reaper(app.handle().clone());
-            gaze::spawn(app.handle().clone(), shared.clone(), settings.gaze, settings.gaze_pause);
             spawn_meter(win.clone(), shared.clone());
             spawn_status(win, shared.clone());
             stats::spawn(shared.clone());
             taskmgr::history_spawn();
             clipboard::spawn(app.handle().clone(), shared.clone());
             apps::spawn(app.handle().clone(), shared.clone());
+            updater::spawn(app.handle().clone());
+            modules::init(app.handle(), &shared.dir);
             build_tray(app, shared)?;
             Ok(())
         })
@@ -1483,6 +1241,8 @@ fn main() {
             // Give the bar's reserved screen strip back.
             bar::appbar_unregister(windows::Win32::Foundation::HWND(exit_shared.island_hwnd.load(Ordering::Relaxed) as _));
             taskbar::restore(&exit_dir);
+            // Then let module backends save and stop (the job object ends any that don't).
+            modules::shutdown();
         }
     });
 }

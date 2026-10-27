@@ -1,0 +1,16 @@
+[package]
+name = "voicemeeter-module"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Island Shell's Voicemeeter module: the mixer in the Audio tab and a mic switch on the top bar, through VoiceDeck's engine."
+
+[[bin]]
+name = "voicemeeter-module"
+path = "src/main.rs"
+
+[dependencies]
+island-module = { path = "../../crates/island-module" }
+island-win = { path = "../../crates/island-win" }
+vd-vm-core = { path = "../../crates/vd-vm-core" }
+serde_json = "1"

@@ -1,0 +1,25 @@
+/* The VPN section of the Network tab (ui/vpn.js), inside its shadow root; the kit (kit.css) brings the
+   service cards (.k-svc), buttons, fields and the "Copied" flash. Moved unchanged from the island's
+   style.css. */
+.vpn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
+@container (max-width: 560px) { .vpn-grid { grid-template-columns: 1fr; } }
+.vpn-me { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; border-radius: 13px; background: var(--ink-2); color: var(--fg); text-align: left; cursor: pointer; transition: background .2s; }
+.vpn-me:hover { background: var(--ink-3); }
+.vpn-me .i { width: 15px; height: 15px; color: var(--muted); }
+.vpn-me span { flex: 1; min-width: 0; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vpn-me b { font: 600 13px/1 var(--f-mono); }
+.vpn-exit { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.vpn-exit .field { height: 30px; padding: 0 8px; }
+.vpn-list { display: grid; gap: 1px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; margin: 0 -4px; }
+.vpn-list .empty { padding: 10px 8px; }
+.peer { position: relative; display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 12px; background: none; color: var(--fg); text-align: left; cursor: pointer; transition: background .2s; }
+.peer:hover { background: var(--ink-2); }
+.peer .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.peer.on .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 20%, transparent); }
+.peer b { display: block; font: 600 12.5px/1.3 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peer:not(.on) b { color: var(--muted); }
+.peer small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peer .tag { padding: 4px 7px; border-radius: 6px; background: var(--ink-3); color: var(--muted); font: 600 10px/1 var(--f-body); white-space: nowrap; }
+.peer .tag.exit { background: var(--accent); color: var(--on-accent); }
+/* Taken: the row under the pointer catches a thin edge of light. */
+.peer:hover, .vpn-me:hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }

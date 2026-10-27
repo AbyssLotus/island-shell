@@ -1,0 +1,75 @@
+{
+ "mod:vpn.status": {
+  "tailscale": {
+   "state": "Running",
+   "tailnet": "example.ts.net",
+   "name": "desk",
+   "ip": "100.64.0.1",
+   "exit_node": "",
+   "health": [],
+   "peers": [
+    {
+     "name": "laptop",
+     "dns": "laptop.example.ts.net",
+     "os": "windows",
+     "ip": "100.64.0.2",
+     "online": true,
+     "active": true,
+     "exit_option": false,
+     "exit_node": false,
+     "last_seen": "",
+     "link": "direct"
+    },
+    {
+     "name": "nas",
+     "dns": "nas.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.3",
+     "online": true,
+     "active": false,
+     "exit_option": true,
+     "exit_node": false,
+     "last_seen": "",
+     "link": "fra"
+    },
+    {
+     "name": "phone",
+     "dns": "phone.example.ts.net",
+     "os": "android",
+     "ip": "100.64.0.4",
+     "online": false,
+     "active": false,
+     "exit_option": false,
+     "exit_node": false,
+     "last_seen": "2026-10-22T18:00:00Z",
+     "link": ""
+    }
+   ]
+  },
+  "radmin": {
+   "running": true,
+   "on": true,
+   "server": true,
+   "ip": "26.0.0.1",
+   "networks": [
+    "Weekend LAN"
+   ],
+   "peers": [
+    {
+     "id": "1",
+     "name": "KIWI",
+     "online": true,
+     "link": "Direct",
+     "since": "2026-10-23T08:30:00"
+    },
+    {
+     "id": "2",
+     "name": "OWL",
+     "online": false,
+     "link": "",
+     "since": "2026-10-22T21:10:00"
+    }
+   ]
+  }
+ }
+}

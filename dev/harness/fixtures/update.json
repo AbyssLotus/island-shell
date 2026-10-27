@@ -1,0 +1,23 @@
+{
+ "update_status": {
+  "current": "0.1.0",
+  "state": "available",
+  "latest": "0.2.0",
+  "notes": "Modules: install only the integrations you use.",
+  "size": 9437184,
+  "progress": 0,
+  "checked": 1792897487887,
+  "error": "",
+  "auto": true,
+  "modules": [
+   {
+    "id": "destiny",
+    "name": "Destiny 2",
+    "from": "1.0.0",
+    "to": "1.1.0",
+    "size": 812345
+   }
+  ],
+  "module_busy": ""
+ }
+}

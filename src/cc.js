@@ -1,25 +1,25 @@
 // The Command Center (Win + Space): Island Shell's full-screen mode for going anywhere on the PC.
 // A black eclipse leaking plasma and Taken light, with the clock and search inside it; the island's
 // sections float around it as cubes, and each opens as a full-size glass sheet: the island's own view
-// of it, or the real website docked in (Discord's web app, your Canvas, DIM). It grows out of the pill:
+// of it, or the real website docked in (Discord's web app, or a module's site like your Canvas or DIM). It grows out of the pill:
 // while it's open the island's window covers the whole monitor (cc_mode) and stays on top
 // (island_rect with urgent).
 //
 // Some sections are their own apps here instead of the island's view: Today is a full calendar
-// (cc-calendar.js), Music a full-size player with synced lyrics (cc-music.js) and Games the Steam
-// library with each game's hero banner (cc-games.js). The Stats cube opens
+// (cc-calendar.js) and Apps the Start menu (cc-apps.js); modules bring their own (Games: the
+// Steam library with each game's hero banner; Music: a full-size player with synced lyrics). The Stats cube opens
 // the Task Manager (cc-taskmgr.js), a window over the eclipse.
 //
-// Search covers Start apps, open windows, Steam games, drives and folders, recently opened files,
+// Search covers Start apps, open windows, drives and folders, recently opened files, what modules add (Steam games),
 // Windows settings and quick commands. What you open from here is remembered (localStorage) and
 // ranked higher next time, since Windows' own recent-items list may be switched off.
 
 import { createCalendar } from './cc-calendar.js';
 import { createTaskManager } from './cc-taskmgr.js';
-import { createMusic } from './cc-music.js';
-import { createGames } from './cc-games.js';
 import { createApps } from './cc-apps.js';
+import { createModules } from './cc-modules.js';
 import { createSetup } from './setup.js';
+import { placeCubes } from './registry.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -51,17 +51,10 @@ const SETTINGS = [
   ['Startup apps', 'rocket', 'ms-settings:startupapps', 'run at login boot'], ['About this PC', 'cpu', 'ms-settings:about', 'specs system info rename']
 ];
 
-/* The cubes: [island tab, label, icon, x and y from the eclipse's center in radii, size]. */
-const CUBES = [
-  ['apps', 'Apps', 'grid', -1.8, -1.12, 'L'], ['discord', 'Discord', 'chat', -2.52, -.02, 'M'], ['audio', 'Audio', 'speaker', -2, 1.1, 'L'],
-  ['today', 'Today', 'calendar', -3.4, .82, 'S'], ['canvas', 'Canvas', 'cap', -3.3, -.84, 'S'],
-  ['games', 'Games', 'gamepad', 1.72, -1.1, 'M'], ['network', 'Network', 'wifi', 2.48, .04, 'W'], ['clipboard', 'Clipboard', 'clip', 1.92, 1.14, 'M'],
-  ['destiny', 'Destiny', 'orbit', 3.3, -.84, 'S'], ['stats', 'Stats', 'pulse', 3.42, 1.02, 'S'],
-  ['music', 'Music', 'note', 0, 1.62, 'W']
-];
+/* Cubes come from the registry (src/registry.js) and sit in its named slots: [x, y] from the
+   eclipse's center in radii, and a size. A cube opens its island tab in a sheet, its own app there
+   (registry sheets), or a real website docked in (registry sites). */
 const CSIZE = { L: [.9, .9], M: [.74, .74], S: [.52, .52], W: [1.14, .72] };
-/* Sections that can show the real website, docked into the sheet: [site, label, opens on it by default]. */
-const SITES = { discord: ['discord', 'Discord app', true], canvas: ['canvas', 'Canvas website', false], destiny: ['dim', 'DIM', false] };
 
 const KIND = { app: 'App', window: 'Window', game: 'Game', folder: 'Folder', drive: 'Drive', file: 'File', setting: 'Settings', command: 'Command', calc: 'Calculator' };
 const GROUP = [['app', 'Apps'], ['window', 'Open windows'], ['game', 'Games'], ['folder', 'Folders & drives'], ['file', 'Files'], ['setting', 'Windows settings'], ['command', 'Commands']];
@@ -91,17 +84,9 @@ function score(q, name, keys) {
   return j === q.length && gaps < q.length * 3 ? 30 - gaps : -1;
 }
 
-/** Next 17:00 UTC (Destiny's reset), on a given weekday if asked. */
-function nextReset(day) {
-  const now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17));
-  if (d <= now) d.setUTCDate(d.getUTCDate() + 1);
-  if (day != null) while (d.getUTCDay() !== day) d.setUTCDate(d.getUTCDate() + 1);
-  return d;
-}
-const until = d => { const m = Math.max(0, Math.round((d - Date.now()) / 60000)); const dd = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return dd ? `${dd}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m}m`; };
-
 export function createCommandCenter(ctx) {
   const { S, invoke, assetUrl, esc, store, gradFor, glyphOf } = ctx;
+  const REG = ctx.R;
   const ic = (n, cls = 'i') => OWN[n] ? `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${OWN[n]}</svg>` : ctx.icon(n);
   const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
 
@@ -127,16 +112,27 @@ export function createCommandCenter(ctx) {
   const cv = $('.cc-canvas'), g2 = cv.getContext('2d'), input = $('.cc-q');
 
   /* ---------- state ---------- */
-  let isOpen = false, busy = false, wins = [], games = [], places = [], index = [], flat = [], sel = 0, scope = 'all', sheetTab = null, sheetMode = 'island', embedT = 0;
+  let isOpen = false, busy = false, wins = [], places = [], index = [], flat = [], sel = 0, scope = 'all', sheetTab = null, sheetMode = 'island', embedT = 0;
   let hist = store.get('ccHist', []), nextEv = null, nativeOn = null;
   const cal = createCalendar({ invoke, esc, ic, store, S, flash });
-  const mus = createMusic({ S, invoke, esc, ic, media: ctx.media, listen: ctx.listen, flash, close: after => close(after, true) });
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
-  const gms = createGames({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), games: ctx.games });
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
-  const NATIVE = { apps: aps, today: cal, music: mus, games: gms };
+  const mds = createModules({ invoke, listen: ctx.listen, esc, ic, flash, settingsOf: ctx.settingsOf || (() => null) });
+  // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
+  [['apps', 'Apps', 'grid'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
+    ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse']]
+    .forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
+  REG.cubes.add({ id: 'modules', title: 'Modules', icon: 'layers', stat: () => mds.stat() });
+  for (const [id, app] of Object.entries({ apps: aps, today: cal, modules: mds })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
+  /** The cubes as placed in slots right now, in slot (keyboard) order. */
+  const cubes = () => placeCubes(REG.cubes.all());
+  const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
+  const NATIVE = new Proxy({}, { get: (_, k) => REG.sheets.get(k), has: (_, k) => REG.sheets.has(k) });
+  REG.cubes.on(() => { if (isOpen) renderCubes(); });
+  // A module's search results changed (its data arrived): index them now.
+  REG.search.on(() => { if (isOpen) { buildIndex(); if (input.value.trim()) search(); } });
   const tm = createTaskManager({ invoke, esc, ic, store, flash, assetUrl, root });
-  const setup = createSetup({ root, invoke, store, ic, S, setDark: ctx.setDark, openTab: ctx.openTab, getGames: () => games });
+  const setup = createSetup({ root, invoke, store, ic, esc, S, setDark: ctx.setDark, openTab: ctx.openTab, moduleCards: ctx.moduleCards || (() => []) });
   const EC = { x: 0, y: 0, r: 120 }, ET = { x: 0, y: 0, r: 120 };
   let R = 120, CX = 0, CY = 0, DPR = 1, running = false, lastT = 0, hoverA = null, hoverK = 0, reachA = 0;
 
@@ -167,7 +163,7 @@ export function createCommandCenter(ctx) {
     Object.assign(EC, ET);
     input.value = ''; showResults(false);
     if (!running) { running = true; lastT = 0; requestAnimationFrame(frame); }
-    tick(); renderCubes(); refresh();
+    tick(); renderCubes(); refresh(); mds.refresh().then(renderCubeStats);
     setTimeout(() => input.focus({ preventScroll: true }), 260);
     busy = false;
   }
@@ -193,9 +189,8 @@ export function createCommandCenter(ctx) {
 
   /* ---------- data ---------- */
   async function refresh() {
-    const [w, g, p] = await Promise.allSettled([invoke('windows_list'), S.games ? Promise.resolve(S.games) : invoke('games_list'), invoke('cc_places')]);
+    const [w, p] = await Promise.allSettled([invoke('windows_list'), invoke('cc_places')]);
     if (w.status === 'fulfilled') wins = w.value;
-    if (g.status === 'fulfilled' && g.value) { games = g.value.games || []; if (!S.games) S.games = g.value; }
     if (p.status === 'fulfilled') places = p.value;
     buildIndex();
     loadNext();
@@ -209,25 +204,16 @@ export function createCommandCenter(ctx) {
   const exeName = p => (p || '').split('\\').pop();
   function appForWin(w) { return (S.apps || []).find(a => (a.exe && a.exe === w.exe) || (w.aumid && a.id === w.aumid)); }
   function commands() {
-    const st = S.status || {}, dc = S.dc || {}, list = [];
+    const st = S.status || {}, list = [];
     // stay: keep the Command Center open afterwards ('quiet': and say nothing).
     const add = (name, icn, sub, keys, run, stay) => list.push({ kind: 'command', name, icon: icn, sub, keys, run, stay });
-    if (dc.authorized) add(dc.mute ? 'Unmute in Discord' : 'Mute in Discord', dc.mute ? 'mic' : 'micoff', 'Discord · your mic', 'discord mic voice', () => invoke('discord_action', { action: dc.mute ? 'unmute' : 'mute' }));
-    if (dc.authorized) add(dc.deaf ? 'Undeafen in Discord' : 'Deafen in Discord', 'headphones', 'Discord · your sound', 'discord deafen', () => invoke('discord_action', { action: dc.deaf ? 'undeafen' : 'deafen' }));
-    if (dc.voice) add('Leave the Discord call', 'phoneoff', `Discord · ${dc.voice.name}`, 'discord hang up disconnect voice', () => invoke('discord_action', { action: 'leave' }));
-    if (S.media) {
-      add(S.media.playing ? 'Pause the music' : 'Play the music', S.media.playing ? 'pause' : 'play', `${S.media.app || 'Music'} · ${S.media.title}`, 'apple music media play pause song', () => invoke('media_cmd', { action: 'toggle' }));
-      add('Next track', 'next', `${S.media.app || 'Music'}`, 'skip song music', () => invoke('media_cmd', { action: 'next' }));
-    }
-    if (S.vm) {
-      add('Mute or unmute my mic', 'mic', 'Voicemeeter · strip 1', 'voicemeeter microphone', () => invoke('vm_mic'));
-      add('Restart the audio engine', 'restart', 'Voicemeeter', 'voicemeeter audio engine fix sound', () => invoke('vm_restart'));
-    }
     if (st.wifi && st.wifi.present) add(st.wifi.on ? 'Turn Wi-Fi off' : 'Turn Wi-Fi on', 'wifi', 'Wireless', 'wifi wireless internet', () => invoke('set_radio', { kind: 'wifi', on: !st.wifi.on }));
     if (st.bluetooth && st.bluetooth.present) add(st.bluetooth.on ? 'Turn Bluetooth off' : 'Turn Bluetooth on', 'bt', 'Wireless', 'bluetooth', () => invoke('set_radio', { kind: 'bluetooth', on: !st.bluetooth.on }));
     add(st.taskbar_hidden ? 'Show the taskbar' : 'Hide the taskbar', 'taskbar', 'Island Shell', 'taskbar windows', () => invoke('set_taskbar', { hidden: !st.taskbar_hidden }));
     add('New virtual desktop', 'layers', 'Desktops', 'desktop workspace', () => invoke('desktop_new'));
     add('Task Manager', 'pulse', 'Processes, performance, startup apps', 'processes taskmgr end task kill startup performance memory', () => openTM(), 'quiet');
+    add('Modules', 'layers', 'Island Shell · install, turn off or remove its parts', 'modules plugins extensions add-ons install remove update', () => openSheet('modules'), 'quiet');
+    add('Load a module folder', 'folder', 'Modules · developer mode (unsigned)', 'module developer unpacked load folder', () => invoke('mod_load_folder', { path: null }).then(m => { if (m) flash(`${m.manifest.name} loaded (developer mode)`); }).catch(err => flash(String(err))), 'quiet');
     add('Setup guide', 'rocket', 'Island Shell · the first-run tour', 'setup guide welcome tour help start onboarding how', () => openSetup(), 'quiet');
     add('Open Windows Task Manager', 'pulse', 'Windows · Ctrl + Shift + Esc', 'processes taskmgr', () => invoke('cc_tool', { name: 'taskmgr' }));
     add('Open Terminal', 'terminal', 'Windows Terminal', 'cmd powershell shell console', () => invoke('cc_tool', { name: 'terminal' }));
@@ -236,13 +222,16 @@ export function createCommandCenter(ctx) {
     add('Take a screenshot', 'image', 'Snipping Tool · region', 'snip capture screen', () => invoke('cc_tool', { name: 'snip' }));
     add('Open Control Panel', 'gear', 'Windows', 'control panel classic', () => invoke('cc_tool', { name: 'control' }));
     add('Lock this PC', 'lock', 'Power · Win + L', 'lock screen away', () => invoke('power', { action: 'lock' }));
+    // Modules not installed yet, from the catalog: "Install Music", found by its keywords too ("lyrics").
+    for (const c of mds.missing()) add(`Install ${c.name}`, 'download', `Module · ${c.description}`, `install add module ${c.name} ${(c.keywords || []).join(' ')}`, () => invoke('mod_queue', { ids: [c.id] }).then(() => flash(`Installing ${c.name} in the background…`)).catch(err => flash(String(err))), 'quiet');
+    // Modules' own commands (src/modhost.js), and their search sources' items.
+    for (const c of REG.commands.all()) list.push({ kind: 'command', name: c.title, icon: c.icon || 'bolt', sub: c.sub || '', keys: c.keys || '', run: c.run, stay: c.stay });
     return list;
   }
   function buildIndex() {
     const items = [];
     for (const a of S.apps || []) items.push({ kind: 'app', id: 'app:' + a.id, name: a.name, sub: a.exe || 'Start menu', img: a.icon, app: a });
     for (const w of wins) { const a = appForWin(w); items.push({ kind: 'window', id: 'win:' + w.hwnd, name: w.title, sub: `${a ? a.name : exeName(w.exe)}${w.minimized ? ' · minimized' : ''}`, keys: a ? a.name : exeName(w.exe), img: (a && a.icon) || w.icon, win: w }); }
-    for (const gm of games) items.push({ kind: 'game', id: 'game:' + gm.appid, name: gm.name, sub: gm.last_played ? `Steam · played ${agoText(gm.last_played * 1000)}` : 'Steam', keys: 'steam game', cover: gm.cover || gm.header, game: gm });
     for (const p of places) {
       const kind = p.kind === 'file' ? 'file' : 'folder';
       const sub = p.kind === 'drive' ? `${p.sub}${p.free_gb != null ? ` · ${Math.round(p.free_gb)} GB free of ${Math.round(p.total_gb)}` : ''}` : p.kind === 'file' ? p.sub : p.path;
@@ -250,6 +239,9 @@ export function createCommandCenter(ctx) {
     }
     for (const [name, icn, uri, keys] of SETTINGS) items.push({ kind: 'setting', id: 'set:' + uri, name, sub: uri, keys, icon: icn, uri });
     for (const c of commands()) items.push({ ...c, id: 'cmd:' + c.name });
+    for (const src of REG.search.all()) {
+      try { for (const it of src.items() || []) items.push({ kind: src.kind || 'command', icon: src.icon, ...it, id: `${src.id}:${it.id || it.name}`, module: src.module }); } catch (e) {}
+    }
     // Files and folders opened from here before, even when Windows no longer lists them.
     for (const h of hist) if (h.path && !items.some(i => i.id === h.id)) items.push({ kind: h.kind, id: h.id, name: h.name, sub: h.sub, keys: h.path, icon: h.kind === 'file' ? 'file' : 'folder', place: { path: h.path, kind: h.kind } });
     index = items;
@@ -280,7 +272,7 @@ export function createCommandCenter(ctx) {
     const raw = input.value, q = raw.trim().toLowerCase();
     showResults(!!q);
     if (!q) return;
-    $('.cc-scopes').innerHTML = SCOPES.map(([k, n, icn]) => `<button class="cc-chip" type="button" data-scope="${k}" aria-pressed="${k === scope}">${ic(icn)}${n}</button>`).join('');
+    $('.cc-scopes').innerHTML = SCOPES.filter(([k]) => k === 'all' || k === scope || k !== 'game' || index.some(it => it.kind === k)).map(([k, n, icn]) => `<button class="cc-chip" type="button" data-scope="${k}" aria-pressed="${k === scope}">${ic(icn)}${n}</button>`).join('');
     flat = [];
     const groups = [];
     const mathSrc = q.startsWith('=') ? q.slice(1) : /^[\d\s.+\-*/%^()×÷]+$/.test(q) && /[+\-*/%^×÷]/.test(q) ? q : null;
@@ -303,10 +295,10 @@ export function createCommandCenter(ctx) {
     renderDetail();
   }
   function actionsFor(it) {
+    if (it.actions) return it.actions.map(a => [a.label, a.icon || 'bolt', a.run, a.stay]);
     switch (it.kind) {
       case 'app': return [['Open', 'ext', () => invoke('app_launch', { id: it.app.id })], ...(it.app.exe ? [['Show in folder', 'folder', () => invoke('cc_open', { path: it.app.exe, reveal: true })]] : [])];
       case 'window': return [['Switch to', 'window', () => invoke('window_activate', { hwnd: it.win.hwnd })], ['Close the window', 'x', () => invoke('window_close', { hwnd: it.win.hwnd }), true]];
-      case 'game': return [['Play', 'play', () => invoke('game_action', { appid: it.game.appid, what: 'play' })], ['Show in Steam', 'gamepad', () => invoke('game_action', { appid: it.game.appid, what: 'library' })], ['Open install folder', 'folder', () => invoke('game_action', { appid: it.game.appid, what: 'folder' })]];
       case 'folder': return [['Open', 'folder', () => invoke('cc_open', { path: it.place.path })], ['Copy path', 'copy', () => invoke('copy_text', { text: it.place.path }), true]];
       case 'file': return [['Open', 'ext', () => invoke('cc_open', { path: it.place.path })], ['Show in folder', 'folder', () => invoke('cc_open', { path: it.place.path, reveal: true })], ['Copy path', 'copy', () => invoke('copy_text', { text: it.place.path }), true]];
       case 'setting': return [['Open Settings', 'gear', () => invoke('open_settings', { uri: it.uri })]];
@@ -346,27 +338,26 @@ export function createCommandCenter(ctx) {
 
   /* ---------- cubes ---------- */
   function cubeStat(k) {
-    const st = S.status || {}, dc = S.dc;
+    const st = S.status || {};
     switch (k) {
       case 'apps': return `${(S.apps || []).length} apps · ${wins.length} open`;
-      case 'discord': return dc && dc.voice ? `${dc.voice.members.length} in ${dc.voice.name}` : dc && dc.connected ? 'Connected' : 'Not connected';
       case 'audio': return S.audio ? `${S.audio.device} · ${S.audio.muted ? 'muted' : Math.round(S.audio.level * 100) + '%'}` : 'Sound';
       case 'today': { if (nextEv) { const d = new Date(nextEv.start), sameDay = d.toDateString() === new Date().toDateString(); return `${nextEv.all_day ? (sameDay ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })) : (sameDay ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${nextEv.title}`; } const w = store.get('weather', null); return w ? `${Math.round(S.unit === 'C' ? w.temp : w.temp * 9 / 5 + 32)}° · ${w.name || ''}` : 'Weather & to-dos'; }
-      case 'canvas': { const n = S.cvData && S.cvData.upcoming.find(t => !t.done && !t.submitted); return n ? `Next: ${n.title}` : 'Due dates'; }
-      case 'games': return `${games.length} games`;
       case 'network': return st.net ? (st.net.name || (st.net.kind === 'ethernet' ? 'Ethernet' : 'Offline')) : 'Network';
       case 'clipboard': return `${(S.clips || []).length} items`;
-      case 'destiny': return `Reset in ${until(nextReset(2))}`;
-      case 'music': { const m = S.media; return m ? `${m.playing ? '' : 'Paused · '}${m.title || 'Unknown title'}` : 'Nothing playing'; }
       case 'stats': return `CPU ${Math.round(st.cpu || 0)}%${st.cpu_temp != null ? ` · ${Math.round(st.cpu_temp)}°` : ''}`;
       default: return '';
     }
   }
+  const cubeIcon = n => (/\.svg$/.test(n || '') ? `<img class="i" src="${esc(n)}" alt="">` : ic(n));
+  const statOf = id => { const c = REG.cubes.get(id); try { return c && c.stat ? String(c.stat() || '') : ''; } catch (e) { return ''; } };
   function renderCubes() {
-    $('.cc-cubes').innerHTML = CUBES.map(([k, n, icn, dx, , sz], i) => `<div class="cc-cw ${dx < 0 ? 'l' : dx > 0 ? 'r' : 'c'} sz-${sz}" data-cube="${k}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(n)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${ic(icn)}<b>${esc(n)}</b><small data-stat="${k}">${esc(cubeStat(k))}</small></span></button></div></div>`).join('');
+    $('.cc-cubes').innerHTML = cubes().map(({ cube: c, slot }, i) => `<div class="cc-cw ${slot.x < 0 ? 'l' : slot.x > 0 ? 'r' : 'c'} sz-${slot.size}" data-cube="${esc(c.id)}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(c.title)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small data-stat="${esc(c.id)}">${esc(statOf(c.id))}</small></span></button></div></div>`).join('');
     layout();
+    // A module's cube stat comes from its UI, so the cubes on screen load theirs.
+    for (const m of new Set(REG.cubes.all().map(c => c.module).filter(Boolean))) ctx.activateModule(m).then(renderCubeStats, () => {});
   }
-  function renderCubeStats() { $$('[data-stat]').forEach(el => { const v = cubeStat(el.dataset.stat); if (el.textContent !== v) el.textContent = v; }); }
+  function renderCubeStats() { $$('[data-stat]').forEach(el => { const v = statOf(el.dataset.stat); if (el.textContent !== v) el.textContent = v; }); }
 
   /* ---------- layout ---------- */
   // The eclipse is all soft light, so its canvas is drawn at 3/4 of the screen's resolution and
@@ -383,11 +374,12 @@ export function createCommandCenter(ctx) {
   function layout() {
     const W = innerWidth, H = innerHeight;
     R = clamp(Math.min(W / 9.8, H / 4.4), 84, 210); CX = W / 2; CY = H / 2 + 4;
+    const at = new Map(cubes().map(p => [p.cube.id, p.slot]));
     $$('.cc-cw').forEach(el => {
-      const c = CUBES.find(x => x[0] === el.dataset.cube); if (!c) return;
-      const [sw, sh] = CSIZE[c[5]], pw = sw * R, ph = sh * R;
+      const s = at.get(el.dataset.cube); if (!s) return;
+      const [sw, sh] = CSIZE[s.size], pw = sw * R, ph = sh * R;
       el.style.setProperty('--w', pw + 'px'); el.style.setProperty('--h', ph + 'px'); el.style.setProperty('--d', (Math.min(pw, ph) * .62) + 'px');
-      el.style.left = (CX + c[3] * R - pw / 2) + 'px'; el.style.top = (CY + c[4] * R - ph / 2) + 'px';
+      el.style.left = (CX + s.x * R - pw / 2) + 'px'; el.style.top = (CY + s.y * R - ph / 2) + 'px';
     });
     layoutTargets();
   }
@@ -524,8 +516,8 @@ export function createCommandCenter(ctx) {
     if (e.target.closest('[data-cc="back"]')) { closeSheet(); return; }
     const st = e.target.closest('[data-sheet]'); if (st) { openSheet(st.dataset.sheet); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); return; }
-    if (e.target.closest('[data-cc="skin"]') && sheetTab && SITES[sheetTab]) {
-      const k = skinKey(sheetTab), on = !store.get(k, true), name = SITES[sheetTab][1].replace(/ (app|website)$/, '');
+    if (e.target.closest('[data-cc="skin"]') && sheetTab && siteOf(sheetTab)) {
+      const k = skinKey(sheetTab), on = !store.get(k, true), name = siteOf(sheetTab).label.replace(/ (app|website)$/, '');
       store.set(k, on);
       $('.cc-skin').setAttribute('aria-pressed', on); flash(on ? `${name} wears the island skin` : `${name} in its own colours`);
       placeEmbed(); return;
@@ -549,7 +541,7 @@ export function createCommandCenter(ctx) {
     if (sheetTab) {
       if (nativeOn && NATIVE[nativeOn].key(e)) { e.preventDefault(); e.stopPropagation(); return; }
       const typing = e.target.matches && e.target.matches('input, textarea, select') && e.target !== input;
-      const order = CUBES.map(c => c[0]), i = order.indexOf(sheetTab);
+      const order = cubes().map(p => p.cube.id), i = order.indexOf(sheetTab);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (typing) e.target.blur(); else closeSheet(); return; }
       if (!typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); e.stopPropagation(); openSheet(order[(i + (e.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length]); return; }
       if (!typing && /^[1-9]$/.test(e.key)) { e.stopPropagation(); if (order[+e.key - 1]) openSheet(order[+e.key - 1]); return; }
@@ -566,43 +558,48 @@ export function createCommandCenter(ctx) {
 
   /* ---------- sheets: each section full size ---------- */
   function openSheet(tab, fromEl) {
-    if (!isOpen || busy || !CUBES.some(c => c[0] === tab)) return false;
+    if (!isOpen || busy || !cubes().some(p => p.cube.id === tab)) return false;
     if (tab === 'stats') { openTM(); return true; }
     tm.close();
     const sheet = $('.cc-sheet'), first = !sheetTab;
     invoke('cc_embed_hide').catch(() => {}); clearTimeout(embedT);
     sheetTab = tab;
-    $('.cc-tabs').innerHTML = CUBES.map(([k, n, icn]) => `<button class="cc-chip" type="button" data-sheet="${k}" aria-pressed="${k === tab}">${ic(icn)}${esc(n)}</button>`).join('');
+    $('.cc-tabs').innerHTML = cubes().map(({ cube: c }) => `<button class="cc-chip" type="button" data-sheet="${esc(c.id)}" aria-pressed="${c.id === tab}">${cubeIcon(c.icon)}${esc(c.title)}</button>`).join('');
     if (first) {
       const src = fromEl || $(`.cc-cw[data-cube="${tab}"]`);
       if (src) { const r = src.getBoundingClientRect(); sheet.style.setProperty('--ox', (r.left + r.width / 2 - 32) + 'px'); sheet.style.setProperty('--oy', (r.top + r.height / 2 - 72) + 'px'); }
       sheet.hidden = false; sheet.style.animation = 'none'; void sheet.offsetWidth; sheet.style.animation = '';
       root.classList.add('sheet-open'); input.blur();
     }
-    const site = SITES[tab];
-    const want = site ? store.get('ccMode:' + tab, site[2] ? 'web' : 'island') : 'island';
-    $('.cc-modes').innerHTML = site ? `<button type="button" data-mode="island" aria-pressed="${want === 'island'}">Island view</button><button type="button" data-mode="web" aria-pressed="${want === 'web'}">${esc(site[1])}</button>` : '';
-    setMode(want, first ? 560 : 60);
+    const site = siteOf(tab);
+    const want = site ? store.get('ccMode:' + tab, site.default ? 'web' : 'island') : 'island';
+    $('.cc-modes').innerHTML = site ? `<button type="button" data-mode="island" aria-pressed="${want === 'island'}">Island view</button><button type="button" data-mode="web" aria-pressed="${want === 'web'}">${esc(site.label)}</button>` : '';
+    // A module's cube may bring its own sheet: load the module first, then show it.
+    const c = REG.cubes.get(tab);
+    if (c && c.module && ctx.activateModule) ctx.activateModule(c.module).then(() => { if (sheetTab === tab) setMode(want, first ? 560 : 60); }, () => { if (sheetTab === tab) setMode(want, first ? 560 : 60); });
+    else setMode(want, first ? 560 : 60);
     return true;
   }
   function setMode(mode, delay = 60) {
-    const tab = sheetTab, site = SITES[tab]; if (!tab) return;
+    const tab = sheetTab, site = siteOf(tab); if (!tab) return;
     if (!site) mode = 'island';
-    if (site && mode === 'web' && tab === 'canvas' && !(S.cv && S.cv.configured)) { mode = 'island'; flash('Connect Canvas in its island view first'); }
+    // A site may need setting up in its island view first (Canvas: which school).
+    if (site && mode === 'web' && site.ready && !site.ready()) { mode = 'island'; flash(site.why || `Set up ${site.label.replace(/ (app|website)$/, '')} in its island view first`); }
     sheetMode = mode;
     if (site) store.set('ccMode:' + tab, mode);
     $$('.cc-modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
     const body = $('.cc-sbody'), web = mode === 'web';
-    // Discord keeps the island's call controls beside its app; the other sites take the whole sheet.
-    body.classList.toggle('web', web); body.classList.toggle('split', web && tab === 'discord');
-    $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site[1]}…` : '';
+    // A `split` site keeps its island view beside it (Discord's call controls); the others take the whole sheet.
+    const split = web && !!site.split;
+    body.classList.toggle('web', web); body.classList.toggle('split', split);
+    $('.cc-slot').hidden = !web; $('.cc-slot span').textContent = web ? `Opening ${site.label}…` : '';
     $('.cc-skin').hidden = !web; $('.cc-skin').setAttribute('aria-pressed', !!(site && store.get(skinKey(tab), true)));
-    if (site) { const n = site[1].replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
+    if (site) { const n = site.label.replace(/ (app|website)$/, ''); $('.cc-skin').title = $('.cc-skin').ariaLabel = `Island skin on ${n}`; }
     const app = NATIVE[tab];
     body.classList.toggle('native', !!app);
     if (nativeOn && nativeOn !== tab) unmountNative();
     if (app) { ctx.unhost(); if (nativeOn !== tab) { app.mount($('.cc-host')); nativeOn = tab; } }
-    else if (!web || tab === 'discord') ctx.hostTab(tab, $('.cc-host')); else ctx.unhost();
+    else if (!web || split) ctx.hostTab(tab, $('.cc-host')); else ctx.unhost();
     clearTimeout(embedT);
     if (web) embedT = setTimeout(placeEmbed, delay); else invoke('cc_embed_hide').catch(() => {});
   }
@@ -612,7 +609,7 @@ export function createCommandCenter(ctx) {
     if (!isOpen || busy || !sheetTab || sheetMode !== 'web') return;
     const r = $('.cc-slot').getBoundingClientRect();
     if (r.width < 120 || r.height < 120) { embedT = setTimeout(placeEmbed, 150); return; }
-    invoke('cc_embed', { site: SITES[sheetTab][0], x: r.left, y: r.top, w: r.width, h: r.height, skin: store.get(skinKey(sheetTab), true) }).catch(e => { $('.cc-slot span').textContent = String(e); });
+    invoke('cc_embed', { site: siteOf(sheetTab).site, x: r.left, y: r.top, w: r.width, h: r.height, skin: store.get(skinKey(sheetTab), true) }).catch(e => { $('.cc-slot span').textContent = String(e); });
   }
   function unmountNative() {
     NATIVE[nativeOn].unmount();

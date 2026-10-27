@@ -1,0 +1,15 @@
+{
+  "id": "wallpaper-engine",
+  "name": "Wallpaper Engine",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Your Wallpaper Engine wallpapers in the Wallpaper tab: search them, put one on, pause or mute it, with the accent following along.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "wallpaper-engine-module.exe", "run": "on-demand", "idle": "120s" },
+  "ui": { "entry": "ui/wallpaper-engine.js", "css": ["ui/wallpaper-engine.css"] },
+  "contributes": {
+    "sections": [{ "tab": "wallpaper", "id": "library", "order": 10, "title": "Wallpaper Engine", "view": true }]
+  },
+  "talksTo": [],
+  "keywords": ["wallpaper engine", "wallpaper", "workshop", "live wallpaper", "animated"]
+}

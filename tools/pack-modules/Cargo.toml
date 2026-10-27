@@ -1,0 +1,16 @@
+[package]
+name = "pack-modules"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Builds Island Shell's release catalog: module zips with their file hashes, modules.json with the base installer, and its minisign signature."
+publish = false
+
+[dependencies]
+island-catalog = { path = "../../crates/island-catalog" }
+island-module-proto = { path = "../../crates/island-module-proto" }
+island-host = { path = "../../crates/island-host" }
+serde_json = "1"
+minisign = "0.7"
+base64 = "0.22"
+zip = { version = "2", default-features = false, features = ["deflate"] }

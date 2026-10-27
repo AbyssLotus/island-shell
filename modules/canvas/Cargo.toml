@@ -1,0 +1,15 @@
+[package]
+name = "canvas-module"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Island Shell's Canvas module: due dates, grades, announcements and reminders from your school's Canvas."
+
+[[bin]]
+name = "canvas-module"
+path = "src/main.rs"
+
+[dependencies]
+island-module = { path = "../../crates/island-module" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
