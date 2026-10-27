@@ -413,13 +413,17 @@ pub fn settings_key(pattern: &str) -> Option<&str> {
 }
 
 /// Host patterns with `{settings.<key>}` filled in from `settings` (left out while unset or not a
-/// plain host name).
+/// plain host name). The setting may be one host or a list of them (a city's transit feeds).
 pub fn resolve_hosts(patterns: &[String], settings: &serde_json::Value) -> Vec<String> {
+    let clean = |v: &serde_json::Value| v.as_str().map(|v| v.trim().to_ascii_lowercase()).filter(|v| valid_host(v));
     patterns
         .iter()
-        .filter_map(|p| match settings_key(p) {
-            Some(k) => settings[k].as_str().map(|v| v.trim().to_ascii_lowercase()).filter(|v| valid_host(v)),
-            None => Some(p.clone()),
+        .flat_map(|p| match settings_key(p) {
+            Some(k) => match &settings[k] {
+                serde_json::Value::Array(list) => list.iter().filter_map(clean).collect(),
+                v => clean(v).into_iter().collect(),
+            },
+            None => vec![p.clone()],
         })
         .collect()
 }
@@ -542,6 +546,8 @@ mod tests {
         assert_eq!(resolve_hosts(&pats, &serde_json::json!({ "domain": "Canvas.School.edu" })), vec!["*.instructure.com", "canvas.school.edu"]);
         assert_eq!(resolve_hosts(&pats, &serde_json::json!({})), vec!["*.instructure.com"]);
         assert_eq!(resolve_hosts(&pats, &serde_json::json!({ "domain": "evil.com/x" })), vec!["*.instructure.com"]);
+        // A list: each plain host name in it.
+        assert_eq!(resolve_hosts(&pats, &serde_json::json!({ "domain": ["gtfs.example.org", "bad host", "RT.example.org", 7] })), vec!["*.instructure.com", "gtfs.example.org", "rt.example.org"]);
     }
 
     #[test]

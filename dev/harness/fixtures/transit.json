@@ -1,0 +1,284 @@
+{
+ "mod:transit.status": {
+  "city": "philadelphia",
+  "name": "Philadelphia",
+  "feeds": [
+   {
+    "id": "septa-bus",
+    "name": "SEPTA buses, trolleys and subway",
+    "state": "ready",
+    "text": "",
+    "stale": false,
+    "stops": 1
+   },
+   {
+    "id": "septa-rail",
+    "name": "SEPTA Regional Rail",
+    "state": "ready",
+    "text": "",
+    "stale": false,
+    "stops": 1
+   }
+  ],
+  "stops": [
+   {
+    "key": "septa-bus:21448",
+    "feed": "septa-bus",
+    "id": "21448",
+    "name": "34th St & Chestnut St",
+    "code": "21448",
+    "ids": [
+     "21448"
+    ],
+    "routes": [],
+    "window": {
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "from": "08:00",
+     "to": "09:15"
+    },
+    "kind": 3
+   },
+   {
+    "key": "septa-rail:90406",
+    "feed": "septa-rail",
+    "id": "90406",
+    "name": "Penn Medicine Station",
+    "code": "",
+    "ids": [
+     "90406"
+    ],
+    "routes": [
+     "AIR",
+     "MED"
+    ],
+    "window": null,
+    "kind": 2
+   }
+  ],
+  "presets": [
+   {
+    "id": "philadelphia",
+    "name": "Philadelphia",
+    "sub": "SEPTA buses, trolleys, subway and Regional Rail"
+   }
+  ],
+  "custom": null
+ },
+ "mod:transit.departures": {
+  "at": 1793103600,
+  "stops": [
+   {
+    "key": "septa-bus:21448",
+    "live": true,
+    "liveError": "",
+    "departures": [
+     {
+      "trip": "1",
+      "route": "49",
+      "label": "49",
+      "color": "0097d6",
+      "text": "ffffff",
+      "kind": 3,
+      "headsign": "40th-Baltimore",
+      "at": 1793103720,
+      "scheduled": 1793103431,
+      "live": true,
+      "delay": 289,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "2",
+      "route": "30",
+      "label": "30",
+      "color": "0097d6",
+      "text": "ffffff",
+      "kind": 3,
+      "headsign": "30th Street Station",
+      "at": 1793104020,
+      "scheduled": 1793104020,
+      "live": true,
+      "delay": 0,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "3",
+      "route": "49",
+      "label": "49",
+      "color": "0097d6",
+      "text": "ffffff",
+      "kind": 3,
+      "headsign": "Strawberry Mansion",
+      "at": 1793104440,
+      "scheduled": 1793104440,
+      "live": false,
+      "delay": 0,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "4",
+      "route": "LUCYGO",
+      "label": "LUCYGO",
+      "color": "f26100",
+      "text": "ffffff",
+      "kind": 3,
+      "headsign": "LUCY Gold Loop",
+      "at": 1793104860,
+      "scheduled": 1793104920,
+      "live": true,
+      "delay": -60,
+      "canceled": true,
+      "approx": false
+     }
+    ]
+   },
+   {
+    "key": "septa-rail:90406",
+    "live": true,
+    "liveError": "",
+    "departures": [
+     {
+      "trip": "5",
+      "route": "AIR",
+      "label": "AIR",
+      "color": "4f758b",
+      "text": "ffffff",
+      "kind": 2,
+      "headsign": "Glenside",
+      "at": 1793103780,
+      "scheduled": 1793103720,
+      "live": true,
+      "delay": 60,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "6",
+      "route": "AIR",
+      "label": "AIR",
+      "color": "4f758b",
+      "text": "ffffff",
+      "kind": 2,
+      "headsign": "Airport Terminals E & F",
+      "at": 1793104140,
+      "scheduled": 1793104020,
+      "live": true,
+      "delay": 120,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "7",
+      "route": "MED",
+      "label": "MED",
+      "color": "4f758b",
+      "text": "ffffff",
+      "kind": 2,
+      "headsign": "Wawa",
+      "at": 1793105220,
+      "scheduled": 1793105220,
+      "live": true,
+      "delay": 0,
+      "canceled": false,
+      "approx": false
+     },
+     {
+      "trip": "8",
+      "route": "AIR",
+      "label": "AIR",
+      "color": "4f758b",
+      "text": "ffffff",
+      "kind": 2,
+      "headsign": "Temple University",
+      "at": 1793105520,
+      "scheduled": 1793105520,
+      "live": false,
+      "delay": 0,
+      "canceled": false,
+      "approx": true
+     }
+    ]
+   }
+  ]
+ },
+ "mod:transit.routes": [
+  {
+   "id": "30",
+   "label": "30",
+   "long": "30th St Station to Drexel",
+   "color": "0097d6",
+   "text": "ffffff",
+   "kind": 3
+  },
+  {
+   "id": "49",
+   "label": "49",
+   "long": "29th-Wharton to Strawberry Mansion",
+   "color": "0097d6",
+   "text": "ffffff",
+   "kind": 3
+  },
+  {
+   "id": "LUCYGO",
+   "label": "LUCYGO",
+   "long": "LUCY Gold Loop",
+   "color": "f26100",
+   "text": "ffffff",
+   "kind": 3
+  }
+ ],
+ "mod:transit.search": [
+  {
+   "feed": "septa-bus",
+   "feedName": "SEPTA buses, trolleys and subway",
+   "id": "21448",
+   "code": "21448",
+   "name": "34th St & Chestnut St",
+   "station": false,
+   "routes": [
+    {
+     "id": "30",
+     "label": "30",
+     "color": "0097d6",
+     "text": "ffffff",
+     "kind": 3
+    },
+    {
+     "id": "49",
+     "label": "49",
+     "color": "0097d6",
+     "text": "ffffff",
+     "kind": 3
+    }
+   ],
+   "saved": true
+  },
+  {
+   "feed": "septa-bus",
+   "feedName": "SEPTA buses, trolleys and subway",
+   "id": "21354",
+   "code": "21354",
+   "name": "Chestnut St & 34th St",
+   "station": false,
+   "routes": [
+    {
+     "id": "21",
+     "label": "21",
+     "color": "0097d6",
+     "text": "ffffff",
+     "kind": 3
+    }
+   ],
+   "saved": false
+  }
+ ],
+ "mod:transit.prepare": null
+}
