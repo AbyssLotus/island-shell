@@ -701,6 +701,8 @@ function renderSounds() {
   $('#sndFs').setAttribute('aria-pressed', sounds.fsMute);
   if (document.activeElement !== $('#sndVol')) { $('#sndVol').value = Math.round(sounds.vol * 100); }
   $('#sndVolOut').textContent = Math.round(sounds.vol * 100) + '%';
+  // The bar fills to --p, like the other volume bars (without it, it sat at half whatever the volume).
+  $('#sndVol').style.setProperty('--p', $('#sndVol').value + '%');
   $('#sndList').classList.toggle('off', !sounds.on);
   const opts = kind => {
     const cur = sounds.choice(kind), file = sounds.fileName(kind);
@@ -732,7 +734,7 @@ $('#sndFile').addEventListener('change', async e => {
 });
 $('#sndOn').addEventListener('click', () => { sounds.set({ on: !sounds.on }); if (sounds.on) sounds.sound('glass'); renderSounds(); renderControls(); });
 $('#sndFs').addEventListener('click', () => { sounds.set({ fsMute: !sounds.fsMute }); renderSounds(); });
-$('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; });
+$('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; e.target.style.setProperty('--p', e.target.value + '%'); });
 $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('mention') !== 'none' ? sounds.choice('mention') : 'glass', 'mention'); renderControls(); });
 
 /* ---------- eye tracking: a module's `presence` (the eye tracking module's) ----------
