@@ -521,6 +521,16 @@ mod tests {
     use island_host::installed::Entry;
 
     #[test]
+    fn the_built_in_key_reads() {
+        // A fork may leave catalog.pub without a key (the updater stays off), but a key that's
+        // there must be a valid one, or the updater would quietly turn itself off.
+        let has_key = KEY.lines().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'));
+        if has_key {
+            island_catalog::public_key(KEY).expect("src-tauri/catalog.pub has a key the updater can't read");
+        }
+    }
+
+    #[test]
     fn module_updates_need_a_newer_runnable_version() {
         let m = |id: &str, version: &str, api: u32| island_catalog::Module { id: id.into(), name: id.into(), version: version.into(), api, size: 10, url: "https://example.com/x.zip".into(), sha256: "0".repeat(64), ..Default::default() };
         let catalog = island_catalog::Catalog { schema: 1, modules: vec![m("destiny", "1.1.0", 1), m("canvas", "1.0.0", 1), m("games", "2.0.0", 99), m("vpn", "1.2.0", 1), m("music", "1.0.0", 1)], ..Default::default() };

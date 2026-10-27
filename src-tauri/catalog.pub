@@ -1,3 +1,4 @@
 # Island Shell's update key: paste the public key that `cargo tauri signer generate` prints (or
 # the whole .pub file it writes) below this note. With no key here the built-in updater stays off.
 # See docs/BUILDING.md, "Releases and updates". Never put the private key in the repo.
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZGREFBODEzMUY5NkM4MUMKUldRY3lKWWZFNmphLzdmZHVkR1AwRGF0cUI3RG00R0ZqNFdYWmJXcjU1MzEzNi9rbVJncFF0amcK
