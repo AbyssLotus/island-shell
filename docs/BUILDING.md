@@ -5,7 +5,7 @@ Island Shell is a [Tauri 2](https://tauri.app) app: a Rust backend (`src-tauri/`
 ## What you need
 
 - [Rust](https://rustup.rs) (stable, MSVC toolchain) and the Visual Studio C++ build tools
-- The Tauri CLI: `cargo install tauri-cli --version "^2"`
+- The Tauri CLI, version 2.12.4 for the installer (see below): `cargo install tauri-cli --version 2.12.4 --locked`, or run it through npm as `npx @tauri-apps/cli@2.12.4` in place of `cargo tauri`
 - WebView2 (built into Windows 11 and current Windows 10)
 
 ## Run and build
@@ -24,6 +24,14 @@ cargo tauri dev
 Release build: `cargo tauri build --no-bundle` (or drop `--no-bundle` for an NSIS installer).
 
 `cargo tauri build` makes the one-click installer at `target/release/bundle/nsis/`. It uses the NSIS template in `src-tauri/installer/` (Tauri's own, changed to install without wizard pages; `/WIZARD` brings them back) and hooks that quit a running Island Shell first so the taskbar always comes back. `src-tauri/installer/make_art.py` redraws the installer's images.
+
+The template is Tauri's from **tauri-cli 2.12.4**, and it only builds with that CLI: Tauri's NSIS helpers change between versions (2.12 needs restart-manager macros 2.11's template doesn't have). The release workflow pins the same version. To move to a newer CLI, merge its template into ours, then change the pin:
+
+```
+git merge-file src-tauri/installer/installer.nsi <old CLI's installer.nsi> <new CLI's installer.nsi>
+```
+
+(Both are `crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi` in the Tauri repo, at the tags `tauri-cli-v<old>` and `tauri-cli-v<new>`. Line endings: the repo's copy is CRLF.)
 
 The repo is one Cargo workspace (the root `Cargo.toml`): the app, its crates, the modules and the tools share one `Cargo.lock` and one `target/` folder, and the release profile lives in the root manifest.
 
