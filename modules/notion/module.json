@@ -1,0 +1,18 @@
+{
+  "id": "notion",
+  "name": "Notion",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "To-dos from your Notion databases in Today, ticked off right from the island, and pages with dates in the island's calendar.",
+  "icon": "ui/icon.svg",
+  "backend": { "exe": "notion-module.exe", "run": "scheduled", "every": "10m", "idle": "120s" },
+  "ui": { "entry": "ui/notion.js", "css": ["ui/notion.css"] },
+  "contributes": {
+    "sections": [{ "tab": "today", "id": "todos", "order": 20, "title": "Notion" }],
+    "calendar": [{ "source": "notion", "name": "Notion", "color": "#d9d4c7" }],
+    "setup": { "card": true }
+  },
+  "talksTo": ["Notion (api.notion.com), with the integration secret you make, for only the databases you share with it"],
+  "hosts": ["api.notion.com"],
+  "keywords": ["notion", "to-do", "todo", "tasks", "task list", "database", "notes", "due"]
+}

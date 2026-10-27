@@ -104,7 +104,9 @@ const IC = {
   chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
   phoneoff: '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="m22 2-20 20"/>',
   headoff: '<path d="M21 14h-1.34"/><path d="M9.13 3.47A9 9 0 0 1 21 12v3.34"/><path d="m2 2 20 20"/><path d="M20.41 20.41A2 2 0 0 1 19 21h-1a2 2 0 0 1-2-2v-3"/><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 2.64-6.36"/>',
-  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>'
+  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>',
+  bus: '<path d="M8 6v6M15 6v6M2 12h19.6M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>',
+  train: '<path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1M15 15l1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3M16 19l2 3"/>'
 };
 const icon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
@@ -2173,11 +2175,12 @@ const cmdCenter = createCommandCenter({
   S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
   settingsOf: id => modHost.settingsOf(id),
   // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
-  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
-    const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);
+  // A module is set up in its own tab, or in the base tab its section is in (Notion in Today).
+  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && (m.man.contributes.tabs?.length || m.man.contributes.sections?.length)).map(m => {
+    const t = m.man.contributes.tabs?.[0], card = R.setup.get(m.man.id);
     let state = '';
     try { state = String(((card && card.render && card.render()) || {}).state || ''); } catch (e) {}
-    return { id: m.man.id, icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
+    return { id: m.man.id, icon: t && !/\.svg$/.test(t.icon) ? t.icon : 'grid', title: m.man.name, sub: m.man.description, tab: t ? t.id : m.man.contributes.sections[0].tab, state };
   }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),

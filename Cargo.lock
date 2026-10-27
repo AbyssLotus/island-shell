@@ -2499,6 +2499,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "notion-module"
+version = "1.0.0"
+dependencies = [
+ "island-module",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "num-conv"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

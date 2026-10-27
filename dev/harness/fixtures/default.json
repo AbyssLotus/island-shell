@@ -485,5 +485,11 @@
   "present": false,
   "enabled": false
  },
- "topic_last": null
+ "topic_last": null,
+ "mod:notion.status": {
+  "configured": false,
+  "workspace": "",
+  "todos": 0,
+  "calendar": 0
+ }
 }
