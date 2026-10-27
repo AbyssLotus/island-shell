@@ -70,6 +70,16 @@ body.cc-on #island, body.cc-on #bar { opacity: 0 !important; pointer-events: non
 .f-front small { font: 500 clamp(9px, calc(var(--h) * .082), 11.5px)/1.2 var(--f-mono); color: #93a6ba; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sz-S .f-front small { display: none; }
 .sz-S .f-front b { font-size: clamp(8.5px, calc(var(--h) * .12), 11.5px); letter-spacing: .08em; }
+/* The furthest-out cubes, and "+N more". */
+.sz-XS .f-front small { display: none; }
+.sz-XS .f-front b { font-size: clamp(8px, calc(var(--h) * .13), 10.5px); letter-spacing: .06em; }
+.cc-cw.more .f-front { box-shadow: inset 0 0 0 1px rgba(var(--glow), .3), inset 0 0 0 4px rgba(4, 5, 9, .9), inset 0 0 0 5px rgba(var(--glow), .14); }
+/* Dragging a cube onto another: it follows the pointer, the one under it lights up. */
+.cc-cw.dragging { z-index: 5; cursor: grabbing; }
+.cc-cw.dragging .cc-fl, .cc-cw.dragging .cc-cube { animation: none; }
+.cc-cw.dragging .cc-cube { transform: rotateX(0) rotateY(0) translateZ(40px) scale(1.08); transition: none; }
+.cc-cw.drop .cc-cube { transform: rotateX(0) rotateY(0) scale(.94); }
+.cc-cw.drop .f-front::after { opacity: 1; animation: none; box-shadow: 0 0 26px rgba(var(--glow), .85), inset 0 0 0 2px rgba(var(--glow), .9); }
 
 /* search results: the eclipse steps aside */
 .cc-results { position: absolute; z-index: 4; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr); gap: 14px; max-width: 1200px; animation: cc-res-in .5s var(--spring); }
@@ -633,3 +643,34 @@ textarea.cal-in { height: auto; padding: 10px 12px; line-height: 1.45; resize: v
 .su-orbit .su-o svg.i { width: 19px; height: 19px; animation: su-spin 40s linear infinite reverse; }
 .su-orbit .su-o0 { transform: rotate(0deg) translate(110px) rotate(0deg); } .su-orbit .su-o1 { transform: rotate(60deg) translate(110px) rotate(-60deg); } .su-orbit .su-o2 { transform: rotate(120deg) translate(110px) rotate(-120deg); } .su-orbit .su-o3 { transform: rotate(180deg) translate(110px) rotate(-180deg); } .su-orbit .su-o4 { transform: rotate(240deg) translate(110px) rotate(-240deg); } .su-orbit .su-o5 { transform: rotate(300deg) translate(110px) rotate(-300deg); }
 @media (max-width: 860px) { .su-card-main { grid-template-columns: 1fr; } .su-art { min-height: 220px; border-right: 0; border-bottom: 1px solid rgba(var(--glow), .1); } }
+
+/* "+N more": the cubes that didn't fit around the eclipse, and the ones taken off it. */
+.cc-more { height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .1) transparent; }
+.cc-mnote { margin: 4px 30px 14px; color: rgba(238, 246, 255, .7); font-size: 13px; }
+.cc-mh { margin: 20px 30px 10px; font: 600 11px/1 var(--f-body); letter-spacing: .16em; text-transform: uppercase; color: rgba(238, 246, 255, .62); }
+.cc-mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; padding: 0 30px; }
+.cc-mtile { display: grid; justify-items: start; gap: 6px; padding: 16px; border: 0; border-radius: 16px; background: rgba(255, 255, 255, .045); box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); color: #eef6ff; text-align: left; font: inherit; cursor: pointer; transition: background .15s, box-shadow .2s; }
+.cc-mtile:hover { background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(var(--glow), .35); }
+.cc-mtile svg.i, .cc-mtile img.i { width: 24px; height: 24px; color: #c9e9ff; }
+.cc-mtile b { font: 600 14px/1.2 var(--f-display); letter-spacing: .04em; }
+.cc-mtile small { font: 500 11px/1.3 var(--f-mono); color: #93a6ba; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-mtile.off { opacity: .7; }
+
+/* The Modules sheet's Layout list. */
+.mds-lay { display: grid; gap: 4px; }
+.mds-lay h4 { margin: 14px 0 6px 4px; font: 600 11px/1 var(--f-body); letter-spacing: .16em; text-transform: uppercase; color: rgba(238, 246, 255, .62); }
+.mds-lay h4:first-child { margin-top: 4px; }
+.mds-lay h4 small { margin-left: 8px; letter-spacing: 0; text-transform: none; font: 500 11.5px var(--f-body); color: rgba(238, 246, 255, .45); }
+.mds-lrow { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 14px; }
+.mds-lrow:hover { background: rgba(255, 255, 255, .04); }
+.mds-lrow em { font: 600 12px/1 var(--f-mono); font-style: normal; color: rgba(238, 246, 255, .5); text-align: right; }
+.mds-lrow.out { opacity: .7; }
+.mds-lrow.off { grid-template-columns: 44px minmax(0, 1fr) auto; }
+.mds-lrow .cc-ib { width: 32px; height: 32px; }
+.mds-lrow .cc-ib svg.i { width: 15px; height: 15px; }
+.mds-lrow .cc-ib.up svg.i { transform: rotate(180deg); }
+.mds-lrow .cc-ib:disabled { opacity: .3; cursor: default; }
+.mds-lrow .mds-ic img.i { width: 22px; height: 22px; }
+.mds-fixed { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.mds-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(var(--glow), .12); font-size: 12px; color: rgba(238, 246, 255, .8); }
+.mds-chip svg.i, .mds-chip img.i { width: 14px; height: 14px; }

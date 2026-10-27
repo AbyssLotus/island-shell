@@ -52,6 +52,8 @@ export function start(port = 5174) {
     // /__harness/* is this folder, /__repo/* the repo (module folders: their UI loads from there), the rest src/.
     // Module files come under their version (/__repo/modules/<id>@<version>/…), like mod.localhost.
     const plain = pathname.replace(/^\/__repo\/modules\/([a-z0-9-]+)@[^/]+\//, '/__repo/modules/$1/');
+    // Made-up modules in fixtures (demo-01…, scenario manycubes) share an empty UI.
+    if (/^\/__repo\/modules\/demo-\d+\/ui\/none\.js$/.test(plain)) { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end('export {};\n'); return; }
     const [root, rel] = plain.startsWith('/__harness/') ? [here, plain.slice(10)] : plain.startsWith('/__repo/') ? [repo, plain.slice(7)] : [src, plain];
     const p = inside(root, rel);
     if (!p) { res.writeHead(403); res.end(); return; }

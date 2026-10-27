@@ -121,8 +121,11 @@ pub struct Cube {
     pub id: String,
     pub title: String,
     pub icon: String,
+    /// Ignored since 0.3: the island places and sizes cubes itself, by the user's ranking. Older
+    /// islands (0.2) want one of [`CUBE_SIZES`], so a module for them still gives it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub size: String,
-    /// The slot it prefers.
+    /// Ignored since 0.3, like `size`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slot: Option<String>,
     /// Opens this docked site instead of a sheet.
@@ -266,8 +269,8 @@ impl Manifest {
             check_icon(&t.icon).map_err(|e| ctx(&format!("tab {}: {e}", t.id)))?;
         }
         for cube in &c.cubes {
-            if !valid_id(&cube.id) || cube.title.trim().is_empty() || !CUBE_SIZES.contains(&cube.size.as_str()) {
-                return Err(ctx(&format!("cube {:?} needs a valid id, a title and a size of S, M, L or W", cube.id)));
+            if !valid_id(&cube.id) || cube.title.trim().is_empty() || (!cube.size.is_empty() && !CUBE_SIZES.contains(&cube.size.as_str())) {
+                return Err(ctx(&format!("cube {:?} needs a valid id and a title (and a size, if it gives one, of S, M, L or W)", cube.id)));
             }
             check_icon(&cube.icon).map_err(|e| ctx(&format!("cube {}: {e}", cube.id)))?;
             if let Some(site) = &cube.site {
@@ -528,6 +531,10 @@ mod tests {
         assert!(broken(|v| v["backend"]["run"] = "while-process".into()).contains("process names"));
         assert!(broken(|v| v["ui"]["entry"] = "ui/x.css".into()).contains(".js"));
         assert!(broken(|v| v["contributes"]["cubes"][0]["size"] = "XL".into()).contains("size"));
+        // No size at all is fine: the island picks it.
+        let mut v: serde_json::Value = serde_json::from_str(canvas()).unwrap();
+        v["contributes"]["cubes"][0].as_object_mut().unwrap().remove("size");
+        assert!(Manifest::parse(&serde_json::to_vec(&v).unwrap()).is_ok());
         assert!(broken(|v| v["contributes"]["cubes"][0]["site"] = "dim".into()).contains("doesn't declare"));
         assert!(broken(|v| v["contributes"]["sites"][0]["url"] = "http://x.com".into()).contains("https"));
         assert!(broken(|v| v["contributes"]["sites"][0]["reader"] = "../reader.js".into()).contains("reader"));

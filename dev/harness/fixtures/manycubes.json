@@ -1,0 +1,907 @@
+{
+ "mod_list": {
+  "modules": [
+   {
+    "id": "demo-01",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-01",
+    "manifest": {
+     "id": "demo-01",
+     "name": "Weather radar",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-01",
+        "title": "Weather radar",
+        "icon": "grid"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-02",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-02",
+    "manifest": {
+     "id": "demo-02",
+     "name": "Stocks",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-02",
+        "title": "Stocks",
+        "icon": "note"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-03",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-03",
+    "manifest": {
+     "id": "demo-03",
+     "name": "Spotify extras",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-03",
+        "title": "Spotify extras",
+        "icon": "chat"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-04",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-04",
+    "manifest": {
+     "id": "demo-04",
+     "name": "Twitch",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-04",
+        "title": "Twitch",
+        "icon": "cap"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-05",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-05",
+    "manifest": {
+     "id": "demo-05",
+     "name": "OBS",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-05",
+        "title": "OBS",
+        "icon": "orbit"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-06",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-06",
+    "manifest": {
+     "id": "demo-06",
+     "name": "GitHub",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-06",
+        "title": "GitHub",
+        "icon": "gamepad"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-07",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-07",
+    "manifest": {
+     "id": "demo-07",
+     "name": "Home Assistant",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-07",
+        "title": "Home Assistant",
+        "icon": "globe"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-08",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-08",
+    "manifest": {
+     "id": "demo-08",
+     "name": "Minecraft server",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-08",
+        "title": "Minecraft server",
+        "icon": "star"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-09",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-09",
+    "manifest": {
+     "id": "demo-09",
+     "name": "Anki",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-09",
+        "title": "Anki",
+        "icon": "rocket"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-10",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-10",
+    "manifest": {
+     "id": "demo-10",
+     "name": "Obsidian",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-10",
+        "title": "Obsidian",
+        "icon": "bus"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-11",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-11",
+    "manifest": {
+     "id": "demo-11",
+     "name": "Slack",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-11",
+        "title": "Slack",
+        "icon": "train"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-12",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-12",
+    "manifest": {
+     "id": "demo-12",
+     "name": "Teams",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-12",
+        "title": "Teams",
+        "icon": "check"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-13",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-13",
+    "manifest": {
+     "id": "demo-13",
+     "name": "Zoom",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-13",
+        "title": "Zoom",
+        "icon": "calendar"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-14",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-14",
+    "manifest": {
+     "id": "demo-14",
+     "name": "Steam friends",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-14",
+        "title": "Steam friends",
+        "icon": "pulse"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-15",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-15",
+    "manifest": {
+     "id": "demo-15",
+     "name": "Riot",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-15",
+        "title": "Riot",
+        "icon": "layers"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-16",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-16",
+    "manifest": {
+     "id": "demo-16",
+     "name": "OpenRGB",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-16",
+        "title": "OpenRGB",
+        "icon": "grid"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-17",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-17",
+    "manifest": {
+     "id": "demo-17",
+     "name": "Hue",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-17",
+        "title": "Hue",
+        "icon": "note"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-18",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-18",
+    "manifest": {
+     "id": "demo-18",
+     "name": "Uptime",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-18",
+        "title": "Uptime",
+        "icon": "chat"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-19",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-19",
+    "manifest": {
+     "id": "demo-19",
+     "name": "Packages",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-19",
+        "title": "Packages",
+        "icon": "cap"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-20",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-20",
+    "manifest": {
+     "id": "demo-20",
+     "name": "Pomodoro stats",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-20",
+        "title": "Pomodoro stats",
+        "icon": "orbit"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-21",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-21",
+    "manifest": {
+     "id": "demo-21",
+     "name": "Habits",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-21",
+        "title": "Habits",
+        "icon": "gamepad"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-22",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-22",
+    "manifest": {
+     "id": "demo-22",
+     "name": "Water",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-22",
+        "title": "Water",
+        "icon": "globe"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-23",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-23",
+    "manifest": {
+     "id": "demo-23",
+     "name": "Sleep",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-23",
+        "title": "Sleep",
+        "icon": "star"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-24",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-24",
+    "manifest": {
+     "id": "demo-24",
+     "name": "Recipes",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-24",
+        "title": "Recipes",
+        "icon": "rocket"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-25",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-25",
+    "manifest": {
+     "id": "demo-25",
+     "name": "Flights",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-25",
+        "title": "Flights",
+        "icon": "bus"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-26",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-26",
+    "manifest": {
+     "id": "demo-26",
+     "name": "Crypto ticker",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-26",
+        "title": "Crypto ticker",
+        "icon": "train"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-27",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-27",
+    "manifest": {
+     "id": "demo-27",
+     "name": "News",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-27",
+        "title": "News",
+        "icon": "check"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-28",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-28",
+    "manifest": {
+     "id": "demo-28",
+     "name": "Podcasts",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-28",
+        "title": "Podcasts",
+        "icon": "calendar"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-29",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-29",
+    "manifest": {
+     "id": "demo-29",
+     "name": "Audiobooks",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-29",
+        "title": "Audiobooks",
+        "icon": "pulse"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   },
+   {
+    "id": "demo-30",
+    "dev": true,
+    "enabled": true,
+    "state": "stopped",
+    "pid": null,
+    "error": null,
+    "crashes": 0,
+    "dir": "modules/demo-30",
+    "manifest": {
+     "id": "demo-30",
+     "name": "Bus tracker",
+     "version": "1.0.0",
+     "api": 1,
+     "description": "A made-up module for trying the Command Center's layout.",
+     "ui": {
+      "entry": "ui/none.js"
+     },
+     "contributes": {
+      "cubes": [
+       {
+        "id": "demo-30",
+        "title": "Bus tracker",
+        "icon": "layers"
+       }
+      ]
+     },
+     "talksTo": []
+    }
+   }
+  ],
+  "broken": []
+ }
+}

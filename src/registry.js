@@ -71,32 +71,120 @@ export function createRegistry() {
   };
 }
 
-/* ---------- Command Center cube slots (§4.12) ---------- */
+/* ---------- Command Center cube layout ----------
+   Six cubes keep a place of their own: Modules, Apps, Games, Audio, Clipboard and Music. Every
+   other cube (Today, Network, Stats and every other module's) is ranked by the user: the first ones
+   sit nearest the eclipse and the rest fill outward, smaller the further out, as many as the screen
+   has room for. When there are more, the last seat holds "+N more". The island decides all of
+   this; a module's manifest has no say in where its cube goes. Positions and sizes are in eclipse
+   radii from its center. */
 
-/** The 12 named slots: [name, x, y (in eclipse radii from its center), size]. Their order is the
- * cubes' order for the keyboard (arrows and number keys in a sheet). */
-export const SLOTS = [
-  ['apps', -1.8, -1.12, 'L'], ['discord', -2.52, -0.02, 'M'], ['audio', -2, 1.1, 'L'],
-  ['today', -3.4, 0.82, 'S'], ['canvas', -3.3, -0.84, 'S'],
-  ['games', 1.72, -1.1, 'M'], ['network', 2.48, 0.04, 'W'], ['clipboard', 1.92, 1.14, 'M'],
-  ['destiny', 3.3, -0.84, 'S'], ['stats', 3.42, 1.02, 'S'],
-  ['music', 0, 1.62, 'W'], ['modules', 0, -1.62, 'S']
+/** The cubes that stay put: [id, x, y, size]. */
+export const FIXED = [
+  ['apps', -1.8, -1.12, 'L'], ['audio', -2, 1.1, 'L'], ['games', 1.72, -1.1, 'M'],
+  ['clipboard', 1.92, 1.14, 'M'], ['music', 0, 1.62, 'W'], ['modules', 0, -1.62, 'S']
 ];
-/** Slots a module cube may take when its own is taken, in this order. */
-export const SPARE = ['discord', 'canvas', 'games', 'destiny', 'music'];
+export const isFixed = id => FIXED.some(f => f[0] === id);
+/** The seats nearest the eclipse, best first: the island's arrangement from before. */
+export const NEAR = [[-2.52, -0.02, 'M'], [2.48, 0.04, 'M'], [-3.3, -0.84, 'S'], [3.3, -0.84, 'S'], [-3.42, 0.95, 'S'], [3.42, 1.02, 'S']];
+/** Cube sizes, [width, height]. */
+export const CSIZE = { L: [.9, .9], M: [.74, .74], S: [.52, .52], XS: [.42, .42], W: [1.14, .72] };
+/** The ranking before the user picks one, best first; other cubes follow in the order they came. */
+export const DEFAULT_ORDER = ['discord', 'network', 'canvas', 'destiny', 'today', 'stats'];
+/** The id of the "+N more" cube. */
+export const MORE = '__more';
+/** A 2560 × 1440 screen, for when there's no screen to measure (tests). */
+export const WIDE = { left: -5.9, right: 5.9, top: -3.1, bottom: 3.2 };
+
+const GAP = .12; // the near seats from before sit this close
+function overlaps(a, b) {
+  const [aw, ah] = CSIZE[a.size], [bw, bh] = CSIZE[b.size];
+  return Math.abs(a.x - b.x) < (aw + bw) / 2 + GAP && Math.abs(a.y - b.y) < (ah + bh) / 2 + GAP;
+}
 
 /**
- * Places cubes in slots. A base cube (no `module`) owns the slot named like it. A module cube takes
- * its `slot` if that's free, otherwise the first free spare slot; with none left it isn't shown.
- * Returns [{ cube, slot: { name, x, y, size } }] in slot order. Earlier cubes win a contested slot.
+ * How far out a seat is, for ranking: measured against the screen's own shape (an ellipse), so a
+ * wide screen fills its sides before its top and bottom edges. 1 is the edge of the screen.
  */
-export function placeCubes(cubes) {
-  const free = new Map(SLOTS.map(s => [s[0], s]));
-  const placed = new Map();
-  const take = (cube, name) => { const s = free.get(name); if (!s) return false; free.delete(name); placed.set(name, cube); return true; };
-  for (const c of cubes) if (!c.module) take(c, c.slot || c.id);
-  for (const c of cubes) if (c.module && !take(c, c.slot || c.id)) SPARE.some(n => take(c, n));
-  return SLOTS.filter(s => placed.has(s[0])).map(([name, x, y, size]) => ({ cube: placed.get(name), slot: { name, x, y, size } }));
+export function farness(s, bounds) {
+  return Math.hypot(s.x / Math.max(bounds.right, -bounds.left), s.y / Math.max(bounds.bottom, -bounds.top));
+}
+
+/**
+ * The seats for ranked cubes, best first, inside `bounds` ({ left, right, top, bottom }) and clear
+ * of `taken` (the fixed cubes there are): the near ones, then a staggered grid further out, nearest
+ * first (farness) and smaller further out, plus the place of a fixed cube that isn't there.
+ */
+export function seats(bounds, taken, spare = []) {
+  const inside = s => { const [w, h] = CSIZE[s.size]; return s.x - w / 2 >= bounds.left && s.x + w / 2 <= bounds.right && s.y - h / 2 >= bounds.top && s.y + h / 2 <= bounds.bottom; };
+  const out = [];
+  const add = s => { if (inside(s) && !taken.some(t => overlaps(s, t)) && !out.some(t => overlaps(s, t))) out.push(s); };
+  for (const [x, y, size] of NEAR) add({ x, y, size });
+  const far = spare.map(s => ({ ...s, d: farness(s, bounds) }));
+  const DX = .86, DY = .82;
+  for (let row = Math.ceil(bounds.top / DY); row * DY <= bounds.bottom; row++) {
+    const off = row % 2 ? DX / 2 : 0;
+    for (let col = Math.ceil((bounds.left - off) / DX); col * DX + off <= bounds.right; col++) {
+      const x = +(col * DX + off).toFixed(3), y = +(row * DY).toFixed(3), d = farness({ x, y }, bounds);
+      if (Math.hypot(x, y) >= 2.3) far.push({ x, y, d, size: d < .78 ? 'S' : 'XS' }); // nearer is the eclipse's corona
+    }
+  }
+  far.sort((a, b) => a.d - b.d || Math.abs(a.y) - Math.abs(b.y) || a.x - b.x);
+  for (const { x, y, size } of far) add({ x, y, size });
+  return out;
+}
+
+/** Ranked cubes in the user's order (`order`, ids), then DEFAULT_ORDER's, then the order they came. */
+export function rankCubes(cubes, order = []) {
+  const at = c => {
+    const i = order.indexOf(c.id);
+    if (i >= 0) return i;
+    const d = DEFAULT_ORDER.indexOf(c.id);
+    return order.length + (d >= 0 ? d : DEFAULT_ORDER.length + cubes.indexOf(c));
+  };
+  return [...cubes].sort((a, b) => at(a) - at(b));
+}
+
+/**
+ * Where every cube goes: { placed: [{ cube, seat: { x, y, size }, fixed }], ranked (every ranked
+ * cube, best first), overflow (the ones in "+N more"), hidden, keys (ids in keyboard order) }.
+ * `order` is the user's ranking and `hidden` the cubes they took off the screen (fixed ones can't
+ * be). A "+N more" cube is { id: MORE, title, icon, more: [ids] }.
+ */
+export function layoutCubes(cubes, { order = [], hidden = [], bounds = WIDE } = {}) {
+  const fixedAt = new Map(FIXED.map(([id, x, y, size]) => [id, { x, y, size }]));
+  const placed = [], movable = [], off = [];
+  for (const c of cubes) {
+    if (fixedAt.has(c.id)) placed.push({ cube: c, seat: fixedAt.get(c.id), fixed: true });
+    else (hidden.includes(c.id) ? off : movable).push(c);
+  }
+  const ranked = rankCubes(movable, order);
+  // A fixed cube that isn't there (no Music module) leaves its place to the ranked ones.
+  const spare = FIXED.filter(([id]) => !cubes.some(c => c.id === id)).map(([, x, y]) => ({ x, y, size: 'M' }));
+  const room = seats(bounds, placed.map(p => p.seat), spare);
+  let shown = ranked, overflow = [];
+  if (ranked.length > room.length) { shown = ranked.slice(0, Math.max(0, room.length - 1)); overflow = ranked.slice(shown.length); }
+  shown.forEach((c, i) => placed.push({ cube: c, seat: room[i], fixed: false }));
+  if (overflow.length && room[shown.length]) placed.push({ cube: { id: MORE, title: `${overflow.length} more`, icon: 'grid', more: overflow.map(c => c.id) }, seat: room[shown.length], fixed: false });
+  const present = id => cubes.some(c => c.id === id);
+  const keys = [...['apps', 'audio', 'games', 'clipboard', 'music'].filter(present), ...ranked.map(c => c.id), ...(present('modules') ? ['modules'] : [])];
+  return { placed, ranked, overflow, hidden: off, keys };
+}
+
+/** `order` with `id` moved `by` places (negative: nearer the eclipse), from the ranking as it stands. */
+export function moveInOrder(ranked, id, by) {
+  const ids = ranked.map(c => c.id), i = ids.indexOf(id);
+  if (i < 0) return ids;
+  const j = Math.max(0, Math.min(ids.length - 1, i + by));
+  ids.splice(j, 0, ids.splice(i, 1)[0]);
+  return ids;
+}
+
+/** `order` with two cubes trading places (dragging one onto the other). */
+export function swapInOrder(ranked, a, b) {
+  const ids = ranked.map(c => c.id), i = ids.indexOf(a), j = ids.indexOf(b);
+  if (i >= 0 && j >= 0) [ids[i], ids[j]] = [ids[j], ids[i]];
+  return ids;
 }
 
 /* ---------- activities (§4.8) ---------- */

@@ -104,7 +104,8 @@ export function createModuleHost(env) {
     for (const s of c.sites || []) R.sites.add({ id: `${id}:${s.id}`, sid: s.id, site: `${id}/${s.id}`, label: s.label, default: !!s.default, split: !!s.split, module: id });
     for (const cube of c.cubes || []) {
       if (R.cubes.has(cube.id)) { log(`modules: ${id} wants cube ${cube.id}, which is taken`); continue; }
-      R.cubes.add({ id: cube.id, title: cube.title, icon: iconFor(id, cube.icon, man.version), size: cube.size, slot: cube.slot, module: id, site: cube.site ? `${id}:${cube.site}` : null, stat: () => (m.cubes.get(cube.id) || {}).stat?.() || '' });
+      // Where it goes and how big is the island's call (registry.js, layoutCubes), not the manifest's.
+      R.cubes.add({ id: cube.id, title: cube.title, icon: iconFor(id, cube.icon, man.version), module: id, site: cube.site ? `${id}:${cube.site}` : null, stat: () => (m.cubes.get(cube.id) || {}).stat?.() || '' });
     }
     for (const h of c.hotkeys || []) if (!R.hotkeys.has(h.key)) R.hotkeys.add({ id: h.key, opens: h.opens, module: id });
     if (man.ui && man.ui.eager) activate(id);
