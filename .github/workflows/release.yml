@@ -53,8 +53,11 @@ jobs:
           if ($env:ISLAND_SIGNING_KEY) { "signed=true" >> $env:GITHUB_OUTPUT } else { "signed=false" >> $env:GITHUB_OUTPUT; Write-Output "::warning::DRY RUN: ISLAND_SIGNING_KEY isn't set, so the catalog won't be signed and nothing will be released" }
           $global:LASTEXITCODE = 0
 
+      # Pinned: src-tauri/installer/installer.nsi is Tauri's template from this exact CLI, and a
+      # newer CLI's NSIS helpers can need macros an older template doesn't have (2.12 broke 2.11's).
+      # To move to a newer CLI, merge its template into ours first (docs/BUILDING.md).
       - name: Build the installer
-        run: npx --yes @tauri-apps/cli@2 build
+        run: npx --yes @tauri-apps/cli@2.12.4 build
 
       - name: Build the modules
         run: cargo build --release --locked --workspace --bins --exclude island-shell --exclude pack-modules
