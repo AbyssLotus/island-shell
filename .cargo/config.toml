@@ -1,0 +1,6 @@
+# Reproducible Windows builds: link.exe stamps the build time into every program unless told not
+# to (/Brepro), which made a module whose code hadn't changed come out different in each release.
+# pack-modules keeps an unchanged module's package only when its files are byte-identical, and
+# refuses a changed module that kept its version, so the stamp failed releases.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/Brepro"]

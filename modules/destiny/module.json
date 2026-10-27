@@ -1,7 +1,7 @@
 {
   "id": "destiny",
   "name": "Destiny 2",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "description": "Your Guardians, their loadouts, Xûr and the weekly reset, plus DIM docked in the Command Center.",
   "icon": "ui/icon.svg",

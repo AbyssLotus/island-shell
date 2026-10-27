@@ -65,7 +65,7 @@ Island Shell updates itself, and its modules, from a **signed catalog** attached
 
 ### Making a release
 
-1. Bump the version in **both** `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the updater compares the latter), and the version in a module's `module.json` for every module that changed.
+1. Bump the version in **both** `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the updater compares the latter), and the version in a module's `module.json` (and its `Cargo.toml`) for every module that changed. A change to the shared crates (`crates/island-module`, `island-module-proto`, `island-win`) changes every module with a backend, since each program is built with them: bump all of those. Builds are reproducible (`.cargo/config.toml` links with `/Brepro`), so a module nothing touched comes out byte-identical and keeps its old package.
 2. Run **Actions → Release → Run workflow**, with a sentence or two of notes for the update prompt.
    - It builds the installer and every module's backend.
    - It runs `pack-modules`, which writes a deterministic zip per module (a module whose version is in the last release's catalog keeps that release's zip, and is refused if it changed without a version bump). It also writes the catalog with the installer in it, and signs it.

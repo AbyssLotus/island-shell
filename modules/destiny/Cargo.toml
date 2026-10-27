@@ -1,6 +1,6 @@
 [package]
 name = "destiny-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Destiny 2 module: Guardians, loadouts, Xûr and the resets, through Bungie's API with your own key."

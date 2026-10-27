@@ -1,6 +1,6 @@
 [package]
 name = "gaze-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's eye tracking module: a Tobii tracker's presence and where your eyes are, for the island (look at it to peek) and the Music module (pause when you step away)."

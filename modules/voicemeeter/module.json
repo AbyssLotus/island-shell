@@ -1,7 +1,7 @@
 {
   "id": "voicemeeter",
   "name": "Voicemeeter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "description": "Voicemeeter's mixer in the Audio tab: every input and output's level, mute and routing, a mic switch on the top bar, and VoiceDeck one click away.",
   "icon": "ui/icon.svg",

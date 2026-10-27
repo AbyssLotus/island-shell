@@ -1,6 +1,6 @@
 [package]
 name = "discord-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Discord module: your call on the island, @mentions as notifications and Apple Music on your status, through the Discord app's local RPC pipe."

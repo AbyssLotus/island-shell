@@ -1,6 +1,6 @@
 [package]
 name = "games-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Games module: your Steam library with covers, heroes and playtime, and your other launchers."

@@ -1,6 +1,6 @@
 [package]
 name = "wallpaper-engine-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Wallpaper Engine module: your wallpapers in the Wallpaper tab, applied, paused and muted through Wallpaper Engine itself."

@@ -1,7 +1,7 @@
 {
   "id": "games",
   "name": "Games",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "description": "Your Steam library: covers, playtime and Play on the island and full size in the Command Center, plus your other game launchers. Win + G opens it.",
   "icon": "ui/icon.svg",
