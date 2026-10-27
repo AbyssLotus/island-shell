@@ -39,7 +39,7 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 
 | | Module | What you get |
 | :---: | --- | --- |
-| 🎵 | **Music** | Apple Music, Spotify and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
+| 🎵 | **Music** | Apple Music, Spotify, Amazon Music, YouTube Music and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
 | 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), @mentions on the island, and the Discord web app docked in the Command Center with an island skin. |
 | 🎓 | **Canvas** | Due dates, grades, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. |
 | ⭐ | **Destiny 2 (with DIM)** | Your Guardians, loadouts, current activity, Xûr and the weekly reset through the Bungie API, and Destiny Item Manager docked in the Command Center in the island's look. |
@@ -48,6 +48,9 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 | 🎚️ | **Voicemeeter** | Voicemeeter's mixer in the Audio tab (with VoiceDeck) and a mic switch on the top bar. |
 | 🌄 | **Wallpaper Engine** | Your Wallpaper Engine library in the Wallpaper tab, with the accent following along. |
 | 🛡️ | **VPN** | Tailscale and Radmin VPN in Network, with a switch in Controls. |
+| ⏱️ | **Focus timer** | Focus stretches and breaks, Pomodoro style, in Today and on the pill. Notifications wait while you focus, and with the eye tracker it pauses when you step away. |
+| ✅ | **Notion** | To-dos from your Notion databases in Today, ticked off from the island, and pages with dates in the calendar. |
+| 🚌 | **Transit** | Live departures for your stops from your city's transit feeds, with the next one on the pill when you usually leave. Philadelphia (SEPTA) is built in. |
 
 ## What it is
 

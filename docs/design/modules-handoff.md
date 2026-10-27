@@ -633,6 +633,8 @@ Extra conditions:
 | D13 | The island keeps the now-playing chrome (pill, peek, Controls card, bar chip) and draws it from a `media` activity; the Music module owns the players, lyrics, the Music tab and sheet. Modules get island services for what the island must do itself: `ctx.island.focusApp` (bring an app forward), `ctx.island.audio.appVolume/setAppVolume`, the equalizer meter (the activity's `exe`) and the `level` event. "Pause when I step away" is the Music module's setting; eye tracking only publishes `presence`. With nothing playing, Controls shows no now-playing card | implementation, 2026-10-26 |
 | D14 | The base hears the topics modules publish (the host's `Sink::topic`; the page gets `topic:<name>`, and `topic_last` for the latest), so the island follows `presence` itself. The base publishes `island.geometry` (`{ rect, monitor, scale, visible }`, physical pixels) from its cursor thread when it changes | implementation, 2026-10-26 |
 | D15 | Installs the guide, search and migration ask for go through one background queue (`mod_queue`, modules/queue.json): one at a time, kept until each is in place, retried at the next start or check when offline. Migration runs when the page has `setupDone` from 0.1.x but not `modulesMigrated` (settings.json can't tell, the base writes it every start): it queues Music, plus each module whose 0.1.x file is there or whose app is on the PC. The catalog carries each module's `keywords` and `preselect` | implementation, 2026-10-26 |
+| D16 | New module kinds, owner's picks (Transit, Notion, Focus timer, more players for Music): a section may take the place of a base card (`sections[].replaces`, only Today's `focus` card); the pill draws the top `timer` activity (Today's own timer is one) and the top `custom` activity as a tag beside the clock; `ctx.island.quiet(on, label)` holds module notifications (urgent ones pass) and shows them afterwards as one or a count; `ctx.island.presence()` and the `presence` event give module UIs the eye tracker's state; a module may have no backend (Focus), with a lib crate that only tests its manifest | implementation, 2026-10-27 |
+| D17 | A `{settings.<key>}` host may be a list (a city's transit feeds on several servers). Transit covers any city through GTFS + GTFS-realtime, with Philadelphia (SEPTA) built in; a trip the live feed says is running counts whatever the timetable's calendar says, and a day the timetable doesn't cover borrows the nearest same weekday (SEPTA publishes its next timetable before it starts and drops the current one) | implementation, 2026-10-27 |
 
 ## Progress tracker
 
@@ -675,6 +677,10 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M3.4 | Picking modules | M3.2 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.5 | Migration from 0.1.x | M3.2, M2.8 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
 | M3.6 | Docs | M3.4 | in review | [#2](https://github.com/AbyssLotus/island-shell/pull/2) |
+| M4.1 | Focus timer module (UI-only; timer activities, `replaces`, quiet, presence) | M1.3 | in review | more-modules |
+| M4.2 | Music: Amazon Music, YouTube Music, Spotify by name (players.rs) | M2.7 | in review | more-modules |
+| M4.3 | Notion module (to-dos in Today, dated pages in the calendar) | M1.3 | in review | more-modules |
+| M4.4 | Transit module (GTFS + GTFS-realtime, Philadelphia preset, pill tag) | M1.3 | in review | more-modules |
 
 ## Starting a session
 
