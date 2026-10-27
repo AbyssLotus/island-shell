@@ -1,0 +1,166 @@
+{
+ "mod:canvas.overview": {
+  "name": "Sam",
+  "domain": "school.example.edu",
+  "courses": [
+   {
+    "id": 1,
+    "name": "Signals and Systems",
+    "code": "EE 101",
+    "color": "#4f8cf7",
+    "score": 92.4,
+    "grade": "A-",
+    "url": "https://school.example.edu/courses/1"
+   },
+   {
+    "id": 2,
+    "name": "Linear Algebra",
+    "code": "MATH 201",
+    "color": "#e8704a",
+    "score": 88.0,
+    "grade": "B+",
+    "url": "https://school.example.edu/courses/2"
+   }
+  ],
+  "upcoming": [
+   {
+    "key": "assignment:11",
+    "kind": "assignment",
+    "id": 11,
+    "title": "Problem set 4",
+    "course_id": 1,
+    "due": "2026-10-23T23:59:00Z",
+    "points": 20,
+    "url": "https://school.example.edu/courses/1/assignments/11",
+    "submitted": false,
+    "graded": false,
+    "missing": false,
+    "late": false,
+    "done": false,
+    "all_day": false,
+    "override_id": null
+   },
+   {
+    "key": "quiz:12",
+    "kind": "quiz",
+    "id": 12,
+    "title": "Quiz 3",
+    "course_id": 2,
+    "due": "2026-10-24T15:00:00Z",
+    "points": 10,
+    "url": "https://school.example.edu/courses/2/assignments/12",
+    "submitted": true,
+    "graded": false,
+    "missing": false,
+    "late": false,
+    "done": false,
+    "all_day": false,
+    "override_id": null
+   },
+   {
+    "key": "discussion_topic:13",
+    "kind": "discussion_topic",
+    "id": 13,
+    "title": "Week 9 reflection",
+    "course_id": 1,
+    "due": "2026-10-26T03:59:00Z",
+    "points": null,
+    "url": "https://school.example.edu/courses/1/assignments/13",
+    "submitted": false,
+    "graded": false,
+    "missing": false,
+    "late": false,
+    "done": true,
+    "all_day": false,
+    "override_id": null
+   },
+   {
+    "key": "assignment:14",
+    "kind": "assignment",
+    "id": 14,
+    "title": "Lab 5: Filters",
+    "course_id": 1,
+    "due": "2026-10-28T03:59:00Z",
+    "points": 30,
+    "url": "https://school.example.edu/courses/1/assignments/14",
+    "submitted": false,
+    "graded": false,
+    "missing": false,
+    "late": false,
+    "done": false,
+    "all_day": false,
+    "override_id": null
+   }
+  ],
+  "missing": [
+   {
+    "key": "assignment:9",
+    "kind": "assignment",
+    "id": 9,
+    "title": "Lab 4: Sampling",
+    "course_id": 1,
+    "due": "2026-10-17T03:59:00Z",
+    "points": 30,
+    "url": "https://school.example.edu/courses/1/assignments/9",
+    "submitted": false,
+    "graded": false,
+    "missing": true,
+    "late": false,
+    "done": false,
+    "all_day": false,
+    "override_id": null
+   }
+  ],
+  "announcements": [
+   {
+    "id": 5,
+    "title": "Midterm review session moved",
+    "course_id": 2,
+    "posted": "2026-10-22T18:00:00Z",
+    "url": "https://school.example.edu/courses/2/discussion_topics/5",
+    "preview": "The review session is now in room 104 at 4 pm."
+   }
+  ],
+  "recent": [
+   {
+    "id": 8,
+    "title": "Lab 3: Convolution",
+    "course_id": 1,
+    "score": 27,
+    "points": 30,
+    "grade": "27",
+    "graded": "2026-10-23T20:15:00Z",
+    "url": "https://school.example.edu/courses/1/assignments/8",
+    "late": false
+   },
+   {
+    "id": 21,
+    "title": "Quiz 2",
+    "course_id": 2,
+    "score": 6.5,
+    "points": 10,
+    "grade": "6.5",
+    "graded": "2026-10-21T16:02:00Z",
+    "url": "https://school.example.edu/courses/2/assignments/21",
+    "late": false
+   },
+   {
+    "id": 19,
+    "title": "Week 8 reflection",
+    "course_id": 1,
+    "score": null,
+    "points": 0,
+    "grade": "complete",
+    "graded": "2026-10-19T14:30:00Z",
+    "url": "https://school.example.edu/courses/1/assignments/19",
+    "late": true
+   }
+  ],
+  "limited": false,
+  "mode": "site",
+  "at": 1793023200000
+ },
+ "mod_site_read": {
+  "signedIn": false
+ }
+}

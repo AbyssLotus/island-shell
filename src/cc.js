@@ -557,7 +557,8 @@ export function createCommandCenter(ctx) {
   }, true);
 
   /* ---------- sheets: each section full size ---------- */
-  function openSheet(tab, fromEl) {
+  /** `mode` ('island' or 'web') overrides the view the sheet remembers. */
+  function openSheet(tab, fromEl, mode) {
     if (!isOpen || busy || !cubes().some(p => p.cube.id === tab)) return false;
     if (tab === 'stats') { openTM(); return true; }
     tm.close();
@@ -572,7 +573,7 @@ export function createCommandCenter(ctx) {
       root.classList.add('sheet-open'); input.blur();
     }
     const site = siteOf(tab);
-    const want = site ? store.get('ccMode:' + tab, site.default ? 'web' : 'island') : 'island';
+    const want = site ? mode || store.get('ccMode:' + tab, site.default ? 'web' : 'island') : 'island';
     $('.cc-modes').innerHTML = site ? `<button type="button" data-mode="island" aria-pressed="${want === 'island'}">Island view</button><button type="button" data-mode="web" aria-pressed="${want === 'web'}">${esc(site.label)}</button>` : '';
     // A module's cube may bring its own sheet: load the module first, then show it.
     const c = REG.cubes.get(tab);

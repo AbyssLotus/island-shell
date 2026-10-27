@@ -82,8 +82,9 @@ Your call (who's talking, mute, deafen, leave) and your @mentions on the island,
 4. Discord (the desktop app, which must be running) asks you to authorize it. Click **Authorize**.
 
 ### Canvas
-Due dates, grades and announcements from your school's Canvas, in the **Canvas** section and the calendar. Two ways:
+Due dates, grades and announcements from your school's Canvas, in the **Canvas** section and the calendar. Three ways:
 
+- **Sign in** (everything, no token): type your school's Canvas address (like `school.instructure.com`) and click **Connect**. Canvas opens in the Command Center: sign in the way you always do, then go back to the Canvas section. Island Shell reads your Canvas through that sign-in, so this works at schools that turn access tokens off. If Canvas signs you out later, the section says so and **Sign in** takes you back.
 - **Calendar feed** (no token): in Canvas, open **Calendar**, click **Calendar Feed** (bottom right), copy the link that ends in `.ics` and paste it in. You get due dates and course events.
 - **Access token** (everything): in Canvas, open **Account → Settings**, click **+ New Access Token**, name it "Island Shell", copy the token and paste it in with your school's Canvas address (like `school.instructure.com`).
 

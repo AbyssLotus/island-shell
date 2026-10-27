@@ -99,7 +99,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | `ui` | object | | `{ "entry": "ui/<id>.js", "css": ["ui/<id>.css"] }`. |
 | `contributes.tabs` | array | | `{ id, title, icon, order }` — an island tab. `order` is a number; base tabs use multiples of 10. |
 | `contributes.cubes` | array | | `{ id, title, icon, size: "S"\|"M"\|"L"\|"W", slot?, site? }` — a Command Center cube (§4.12). |
-| `contributes.sites` | array | | `{ id, label, url, hosts: [..], skin?, default? }`. `url` may hold `{settings.<key>}`; `hosts` are where the skin applies. |
+| `contributes.sites` | array | | `{ id, label, url, hosts: [..], skin?, default?, split?, reader?, readPage? }`. `url` may hold `{settings.<key>}`; `hosts` are where the skin and the reader apply. `reader` is a `.js` file of the module's (one function expression), run by `ctx.sites.read` in a hidden copy of the site that shares its sign-in; `readPage` is the path it opens (needs a `reader`). |
 | `contributes.calendar` | array | | `{ source, name, color }`. |
 | `contributes.hotkeys` | array | | `{ key: "G", opens: "tab:games" }` — the Win + letter. Letters the base uses are taken (§4.13). |
 | `contributes.setup` | object | | `{ "card": true, "preselect": false }` — a card in the setup guide's module step. |
