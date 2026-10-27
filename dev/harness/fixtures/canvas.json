@@ -127,7 +127,43 @@
     "preview": "The review session is now in room 104 at 4 pm."
    }
   ],
+  "recent": [
+   {
+    "id": 8,
+    "title": "Lab 3: Convolution",
+    "course_id": 1,
+    "score": 27,
+    "points": 30,
+    "grade": "27",
+    "graded": "2026-10-23T20:15:00Z",
+    "url": "https://school.example.edu/courses/1/assignments/8",
+    "late": false
+   },
+   {
+    "id": 21,
+    "title": "Quiz 2",
+    "course_id": 2,
+    "score": 6.5,
+    "points": 10,
+    "grade": "6.5",
+    "graded": "2026-10-21T16:02:00Z",
+    "url": "https://school.example.edu/courses/2/assignments/21",
+    "late": false
+   },
+   {
+    "id": 19,
+    "title": "Week 8 reflection",
+    "course_id": 1,
+    "score": null,
+    "points": 0,
+    "grade": "complete",
+    "graded": "2026-10-19T14:30:00Z",
+    "url": "https://school.example.edu/courses/1/assignments/19",
+    "late": true
+   }
+  ],
   "limited": false,
+  "mode": "token",
   "at": 0
  }
 }

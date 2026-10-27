@@ -132,6 +132,7 @@ pub struct Cube {
 
 /// A real website docked into a Command Center sheet by the base's embed.rs.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Site {
     pub id: String,
     pub label: String,
@@ -146,6 +147,15 @@ pub struct Site {
     /// Docked, the site keeps the module's island view beside it (Discord's call controls).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub split: bool,
+    /// A script the module runs inside the site, signed in with the docked site's session, to read
+    /// what the site's own pages show (Canvas without an access token). Its code is one function
+    /// expression, `async function name(args) { … }`, resolving to anything JSON can hold.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reader: Option<String>,
+    /// Which page of the site the reader runs on, as a path (default: the start page). A light one
+    /// loads faster.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_page: Option<String>,
 }
 
 /// A section inside a base tab (Voicemeeter in Audio, VPN in Network, Wallpaper Engine in Wallpaper).
@@ -269,6 +279,18 @@ impl Manifest {
             if let Some(skin) = &s.skin {
                 safe_path(skin).map_err(|e| ctx(&format!("site {} skin: {e}", s.id)))?;
             }
+            if let Some(reader) = &s.reader {
+                safe_path(reader).map_err(|e| ctx(&format!("site {} reader: {e}", s.id)))?;
+                if !reader.ends_with(".js") {
+                    return Err(ctx(&format!("site {} reader must be a .js file", s.id)));
+                }
+            }
+            if let Some(page) = &s.read_page {
+                let ok = page.starts_with('/') && !page.starts_with("//") && page.len() <= 200 && page.bytes().all(|b| b.is_ascii_graphic()) && !page.contains(['\\', '"', '<', '>']);
+                if !ok || s.reader.is_none() {
+                    return Err(ctx(&format!("site {}: readPage must be a path like /api/status, with a reader", s.id)));
+                }
+            }
         }
         for s in &c.sections {
             if !valid_id(&s.tab) || !valid_id(&s.id) || !s.order.is_finite() {
@@ -326,6 +348,7 @@ impl Manifest {
             out.extend(ui.css.iter().cloned());
         }
         out.extend(self.contributes.sites.iter().filter_map(|s| s.skin.clone()));
+        out.extend(self.contributes.sites.iter().filter_map(|s| s.reader.clone()));
         out.extend(self.contributes.tabs.iter().map(|t| t.icon.clone()).filter(|i| i.ends_with(".svg")));
         out.extend(self.contributes.cubes.iter().map(|c| c.icon.clone()).filter(|i| i.ends_with(".svg")));
         out.sort();
@@ -446,7 +469,7 @@ mod tests {
           "ui": { "entry": "ui/canvas.js", "css": ["ui/canvas.css"] },
           "contributes": {
             "tabs": [{ "id": "canvas", "title": "Canvas", "icon": "cap", "order": 60 }],
-            "sites": [{ "id": "canvas", "label": "Canvas", "url": "{settings.baseUrl}", "hosts": ["*.instructure.com"], "skin": "skins/canvas-skin.css" }],
+            "sites": [{ "id": "canvas", "label": "Canvas", "url": "{settings.baseUrl}", "hosts": ["*.instructure.com"], "skin": "skins/canvas-skin.css", "reader": "readers/canvas-reader.js", "readPage": "/api/v1/users/self" }],
             "cubes": [{ "id": "canvas", "title": "Canvas", "icon": "cap", "size": "S", "slot": "canvas", "site": "canvas" }],
             "calendar": [{ "source": "canvas", "name": "Canvas", "color": "#f5c26b" }],
             "setup": { "card": true }
@@ -464,7 +487,8 @@ mod tests {
         assert_eq!(m.every(), Some(Duration::from_secs(900)));
         assert_eq!(m.idle(), Duration::from_secs(60));
         assert_eq!(m.talks_to, vec!["Your school's Canvas"]);
-        assert_eq!(m.referenced_files(), vec!["canvas-module.exe", "skins/canvas-skin.css", "ui/canvas.css", "ui/canvas.js", "ui/icon.svg"]);
+        assert_eq!(m.referenced_files(), vec!["canvas-module.exe", "readers/canvas-reader.js", "skins/canvas-skin.css", "ui/canvas.css", "ui/canvas.js", "ui/icon.svg"]);
+        assert_eq!(m.contributes.sites[0].read_page.as_deref(), Some("/api/v1/users/self"));
         // And it survives a round trip through serde.
         let again = Manifest::parse(&serde_json::to_vec(&m).unwrap()).unwrap();
         assert_eq!(again, m);
@@ -489,6 +513,11 @@ mod tests {
         assert!(broken(|v| v["contributes"]["cubes"][0]["size"] = "XL".into()).contains("size"));
         assert!(broken(|v| v["contributes"]["cubes"][0]["site"] = "dim".into()).contains("doesn't declare"));
         assert!(broken(|v| v["contributes"]["sites"][0]["url"] = "http://x.com".into()).contains("https"));
+        assert!(broken(|v| v["contributes"]["sites"][0]["reader"] = "../reader.js".into()).contains("reader"));
+        assert!(broken(|v| v["contributes"]["sites"][0]["reader"] = "readers/reader.css".into()).contains(".js"));
+        assert!(broken(|v| v["contributes"]["sites"][0]["readPage"] = "https://evil.example/".into()).contains("readPage"));
+        assert!(broken(|v| v["contributes"]["sites"][0]["readPage"] = "//evil.example/".into()).contains("readPage"));
+        assert!(broken(|v| { v["contributes"]["sites"][0].as_object_mut().unwrap().remove("reader"); }).contains("with a reader"));
         assert!(broken(|v| v["contributes"]["calendar"][0]["color"] = "gold".into()).contains("color"));
         assert!(broken(|v| v["contributes"]["hotkeys"] = serde_json::json!([{ "key": "A", "opens": "tab:canvas" }])).contains("hotkey"));
         assert!(broken(|v| v["contributes"]["hotkeys"] = serde_json::json!([{ "key": "C", "opens": "canvas" }])).contains("tab:<id>"));

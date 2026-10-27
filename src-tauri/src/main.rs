@@ -359,6 +359,13 @@ fn cc_embed_hide(app: AppHandle) {
     embed::hide_all(&app);
 }
 
+/// Runs a module site's reader in a hidden copy of the site, signed in like the docked one
+/// (embed::read). `site` is `<module>/<site>`; the page's module host only names a module's own.
+#[tauri::command]
+async fn mod_site_read(site: String, args: Option<serde_json::Value>, app: AppHandle) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || embed::read(&app, &site, &args.unwrap_or_default())).await.map_err(|e| e.to_string())?
+}
+
 /// taskmgr | terminal | explorer | recycle | control | snip
 #[tauri::command]
 fn cc_tool(name: String) -> Result<(), String> {
@@ -1076,6 +1083,7 @@ fn main() {
             cc_web,
             cc_embed,
             cc_embed_hide,
+            mod_site_read,
             calendar_events,
             calendar_sources,
             calendar_add_feed,

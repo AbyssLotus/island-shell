@@ -30,8 +30,10 @@
 //   commands.set([{ id, title, icon, sub, keys, run, stay }])  quick commands (replaces its own)
 //   activity.set({ id, kind, … }), activity.clear(id)         live things on the pill
 //   notify({ title, body, icon, img, round, urgent, action, sound, ms })
-//   open('tab:<id>' | 'cube:<id>')
+//   open('tab:<id>' | 'cube:<id>' | 'cube:<id>:web')   ':web' opens the cube on its docked site
 //   openWeb(url)                    a link in the default browser (never Edge)
+//   sites.read(site, args)          runs the site's reader (manifest sites[].reader) in a hidden copy
+//                                   of that docked site, signed in like it; resolves to its answer
 //   island                          layout(), showing(tab), closePanel(keep), releaseFocus(), menu(x, y, items), state(), on(event, fn),
 //                                   focusApp({ id, exe, hwnd }), audio.appVolume(exe) / .setAppVolume(exe, level),
 //                                   accentFrom(imageUrl), flash(msg) and closeCommandCenter(then) for a sheet,
@@ -222,6 +224,7 @@ export function createModuleHost(env) {
       notify: n => env.notify(id, n),
       open: target => env.open(target),
       openWeb: url => invoke('open_link', { url }),
+      sites: { read: (site, args) => invoke('mod_site_read', { site: `${id}/${site}`, args: args === undefined ? null : args }) },
       island: env.island,
       settings: { mount(fn) { m.settings = fn; } },
       setup: { card(fn) { R.setup.set({ id, module: id, order: 100, render: fn }); } }

@@ -1,6 +1,12 @@
 //! Canvas (the school LMS), an Island Shell module backend (docs/design/modules.md); its UI is
-//! ui/canvas.js. Two ways in:
+//! ui/canvas.js. Three ways in:
 //!
+//! - **Signed in on the site** (for schools that turn access tokens off): you sign in to Canvas once
+//!   where it's docked in the Command Center, and the module's reader (readers/canvas-reader.js, the
+//!   manifest's `sites[].reader`) reads your Canvas in a hidden copy of that site with the same
+//!   sign-in: the JSON Canvas's own pages load. The backend can't reach the site's sign-in, so the UI
+//!   runs the reader (`ctx.sites.read`) and hands what it brings back to `ingest`. Everything the token
+//!   gives, with no token; ticking items off goes through the reader too.
 //! - **Calendar feed** (works when a school blocks access tokens): the private .ics link Canvas
 //!   gives every student under Calendar → Calendar Feed, meant for calendar apps. It has every due
 //!   date and course event with its course and link, but no grades, submission status or
@@ -10,9 +16,13 @@
 //!
 //! - What's coming up (Canvas's own planner: assignments, quizzes, discussions…) with submission
 //!   status, and marking items done the way the Canvas app's checkbox does (planner overrides).
-//! - Missing work, current grades per course, recent announcements.
+//! - Missing work, current grades per course, what was graded lately (with the scores), recent
+//!   announcements. The token and the reader bring the same API answers (`Raw`), read by one
+//!   function (`build_overview`).
 //! - Notifications from a check every 10 minutes (the `scheduled` tick): due in under 3 hours (shown
-//!   on top of everything), newly graded work with the score, new announcements.
+//!   on top of everything), newly graded work with the score, new announcements. Signed in on the
+//!   site, the tick asks the UI to read Canvas again (the `read` event) and gives due-soon reminders
+//!   from the last read; what the read brings in gets its notifications in `ingest`.
 //! - Due dates in the island's calendar (source `canvas`), refreshed with every read.
 //!
 //! With the feed, notifications are due-soon reminders and newly posted assignments.
@@ -20,10 +30,12 @@
 //! The token or feed link is DPAPI-encrypted in `canvas.json`; what's already been notified is in
 //! `canvas-seen.json`. All three files are taken over from 0.1.x. The school's address also goes in
 //! settings.json, where the manifest's `{settings.domain}` (its one allowed host, and the docked
-//! site) reads it.
+//! site) reads it. The last read from the site is kept in the cache folder (`overview.json`), so the
+//! tab, the reminders and the calendar work between reads.
 //!
-//! RPC methods: `status`, `configure { domain, token }`, `configure_feed { url }`, `overview`,
-//! `done { key, kind, id, override_id, done }`, `forget`.
+//! RPC methods: `status`, `configure { domain, token }`, `configure_feed { url }`,
+//! `configure_site { domain }`, `overview`, `ingest { data }`, `done { key, kind, id, override_id, done }`,
+//! `forget`.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::path::{Path, PathBuf};
@@ -37,6 +49,8 @@ use serde::{Deserialize, Serialize};
 
 /// How soon before a due date the reminder comes.
 const REMIND_MS: i64 = 3 * 3600 * 1000;
+
+const DAY_MS: i64 = 86_400_000;
 
 // ---------- settings ----------
 
@@ -52,6 +66,9 @@ struct Saved {
     feed: String,
     #[serde(default)]
     name: String,
+    /// Signed in on the site: nothing secret here, the docked site's sign-in is the key.
+    #[serde(default)]
+    site: bool,
 }
 
 fn load(dir: &Path) -> Saved {
@@ -69,7 +86,7 @@ fn save(dir: &Path, s: &Saved) {
 #[derive(Serialize, Clone, Default)]
 struct Status {
     configured: bool,
-    /// "feed" (calendar feed only) or "token".
+    /// "site" (signed in on the docked site), "feed" (calendar feed only) or "token".
     mode: String,
     domain: String,
     name: String,
@@ -77,8 +94,8 @@ struct Status {
 
 fn status(dir: &Path) -> Status {
     let s = load(dir);
-    let mode = if !s.feed.is_empty() { "feed" } else { "token" };
-    Status { configured: !s.domain.is_empty() && (!s.token.is_empty() || !s.feed.is_empty()), mode: mode.into(), domain: s.domain, name: s.name }
+    let mode = if s.site { "site" } else if !s.feed.is_empty() { "feed" } else { "token" };
+    Status { configured: !s.domain.is_empty() && (s.site || !s.token.is_empty() || !s.feed.is_empty()), mode: mode.into(), domain: s.domain, name: s.name }
 }
 
 /// "https://school.instructure.com/courses/1" or "canvas.school.edu" → "canvas.school.edu".
@@ -128,10 +145,11 @@ impl Api {
     fn get(&self, path: &str) -> Result<Value, String> {
         self.call("GET", path, None)
     }
+}
 
-    fn url(&self, path: &str) -> String {
-        if path.starts_with("http") { path.to_string() } else { format!("https://{}{path}", self.domain) }
-    }
+/// A link on the user's Canvas (Canvas gives some as paths: "/courses/1/assignments/2").
+fn abs_url(domain: &str, path: &str) -> String {
+    if path.starts_with("http") { path.to_string() } else { format!("https://{domain}{path}") }
 }
 
 /// A plain GET (the feed needs no sign-in; its link is the key).
@@ -156,7 +174,8 @@ fn clean_feed(input: &str) -> Option<String> {
 
 // ---------- overview ----------
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 struct Course {
     id: u64,
     name: String,
@@ -167,7 +186,8 @@ struct Course {
     url: String,
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 struct Task {
     /// Unique per item ("assignment:12", or the feed's UID).
     key: String,
@@ -189,12 +209,10 @@ struct Task {
     /// A date without a time (feed events).
     all_day: bool,
     override_id: Option<u64>,
-    /// For graded work: the assignment behind it (quizzes have their own id).
-    #[serde(skip)]
-    assignment_id: Option<u64>,
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 struct Announcement {
     id: u64,
     title: String,
@@ -204,7 +222,26 @@ struct Announcement {
     preview: String,
 }
 
-#[derive(Serialize, Clone, Default)]
+/// Work graded lately, with its score: what Canvas's Grades page shows.
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+struct Grade {
+    /// The assignment's id.
+    id: u64,
+    title: String,
+    course_id: u64,
+    score: Option<f64>,
+    points: Option<f64>,
+    /// As Canvas words it: a letter, "complete", or the score again.
+    grade: String,
+    /// ISO date it was graded.
+    graded: String,
+    url: String,
+    late: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 struct Overview {
     name: String,
     domain: String,
@@ -213,12 +250,13 @@ struct Overview {
     upcoming: Vec<Task>,
     missing: Vec<Task>,
     announcements: Vec<Announcement>,
+    /// Graded in the last three weeks, newest first (and the grade notifications).
+    recent: Vec<Grade>,
     /// From the calendar feed: due dates only (no grades, status, announcements or missing work).
     limited: bool,
+    /// "site", "token" or "feed".
+    mode: String,
     at: u64,
-    /// Graded items from the planner window (for the grade notifications).
-    #[serde(skip)]
-    graded: Vec<Task>,
 }
 
 fn iso(ms: i64) -> String {
@@ -256,7 +294,7 @@ fn parse_iso(s: &str) -> Option<i64> {
     Some(((days * 86400) + h * 3600 + mi * 60 + se) * 1000)
 }
 
-fn task_from(api: &Api, it: &Value) -> Task {
+fn task_from(domain: &str, it: &Value) -> Task {
     let p = &it["plannable"];
     let sub = &it["submissions"];
     let flag = |k: &str| sub[k].as_bool().unwrap_or(false);
@@ -266,9 +304,9 @@ fn task_from(api: &Api, it: &Value) -> Task {
         id: it["plannable_id"].as_u64().unwrap_or(0),
         title: p["title"].as_str().or(p["name"].as_str()).unwrap_or("Untitled").to_string(),
         course_id: it["course_id"].as_u64().unwrap_or(0),
-        due: p["due_at"].as_str().or(it["plannable_date"].as_str()).unwrap_or("").to_string(),
+        due: p["due_at"].as_str().or(p["todo_date"].as_str()).or(it["plannable_date"].as_str()).unwrap_or("").to_string(),
         points: p["points_possible"].as_f64(),
-        url: it["html_url"].as_str().map(|u| api.url(u)).unwrap_or_default(),
+        url: it["html_url"].as_str().map(|u| abs_url(domain, u)).unwrap_or_default(),
         submitted: flag("submitted"),
         graded: flag("graded"),
         missing: flag("missing"),
@@ -276,36 +314,126 @@ fn task_from(api: &Api, it: &Value) -> Task {
         done: it["planner_override"]["marked_complete"].as_bool().unwrap_or(false),
         all_day: false,
         override_id: it["planner_override"]["id"].as_u64(),
-        assignment_id: p["assignment_id"].as_u64().or_else(|| (it["plannable_type"] == "assignment").then(|| it["plannable_id"].as_u64()).flatten()),
     }
 }
 
-/// Text from an announcement's HTML (tags dropped, entities for the common characters).
+/// Text from an announcement's HTML: tags dropped (a block's end is a space, a <b>'s isn't, so
+/// "<b>4 pm</b>." stays "4 pm."), and entities decoded.
 fn plain(html: &str) -> String {
+    const INLINE: [&str; 14] = ["a", "b", "i", "u", "em", "strong", "span", "sub", "sup", "small", "code", "mark", "s", "font"];
     let mut out = String::new();
-    let mut tag = false;
+    let mut tag: Option<String> = None;
     for c in html.chars() {
-        match c {
-            '<' => tag = true,
-            '>' => {
-                tag = false;
-                out.push(' ');
+        match (&mut tag, c) {
+            (None, '<') => tag = Some(String::new()),
+            (Some(t), '>') => {
+                let name: String = t.trim_start_matches('/').chars().take_while(char::is_ascii_alphanumeric).collect::<String>().to_ascii_lowercase();
+                if !INLINE.contains(&name.as_str()) {
+                    out.push(' ');
+                }
+                tag = None;
             }
-            _ if !tag => out.push(c),
-            _ => {}
+            (Some(t), c) => t.push(c),
+            (None, c) => out.push(c),
         }
     }
-    let out = out.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'");
+    let out = entities(&out);
     out.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(160).collect()
 }
 
-fn token_overview(api: &Api, saved: &Saved) -> Result<Overview, String> {
-    let courses_v = api.get("/courses?enrollment_state=active&include[]=total_scores&per_page=100")?;
-    let colors = api.get("/users/self/colors").unwrap_or(Value::Null);
-    let courses: Vec<Course> = courses_v
-        .as_array()
-        .into_iter()
-        .flatten()
+/// HTML entities: numbered ones and the named ones Canvas's editor writes.
+fn entities(s: &str) -> String {
+    let named = [("nbsp", ' '), ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''), ("rsquo", '’'), ("lsquo", '‘'), ("rdquo", '”'), ("ldquo", '“'), ("ndash", '–'), ("mdash", '—'), ("hellip", '…')];
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        let end = rest.find(';').filter(|&j| j <= 10);
+        let decoded = end.and_then(|j| {
+            let name = &rest[1..j];
+            let num = name.strip_prefix("#x").or(name.strip_prefix("#X")).map(|h| u32::from_str_radix(h, 16)).or(name.strip_prefix('#').map(str::parse::<u32>));
+            match num {
+                Some(n) => n.ok().and_then(char::from_u32),
+                None => named.iter().find(|(n, _)| *n == name).map(|(_, c)| *c),
+            }
+        });
+        match (decoded, end) {
+            (Some(c), Some(j)) => {
+                out.push(c);
+                rest = &rest[j + 1..];
+            }
+            _ => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// What Canvas says, as its API words it: fetched with the token (`token_raw`), or read on the site by
+/// readers/canvas-reader.js, which asks for the same things and trims each item to what's read here.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Raw {
+    /// users/self.
+    user: Value,
+    courses: Value,
+    colors: Value,
+    planner: Value,
+    missing: Value,
+    announcements: Value,
+    /// Graded submissions with their assignment (`include[]=assignment`), each with its `course_id`.
+    graded: Value,
+    /// From the reader: parts it couldn't read (`{ "graded": "Canvas answered HTTP 500" }`).
+    errors: Value,
+}
+
+fn items(v: &Value) -> impl Iterator<Item = &Value> {
+    v.as_array().into_iter().flatten()
+}
+
+/// The planner window, missing work, announcements and recent grades: the same paths the reader
+/// asks for.
+fn token_raw(api: &Api) -> Result<Raw, String> {
+    let t = now_ms();
+    let courses = api.get("/courses?enrollment_state=active&include[]=total_scores&per_page=100")?;
+    let ids: Vec<u64> = items(&courses).filter(|c| c["name"].is_string()).filter_map(|c| c["id"].as_u64()).collect();
+    let planner = api.get(&format!("/planner/items?start_date={}&end_date={}&per_page=100", iso(t - 14 * DAY_MS), iso(t + 21 * DAY_MS)))?;
+    let codes: Vec<String> = ids.iter().map(|id| format!("context_codes[]=course_{id}")).collect();
+    let announcements = if codes.is_empty() {
+        Value::Null
+    } else {
+        api.get(&format!("/announcements?{}&start_date={}&end_date={}&per_page=20", codes.join("&"), iso(t - 21 * DAY_MS), iso(t + DAY_MS))).unwrap_or(Value::Null)
+    };
+    let mut graded = vec![];
+    for id in &ids {
+        let path = format!("/courses/{id}/students/submissions?workflow_state=graded&graded_since={}&include[]=assignment&order=graded_at&order_direction=descending&per_page=20", iso(t - 21 * DAY_MS));
+        if let Ok(Value::Array(subs)) = api.get(&path) {
+            graded.extend(subs.into_iter().filter(Value::is_object).map(|mut s| {
+                s["course_id"] = json!(id);
+                s
+            }));
+        }
+    }
+    Ok(Raw {
+        user: Value::Null,
+        colors: api.get("/users/self/colors").unwrap_or(Value::Null),
+        missing: api.get("/users/self/missing_submissions?include[]=planner_overrides&filter[]=submittable&per_page=100").unwrap_or(Value::Null),
+        courses,
+        planner,
+        announcements,
+        graded: Value::Array(graded),
+        errors: Value::Null,
+    })
+}
+
+/// The tab's overview from Canvas's answers, at time `t`.
+fn build_overview(raw: &Raw, domain: &str, name: &str, mode: &str, t: i64) -> Overview {
+    let url = |v: &Value| v.as_str().map(|u| abs_url(domain, u)).unwrap_or_default();
+    let courses: Vec<Course> = items(&raw.courses)
         .filter(|c| c["name"].is_string())
         .map(|c| {
             let id = c["id"].as_u64().unwrap_or(0);
@@ -314,25 +442,16 @@ fn token_overview(api: &Api, saved: &Saved) -> Result<Overview, String> {
                 id,
                 name: c["name"].as_str().unwrap_or("").to_string(),
                 code: c["course_code"].as_str().unwrap_or("").to_string(),
-                color: colors["custom_colors"][format!("course_{id}")].as_str().unwrap_or("").to_string(),
+                color: raw.colors["custom_colors"][format!("course_{id}")].as_str().unwrap_or("").to_string(),
                 score: e["computed_current_score"].as_f64(),
                 grade: e["computed_current_grade"].as_str().unwrap_or("").to_string(),
-                url: api.url(&format!("/courses/{id}")),
+                url: abs_url(domain, &format!("/courses/{id}")),
             }
         })
         .collect();
-    let t = now_ms();
-    let items = api.get(&format!("/planner/items?start_date={}&end_date={}&per_page=100", iso(t - 14 * 86_400_000), iso(t + 21 * 86_400_000)))?;
-    let all: Vec<Task> = items.as_array().into_iter().flatten().map(|it| task_from(api, it)).collect();
-    let mut upcoming: Vec<Task> = all.iter().filter(|x| parse_iso(&x.due).is_some_and(|d| d >= t - 3_600_000)).cloned().collect();
+    let mut upcoming: Vec<Task> = items(&raw.planner).map(|it| task_from(domain, it)).filter(|x| parse_iso(&x.due).is_some_and(|d| d >= t - 3_600_000)).collect();
     upcoming.sort_by_key(|x| parse_iso(&x.due).unwrap_or(0));
-    let graded: Vec<Task> = all.iter().filter(|x| x.graded).cloned().collect();
-    let missing: Vec<Task> = api
-        .get("/users/self/missing_submissions?include[]=planner_overrides&filter[]=submittable&per_page=100")
-        .unwrap_or(Value::Null)
-        .as_array()
-        .into_iter()
-        .flatten()
+    let missing: Vec<Task> = items(&raw.missing)
         .filter(|a| a["planner_override"]["marked_complete"].as_bool() != Some(true))
         .map(|a| Task {
             key: format!("assignment:{}", a["id"].as_u64().unwrap_or(0)),
@@ -342,32 +461,55 @@ fn token_overview(api: &Api, saved: &Saved) -> Result<Overview, String> {
             course_id: a["course_id"].as_u64().unwrap_or(0),
             due: a["due_at"].as_str().unwrap_or("").to_string(),
             points: a["points_possible"].as_f64(),
-            url: a["html_url"].as_str().map(|u| api.url(u)).unwrap_or_default(),
+            url: url(&a["html_url"]),
             missing: true,
             override_id: a["planner_override"]["id"].as_u64(),
             ..Default::default()
         })
         .collect();
-    let codes: Vec<String> = courses.iter().map(|c| format!("context_codes[]=course_{}", c.id)).collect();
-    let announcements: Vec<Announcement> = if codes.is_empty() {
-        vec![]
-    } else {
-        api.get(&format!("/announcements?{}&start_date={}&end_date={}&per_page=20", codes.join("&"), iso(t - 21 * 86_400_000), iso(t + 86_400_000)))
-            .unwrap_or(Value::Null)
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|a| Announcement {
-                id: a["id"].as_u64().unwrap_or(0),
-                title: a["title"].as_str().unwrap_or("").to_string(),
-                course_id: a["context_code"].as_str().and_then(|c| c.trim_start_matches("course_").parse().ok()).unwrap_or(0),
-                posted: a["posted_at"].as_str().unwrap_or("").to_string(),
-                url: a["html_url"].as_str().map(|u| api.url(u)).unwrap_or_default(),
-                preview: plain(a["message"].as_str().unwrap_or("")),
-            })
-            .collect()
-    };
-    Ok(Overview { name: saved.name.clone(), domain: api.domain.clone(), courses, upcoming, missing, announcements, limited: false, at: now_ms() as u64, graded })
+    let announcements: Vec<Announcement> = items(&raw.announcements)
+        .map(|a| Announcement {
+            id: a["id"].as_u64().unwrap_or(0),
+            title: a["title"].as_str().unwrap_or("").to_string(),
+            course_id: a["context_code"].as_str().and_then(|c| c.trim_start_matches("course_").parse().ok()).unwrap_or(0),
+            posted: a["posted_at"].as_str().unwrap_or("").to_string(),
+            url: url(&a["html_url"]),
+            preview: plain(a["message"].as_str().unwrap_or("")),
+        })
+        .collect();
+    // Only grades the student can see: Canvas leaves the score and grade out until they're posted.
+    let mut recent: Vec<Grade> = items(&raw.graded)
+        .filter(|s| s["excused"] != true && (s["score"].is_number() || s["grade"].is_string()))
+        .map(|s| {
+            let a = &s["assignment"];
+            Grade {
+                id: s["assignment_id"].as_u64().or(a["id"].as_u64()).unwrap_or(0),
+                title: a["name"].as_str().unwrap_or("Untitled").to_string(),
+                course_id: s["course_id"].as_u64().or(a["course_id"].as_u64()).unwrap_or(0),
+                score: s["score"].as_f64(),
+                points: a["points_possible"].as_f64(),
+                grade: s["grade"].as_str().unwrap_or("").to_string(),
+                graded: s["graded_at"].as_str().unwrap_or("").to_string(),
+                url: url(&a["html_url"]),
+                late: s["late"].as_bool().unwrap_or(false),
+            }
+        })
+        .collect();
+    recent.sort_by(|a, b| b.graded.cmp(&a.graded));
+    recent.truncate(20);
+    let me = raw.user["short_name"].as_str().or(raw.user["name"].as_str()).unwrap_or("");
+    Overview {
+        name: if name.is_empty() { me.to_string() } else { name.to_string() },
+        domain: domain.to_string(),
+        courses,
+        upcoming,
+        missing,
+        announcements,
+        recent,
+        limited: false,
+        mode: mode.into(),
+        at: t as u64,
+    }
 }
 
 // ---------- calendar feed ----------
@@ -469,12 +611,12 @@ fn feed_overview(dir: &Path, saved: &Saved) -> Result<Overview, String> {
         let (title, course) = split_course(&ev.summary);
         let cid = if course.is_empty() { 0 } else { course_id(&course) };
         // Courses with anything from a month back to two months ahead count as current.
-        if cid != 0 && start > t - 30 * 86_400_000 && start < t + 60 * 86_400_000 && !courses.iter().any(|c| c.id == cid) {
+        if cid != 0 && start > t - 30 * DAY_MS && start < t + 60 * DAY_MS && !courses.iter().any(|c| c.id == cid) {
             courses.push(Course { id: cid, name: course.clone(), code: course.clone(), url: format!("https://{}/calendar", saved.domain), ..Default::default() });
         }
         // All-day events stay listed through their day.
-        let shown_from = if all_day { t - 86_400_000 } else { t - 3_600_000 };
-        if start < shown_from || start > t + 21 * 86_400_000 {
+        let shown_from = if all_day { t - DAY_MS } else { t - 3_600_000 };
+        if start < shown_from || start > t + 21 * DAY_MS {
             continue;
         }
         let key = ev.uid.clone();
@@ -492,7 +634,7 @@ fn feed_overview(dir: &Path, saved: &Saved) -> Result<Overview, String> {
     }
     upcoming.sort_by_key(|x| parse_iso(&x.due).unwrap_or(0));
     courses.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(Overview { name: saved.name.clone(), domain: saved.domain.clone(), courses, upcoming, limited: true, at: now_ms() as u64, ..Default::default() })
+    Ok(Overview { name: saved.name.clone(), domain: saved.domain.clone(), courses, upcoming, limited: true, mode: "feed".into(), at: now_ms() as u64, ..Default::default() })
 }
 
 /// The overview's due dates as calendar events: coloured by course, the course as their place.
@@ -528,6 +670,10 @@ fn calendar_events(o: &Overview) -> Vec<CalendarEvent> {
 struct Seen {
     #[serde(default)]
     started: bool,
+    /// 2 since grades are kept by assignment ("assignment:<id>", from what was graded lately);
+    /// before, by planner item.
+    #[serde(default)]
+    v: u32,
     #[serde(default)]
     announcements: Vec<u64>,
     #[serde(default)]
@@ -545,9 +691,13 @@ fn keep_last<T>(v: &mut Vec<T>, n: usize) {
     }
 }
 
+/// One check at a time: a read the UI brings in and the tick may overlap.
+static NOTICES: Mutex<()> = Mutex::new(());
+
 /// What's worth a notification since the last check. The first check only remembers what's there,
 /// so connecting Canvas doesn't set off a pile of old news.
-fn notices(dir: &Path, o: &Overview, api: Option<&Api>, t: i64) -> Vec<Notify> {
+fn notices(dir: &Path, o: &Overview, t: i64) -> Vec<Notify> {
+    let _one = NOTICES.lock().unwrap_or_else(|e| e.into_inner());
     let path = dir.join("canvas-seen.json");
     let mut seen: Seen = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     let course = |id: u64| o.courses.iter().find(|c| c.id == id).map(|c| if c.code.is_empty() { c.name.clone() } else { c.code.clone() }).unwrap_or_default();
@@ -569,24 +719,23 @@ fn notices(dir: &Path, o: &Overview, api: Option<&Api>, t: i64) -> Vec<Notify> {
             out.push(note(course(a.course_id), a.title.clone(), false));
         }
     }
-    for g in &o.graded {
-        let key = format!("{}:{}", g.kind, g.id);
+    // Grades seen before v2 were kept another way: the first check since only takes note of them.
+    let quiet = seen.v < 2;
+    for g in &o.recent {
+        let key = format!("assignment:{}", g.id);
         if seen.graded.contains(&key) {
             continue;
         }
         seen.graded.push(key);
-        let mut body = g.title.clone();
-        if seen.started {
-            if let (Some(aid), Some(api)) = (g.assignment_id, api) {
-                if let Ok(s) = api.get(&format!("/courses/{}/assignments/{aid}/submissions/self", g.course_id)) {
-                    match (s["score"].as_f64(), g.points) {
-                        (Some(sc), Some(p)) if p > 0.0 => body = format!("{} · {sc}/{p}", g.title),
-                        (Some(sc), _) => body = format!("{} · {sc}", g.title),
-                        _ => {}
-                    }
-                }
-            }
+        if quiet {
+            continue;
         }
+        let body = match (g.score, g.points) {
+            (Some(sc), Some(p)) if p > 0.0 => format!("{} · {sc}/{p}", g.title),
+            (Some(sc), _) => format!("{} · {sc}", g.title),
+            _ if !g.grade.is_empty() => format!("{} · {}", g.title, g.grade),
+            _ => g.title.clone(),
+        };
         out.push(note(format!("Graded · {}", course(g.course_id)), body, false));
     }
     // From the feed: assignments posted since the last check (Canvas can't say more without a token).
@@ -613,6 +762,7 @@ fn notices(dir: &Path, o: &Overview, api: Option<&Api>, t: i64) -> Vec<Notify> {
     }
     let first = !seen.started;
     seen.started = true;
+    seen.v = 2;
     keep_last(&mut seen.announcements, 300);
     keep_last(&mut seen.graded, 500);
     keep_last(&mut seen.reminded, 300);
@@ -627,11 +777,27 @@ fn notices(dir: &Path, o: &Overview, api: Option<&Api>, t: i64) -> Vec<Notify> {
     }
 }
 
+/// Shows notifications one at a time a few seconds apart, so each gets read (at most four).
+fn deliver(host: &Host, notes: Vec<Notify>) {
+    if notes.is_empty() {
+        return;
+    }
+    let host = host.clone();
+    std::thread::spawn(move || {
+        for (i, n) in notes.into_iter().take(4).enumerate() {
+            if i > 0 {
+                std::thread::sleep(Duration::from_secs(7));
+            }
+            host.notify(n);
+        }
+    });
+}
+
 // ---------- the module ----------
 
 #[derive(Default)]
 struct Canvas {
-    /// The last overview, re-read at most once a minute.
+    /// The last overview, re-read at most once a minute (signed in on the site: the last read).
     overview: Mutex<Option<(Instant, Overview)>>,
 }
 
@@ -640,9 +806,35 @@ impl Canvas {
         host.data_dir()
     }
 
+    /// The last read from the site, kept between runs of the backend.
+    fn snapshot_path(host: &Host) -> PathBuf {
+        host.cache_dir().join("overview.json")
+    }
+
+    fn snapshot(&self, host: &Host) -> Option<Overview> {
+        if let Some((_, o)) = self.overview.lock().unwrap().as_ref() {
+            return Some(o.clone());
+        }
+        let o: Overview = std::fs::read(Self::snapshot_path(host)).ok().and_then(|b| serde_json::from_slice(&b).ok())?;
+        *self.overview.lock().unwrap() = Some((Instant::now(), o.clone()));
+        Some(o)
+    }
+
+    fn keep(&self, host: &Host, o: &Overview) {
+        let path = Self::snapshot_path(host);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(b) = serde_json::to_vec(o) {
+            let _ = std::fs::write(path, b);
+        }
+        *self.overview.lock().unwrap() = Some((Instant::now(), o.clone()));
+    }
+
     /// After (re)linking: the first check should only take note of what's there.
-    fn linked(&self, dir: &Path) {
-        let _ = std::fs::remove_file(dir.join("canvas-seen.json"));
+    fn linked(&self, host: &Host) {
+        let _ = std::fs::remove_file(Self::dir(host).join("canvas-seen.json"));
+        let _ = std::fs::remove_file(Self::snapshot_path(host));
         *self.overview.lock().unwrap() = None;
     }
 
@@ -667,10 +859,11 @@ impl Canvas {
         saved.domain = domain;
         saved.token = protect(&token);
         saved.feed.clear();
+        saved.site = false;
         saved.name = me["short_name"].as_str().or(me["name"].as_str()).unwrap_or("").to_string();
         save(&dir, &saved);
         host.info(format!("linked {} with a token", saved.domain));
-        self.linked(&dir);
+        self.linked(host);
         Ok(status(&dir))
     }
 
@@ -689,10 +882,36 @@ impl Canvas {
             }
         };
         let name = text.lines().find_map(|l| l.strip_prefix("X-WR-CALNAME:")).unwrap_or("").replace(" Calendar (Canvas)", "").trim().to_string();
-        let saved = Saved { domain: clean_domain(&feed).unwrap_or_default(), token: String::new(), feed: protect(&feed), name };
+        let saved = Saved { domain: clean_domain(&feed).unwrap_or_default(), feed: protect(&feed), name, ..Default::default() };
         save(&dir, &saved);
         host.info(format!("linked {} with its calendar feed", saved.domain));
-        self.linked(&dir);
+        self.linked(host);
+        Ok(status(&dir))
+    }
+
+    /// Links Canvas through the docked site: just the address, nothing secret. Its API answers a
+    /// stranger (this backend has no sign-in) with 401, so a typo doesn't get as far as signing in;
+    /// a school that puts its own sign-in in front gets the benefit of the doubt.
+    fn configure_site(&self, host: &Host, domain: &str) -> Result<Status, String> {
+        let dir = Self::dir(host);
+        let domain = clean_domain(domain).ok_or("That doesn't look like a web address (e.g. school.instructure.com).")?;
+        let previous = load(&dir);
+        let _ = std::fs::write(dir.join("settings.json"), json!({ "domain": domain }).to_string());
+        let check = Request::get(&format!("https://{domain}/api/v1/users/self")).header("Accept", "application/json").send();
+        let refused = match check {
+            Ok(r) if r.status == 404 => Some(format!("{domain} doesn't look like a Canvas address.")),
+            Ok(_) => None,
+            Err(e) => Some(e),
+        };
+        if let Some(e) = refused {
+            save(&dir, &previous);
+            return Err(e);
+        }
+        let name = if previous.domain == domain { previous.name } else { String::new() };
+        let saved = Saved { domain, name, site: true, ..Default::default() };
+        save(&dir, &saved);
+        host.info(format!("linked {} through its docked site", saved.domain));
+        self.linked(host);
         Ok(status(&dir))
     }
 
@@ -700,33 +919,80 @@ impl Canvas {
         let dir = Self::dir(host);
         save(&dir, &Saved::default());
         let _ = std::fs::remove_file(dir.join("canvas-done.json"));
-        self.linked(&dir);
+        self.linked(host);
         host.calendar("canvas", vec![]);
     }
 
     /// Everything for the tab, re-read at most once a minute (or now, with `fresh`). Each read also
-    /// refreshes the calendar's Canvas due dates.
-    fn overview(&self, host: &Host, fresh: bool) -> Result<Overview, String> {
+    /// refreshes the calendar's Canvas due dates. Signed in on the site, it's the last read (None
+    /// before the first), which only `ingest` renews.
+    fn overview(&self, host: &Host, fresh: bool) -> Result<Option<Overview>, String> {
+        let dir = Self::dir(host);
+        let saved = load(&dir);
+        if saved.site {
+            return Ok(self.snapshot(host));
+        }
         if !fresh {
             if let Some((at, o)) = self.overview.lock().unwrap().as_ref() {
                 if at.elapsed() < Duration::from_secs(60) {
-                    return Ok(o.clone());
+                    return Ok(Some(o.clone()));
                 }
             }
         }
-        let dir = Self::dir(host);
-        let saved = load(&dir);
-        let o = if !saved.feed.is_empty() { feed_overview(&dir, &saved)? } else { token_overview(&Api::from(&dir)?, &saved)? };
+        let o = if !saved.feed.is_empty() {
+            feed_overview(&dir, &saved)?
+        } else {
+            let api = Api::from(&dir)?;
+            build_overview(&token_raw(&api)?, &api.domain, &saved.name, "token", now_ms())
+        };
         *self.overview.lock().unwrap() = Some((Instant::now(), o.clone()));
         host.calendar("canvas", calendar_events(&o));
+        Ok(Some(o))
+    }
+
+    /// What the reader brought back from the site (ui/canvas.js runs it): the overview, kept until
+    /// the next read, the calendar's due dates, and whatever's new as notifications.
+    fn ingest(&self, host: &Host, data: Value) -> Result<Overview, String> {
+        let dir = Self::dir(host);
+        let mut saved = load(&dir);
+        if !saved.site {
+            return Err("Canvas is set up another way now.".into());
+        }
+        if data["signedIn"] != true {
+            return Err("Sign in to Canvas in the Command Center first.".into());
+        }
+        let raw: Raw = serde_json::from_value(data).map_err(|e| format!("Couldn't make sense of what Canvas sent: {e}"))?;
+        for (part, why) in raw.errors.as_object().into_iter().flatten() {
+            host.warn(format!("couldn't read {part}: {}", why.as_str().unwrap_or("")));
+        }
+        let me = raw.user["short_name"].as_str().or(raw.user["name"].as_str()).unwrap_or("").to_string();
+        if !me.is_empty() && me != saved.name {
+            saved.name = me;
+            save(&dir, &saved);
+        }
+        let o = build_overview(&raw, &saved.domain, &saved.name, "site", now_ms());
+        self.keep(host, &o);
+        host.calendar("canvas", calendar_events(&o));
+        deliver(host, notices(&dir, &o, now_ms()));
         Ok(o)
     }
 
     /// Ticks an item off (or back on): in Canvas's planner, like the checkbox in the Canvas app; with
-    /// the calendar feed (which can't be written to), on this PC.
+    /// the calendar feed (which can't be written to), on this PC. Signed in on the site, the reader has
+    /// already ticked it in Canvas, and this keeps the last read in step until the next one.
     fn set_done(&self, host: &Host, key: &str, kind: &str, id: u64, override_id: Option<u64>, done: bool) -> Result<Option<u64>, String> {
         let dir = Self::dir(host);
-        if !load(&dir).feed.is_empty() {
+        let saved = load(&dir);
+        if saved.site {
+            let mut o = self.snapshot(host).ok_or("Canvas hasn't been read yet.")?;
+            for t in o.upcoming.iter_mut().chain(o.missing.iter_mut()).filter(|t| t.key == key) {
+                t.done = done;
+                t.override_id = override_id.or(t.override_id);
+            }
+            self.keep(host, &o);
+            return Ok(override_id);
+        }
+        if !saved.feed.is_empty() {
             let mut keys = local_done(&dir);
             keys.retain(|k| k != key);
             if done {
@@ -777,7 +1043,9 @@ impl Module for Canvas {
             "status" => Ok(to(&status(&Self::dir(host)))),
             "configure" => self.configure(host, params["domain"].as_str().unwrap_or(""), params["token"].as_str().unwrap_or("")).map(|s| to(&s)).map_err(failed),
             "configure_feed" => self.configure_feed(host, params["url"].as_str().unwrap_or("")).map(|s| to(&s)).map_err(failed),
+            "configure_site" => self.configure_site(host, params["domain"].as_str().unwrap_or("")).map(|s| to(&s)).map_err(failed),
             "overview" => self.overview(host, false).map(|o| to(&o)).map_err(failed),
+            "ingest" => self.ingest(host, params["data"].clone()).map(|o| to(&o)).map_err(failed),
             "done" => {
                 let p = &params;
                 self.set_done(host, p["key"].as_str().unwrap_or(""), p["kind"].as_str().unwrap_or(""), p["id"].as_u64().unwrap_or(0), p["override_id"].as_u64(), p["done"].as_bool().unwrap_or(false))
@@ -792,20 +1060,24 @@ impl Module for Canvas {
         }
     }
 
-    /// Every 10 minutes: a fresh read (which also refreshes the calendar) and its notifications,
-    /// one at a time a few seconds apart, so each gets read.
+    /// Every 10 minutes: a fresh read (which also refreshes the calendar) and its notifications.
+    /// Signed in on the site, the UI does the reading: this asks it to, and gives the due-soon
+    /// reminders from the last read (they come due whether or not Canvas could be read).
     fn tick(&self, host: &Host) -> Result<(), RpcError> {
         let dir = Self::dir(host);
         if !status(&dir).configured {
             return Ok(());
         }
-        let o = self.overview(host, true).map_err(RpcError::failed)?;
-        let api = Api::from(&dir).ok();
-        for (i, n) in notices(&dir, &o, api.as_ref(), now_ms()).into_iter().take(4).enumerate() {
-            if i > 0 {
-                std::thread::sleep(Duration::from_secs(7));
+        if load(&dir).site {
+            host.emit("read", json!({}));
+            if let Some(o) = self.snapshot(host) {
+                host.calendar("canvas", calendar_events(&o));
+                deliver(host, notices(&dir, &o, now_ms()));
             }
-            host.notify(n);
+            return Ok(());
+        }
+        if let Some(o) = self.overview(host, true).map_err(RpcError::failed)? {
+            deliver(host, notices(&dir, &o, now_ms()));
         }
         Ok(())
     }
@@ -865,6 +1137,64 @@ mod tests {
     #[test]
     fn announcement_text() {
         assert_eq!(plain("<p>Exam moved to <b>Friday</b>&nbsp;&amp; bring a pencil</p>"), "Exam moved to Friday & bring a pencil");
+        assert_eq!(plain("<p>Room 104 at <strong>4 pm</strong>.</p><p>Don&rsquo;t be late &#8212; or &#x2014; &bogus; R&D</p>"), "Room 104 at 4 pm. Don’t be late — or — &bogus; R&D");
+        assert_eq!(plain("line<br>break<br/>here"), "line break here");
+    }
+
+    /// What readers/canvas-reader.js answered for the stand-in Canvas in dev/tests/canvas-reader.test.js.
+    const READ: &str = include_str!("testdata/read.json");
+
+    #[test]
+    fn the_tab_from_what_the_reader_read() {
+        let raw: Raw = serde_json::from_str(READ).unwrap();
+        let t = parse_iso("2026-10-24T13:41:00Z").unwrap();
+        let o = build_overview(&raw, "school.example.edu", "", "site", t);
+        assert_eq!((o.name.as_str(), o.mode.as_str(), o.limited), ("Sam", "site", false));
+        // The courses Canvas names (not the one it won't), with their colors and current grades.
+        let courses: Vec<_> = o.courses.iter().map(|c| (c.code.as_str(), c.color.as_str(), c.score, c.grade.as_str())).collect();
+        assert_eq!(courses, [("EE 101", "#4f8cf7", Some(92.4), "A-"), ("MATH 201", "#e8704a", Some(88.0), "B+")]);
+        // The planner in order, ticks and submissions included; a to-do's date is its to-do date.
+        let up: Vec<_> = o.upcoming.iter().map(|x| (x.key.as_str(), x.due.as_str(), x.submitted, x.done)).collect();
+        assert_eq!(up, [("assignment:11", "2026-10-25T03:59:00Z", false, false), ("quiz:12", "2026-10-26T15:00:00Z", true, true), ("planner_note:5", "2026-10-27T16:00:00Z", false, false)]);
+        assert_eq!(o.upcoming[0].url, "https://school.example.edu/courses/1/assignments/11");
+        assert_eq!((o.upcoming[0].points, o.upcoming[1].override_id), (Some(20.0), Some(900)));
+        assert_eq!(o.missing.iter().map(|x| (x.key.as_str(), x.missing, x.course_id)).collect::<Vec<_>>(), [("assignment:9", true, 1)]);
+        assert_eq!((o.announcements[0].course_id, o.announcements[0].preview.as_str()), (2, "The review session is now in room 104 at 4 pm."));
+        // Only grades the student can see: the unposted one has no score yet.
+        let recent: Vec<_> = o.recent.iter().map(|g| (g.id, g.title.as_str(), g.course_id, g.score, g.points, g.graded.as_str())).collect();
+        assert_eq!(recent, [(8, "Lab 3: Convolution", 1, Some(27.0), Some(30.0), "2026-10-23T20:15:00Z")]);
+        // Kept between reads as JSON, and read back the same.
+        let again: Overview = serde_json::from_slice(&serde_json::to_vec(&o).unwrap()).unwrap();
+        assert_eq!(serde_json::to_value(&again).unwrap(), serde_json::to_value(&o).unwrap());
+        // The token's answers are the same shape, without the reader's trimming or its user.
+        let mut raw2: Raw = serde_json::from_str(READ).unwrap();
+        raw2.user = Value::Null;
+        assert_eq!(build_overview(&raw2, "school.example.edu", "Student", "token", t).name, "Student");
+    }
+
+    #[test]
+    fn new_grades_come_with_their_score() {
+        let dir = std::env::temp_dir().join(format!("canvas-grades-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let t = parse_iso("2026-10-26T12:00:00Z").unwrap();
+        let grade = |id: u64, title: &str, score: Option<f64>, grade: &str| Grade { id, title: title.into(), course_id: 1, score, points: Some(20.0), grade: grade.into(), ..Default::default() };
+        let mut o = Overview {
+            courses: vec![Course { id: 1, name: "Signals".into(), code: "EE 101".into(), ..Default::default() }],
+            recent: vec![grade(8, "Lab 3", Some(27.0), "27")],
+            ..Default::default()
+        };
+        assert!(notices(&dir, &o, t).is_empty());
+        o.recent.insert(0, grade(10, "Problem set 3", Some(18.5), "18.5"));
+        o.recent.insert(0, grade(11, "Reflection", None, "complete"));
+        let n = notices(&dir, &o, t);
+        assert_eq!(n.iter().map(|n| (n.title.as_str(), n.body.as_str())).collect::<Vec<_>>(), [("Graded · EE 101", "Reflection · complete"), ("Graded · EE 101", "Problem set 3 · 18.5/20")]);
+        assert!(notices(&dir, &o, t).is_empty());
+        // Grades seen before the update were kept by planner item: the first check after it is quiet.
+        std::fs::write(dir.join("canvas-seen.json"), r#"{"started":true,"graded":["quiz:12"]}"#).unwrap();
+        assert!(notices(&dir, &o, t).is_empty());
+        o.recent.insert(0, grade(12, "Lab 5", Some(20.0), "20"));
+        assert_eq!(notices(&dir, &o, t).len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -895,14 +1225,14 @@ mod tests {
             upcoming: vec![Task { key: "assignment:9".into(), title: "Quiz".into(), due: iso(t + 3_600_000), ..Default::default() }],
             ..Default::default()
         };
-        assert!(notices(&dir, &o, None, t).is_empty());
+        assert!(notices(&dir, &o, t).is_empty());
         // Next time: only what's new, and a due-soon reminder once.
         o.announcements.push(Announcement { id: 2, title: "Exam moved".into(), ..Default::default() });
         o.upcoming.push(Task { key: "assignment:10".into(), title: "Lab".into(), due: iso(t + 7_200_000), ..Default::default() });
-        let n = notices(&dir, &o, None, t);
+        let n = notices(&dir, &o, t);
         assert_eq!(n.iter().map(|n| n.body.as_str()).collect::<Vec<_>>(), ["Exam moved", "Lab"]);
         assert!(!n[0].urgent && n[1].urgent && n[1].title.starts_with("Due in 2h 0m"));
-        assert!(notices(&dir, &o, None, t).is_empty());
+        assert!(notices(&dir, &o, t).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

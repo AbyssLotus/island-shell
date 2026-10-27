@@ -56,9 +56,15 @@
     },
     mod_call: ({ id, method }) => {
       const k = `mod:${id}.${method}`;
-      if (k in fixtures) return structuredClone(fixtures[k]);
-      throw { code: -32601, message: `${id} has no ${method} in the harness fixtures` };
+      if (!(k in fixtures)) throw { code: -32601, message: `${id} has no ${method} in the harness fixtures` };
+      // `"at": "now"` in a fixture is the time of the call (Canvas's "read just now").
+      const v = structuredClone(fixtures[k]);
+      if (v && v.at === 'now') v.at = Date.now();
+      return v;
     },
+    // A docked site's reader: "mod_site_read" is what it reads (Canvas's own answers), after a moment,
+    // like the hidden copy of the site takes; anything else it's asked to do just works.
+    mod_site_read: ({ args }) => new Promise(done => setTimeout(() => done(args && args.action !== 'read' ? { id: 901 } : structuredClone(fixtures.mod_site_read ?? { signedIn: false })), 900)),
     log: ({ msg }) => { console.debug('[page log]', msg); return null; },
   };
 
