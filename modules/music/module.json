@@ -1,9 +1,9 @@
 {
   "id": "music",
   "name": "Music",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
-  "description": "What's playing in Apple Music, Spotify or any player Windows knows: artwork and controls on the island, time-synced lyrics, and the Music tab and sheet. Apple Music gets seek, shuffle, repeat and favorite.",
+  "description": "What's playing in Apple Music, Spotify, Amazon Music, YouTube Music or any player Windows knows: artwork and controls on the island, time-synced lyrics, and the Music tab and sheet. Apple Music gets seek, shuffle, repeat and favorite.",
   "icon": "ui/icon.svg",
   "backend": { "exe": "music-module.exe", "run": "always" },
   "ui": { "entry": "ui/music.js", "css": ["ui/music.css"], "eager": true },
@@ -19,5 +19,5 @@
     "Apple's iTunes Search, for the Music sheet's cover, year and genre: title, artist and album"
   ],
   "hosts": ["lrclib.net", "itunes.apple.com"],
-  "keywords": ["music", "lyrics", "apple music", "spotify", "now playing", "song", "album", "play", "pause", "next track", "shuffle", "repeat"]
+  "keywords": ["music", "lyrics", "apple music", "spotify", "amazon music", "youtube music", "ytm", "now playing", "song", "album", "play", "pause", "next track", "shuffle", "repeat"]
 }

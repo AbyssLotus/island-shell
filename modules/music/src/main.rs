@@ -3,6 +3,8 @@
 //! island draws on its pill, peek, Controls card and top bar).
 //!
 //! - media.rs: what's playing, through Windows' system media controls, in any player Windows knows.
+//!   players.rs: which player that is (Apple Music, Spotify, Amazon Music, YouTube Music, a
+//!   browser…), what to call it and where its sound comes from.
 //! - applemusic.rs: Apple Music's own player bar through UI Automation (seek, shuffle, repeat,
 //!   favorite and the quality badge).
 //! - lyrics.rs: time-synced lyrics from LRCLIB. info.rs: the sheet's cover, year and genre from
@@ -20,6 +22,8 @@
 
 mod info;
 mod lyrics;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod players;
 
 #[cfg(windows)]
 mod applemusic;
