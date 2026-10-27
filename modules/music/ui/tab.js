@@ -76,7 +76,7 @@ export function createTab(core) {
     badge.hidden = !(m && m.badge);
     if (m && m.badge) txt(badge, m.badge);
     txt($('#title'), m ? m.title || 'Unknown title' : 'Nothing playing');
-    txt($('#artist'), m ? m.artist || m.app : 'Play something in Apple Music or Spotify');
+    txt($('#artist'), m ? m.artist || m.app : 'Play something in Apple Music, Spotify, Amazon Music or YouTube Music');
     txt($('#album'), m && m.album ? m.album : '');
     if (what === 'song') { const el = $('#title'); el.classList.remove('new'); void el.offsetWidth; el.classList.add('new'); }
     // Shuffle and repeat keep their place (hidden but still taking space) so play stays centered.

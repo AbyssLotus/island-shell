@@ -2,9 +2,12 @@
 //! (Moved from the island's base into the Music module; bringing the player forward is the
 //! island's job, since it's the one in front when you ask.)
 //!
+//! Which player a session is (Apple Music, Spotify, Amazon Music, YouTube Music, a browser…) is
+//! players.rs, from its app id and the name Windows has for the app.
+//!
 //! Apple Music gets extra treatment: its album is split out of the artist field, and seeking,
 //! shuffle, repeat, favorite and the quality badge come from its own player bar (applemusic.rs).
-//! Spotify and everything else get whatever their media session supports.
+//! Everything else gets whatever its media session supports.
 
 use serde::Serialize;
 use windows::Media::Control::{
@@ -16,6 +19,7 @@ use windows::Media::MediaPlaybackAutoRepeatMode as RepeatMode;
 use windows::Storage::Streams::DataReader;
 
 use crate::applemusic::{self, Cmd};
+use crate::players::{self, Player};
 
 /// A media session, for the source switcher.
 #[derive(Serialize, Clone, Default)]
@@ -34,7 +38,7 @@ pub struct MediaInfo {
     pub app: String,
     /// The session's app id (AUMID).
     pub id: String,
-    /// "apple", "spotify" or "other".
+    /// "apple", "spotify", "amazon", "youtube", "browser" or "other" (players.rs).
     pub source: String,
     pub playing: bool,
     pub position: f64,
@@ -56,7 +60,7 @@ pub struct MediaInfo {
     pub pinned: bool,
     pub sessions: Vec<SessionInfo>,
     pub key: String,
-    /// Process image name(s) of the player, `|`-separated, for its volume and level meter (see `exe_for`).
+    /// Process image name(s) of the player, `|`-separated, for its volume and level meter (players.rs).
     pub exe: String,
     /// Apple Music's main window, to bring it forward (0 otherwise).
     pub hwnd: isize,
@@ -75,43 +79,22 @@ fn id_of(s: &Session) -> String {
     s.SourceAppUserModelId().map(|h| h.to_string()).unwrap_or_default()
 }
 
-pub fn source_of(id: &str) -> &'static str {
-    let l = id.to_lowercase();
-    if l.contains("applemusic") {
-        "apple"
-    } else if l.contains("spotify") {
-        "spotify"
-    } else {
-        "other"
-    }
+/// The player behind a session's app id (players.rs), with the name Windows has for the app.
+pub fn player(id: &str) -> Player {
+    players::identify(id, display_name(id).as_deref())
+}
+
+fn source_of(id: &str) -> &'static str {
+    player(id).source
 }
 
 fn is_playing(s: &Session) -> bool {
     s.GetPlaybackInfo().and_then(|i| i.PlaybackStatus()).is_ok_and(|st| st == PlaybackStatus::Playing)
 }
 
-/// The player's process image name(s), `|`-separated, for finding its audio sessions.
-fn exe_for(id: &str) -> String {
-    if source_of(id) == "apple" {
-        // Apple Music plays through its background agent, not the app window's process.
-        return "amplibraryagent.exe|applemusic.exe".into();
-    }
-    let l = id.to_lowercase();
-    if l.ends_with(".exe") {
-        return l.rsplit('\\').next().unwrap_or(&l).to_string();
-    }
-    match l.as_str() {
-        "chrome" => "chrome.exe".into(),
-        "msedge" => "msedge.exe".into(),
-        "308046b0af4a39cb" => "firefox.exe".into(),
-        _ if l.contains("spotify") => "spotify.exe".into(),
-        _ => String::new(),
-    }
-}
-
 /// The session to show: the one the user picked, otherwise whatever is playing (Apple Music first,
-/// then Spotify, then anything else), otherwise a paused Apple Music or Spotify, otherwise
-/// whatever Windows considers current.
+/// then the other music apps, other players, and browsers last), otherwise a paused one in that
+/// order, otherwise whatever Windows considers current.
 fn pick(mgr: &Manager, preferred: &str) -> Option<Session> {
     let sessions: Vec<Session> = mgr.GetSessions().ok()?.into_iter().collect();
     if !preferred.is_empty() {
@@ -120,21 +103,17 @@ fn pick(mgr: &Manager, preferred: &str) -> Option<Session> {
         }
     }
     let current = mgr.GetCurrentSession().ok().map(|s| id_of(&s));
-    let rank = |id: &str| match source_of(id) {
-        "apple" => 0,
-        "spotify" => 1,
-        _ => 2,
-    };
     sessions.into_iter().min_by_key(|s| {
         let id = id_of(s);
-        (!is_playing(s), rank(&id), current.as_deref() != Some(id.as_str()))
+        (!is_playing(s), player(&id).rank, current.as_deref() != Some(id.as_str()))
     })
 }
 
 pub fn snapshot(mgr: &Manager, preferred: &str) -> Option<MediaInfo> {
     let s = pick(mgr, preferred)?;
     let id = id_of(&s);
-    let source = source_of(&id);
+    let who = player(&id);
+    let source = who.source;
     let props = s.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
     let title = props.Title().map(|h| h.to_string()).unwrap_or_default();
     let mut artist = props.Artist().map(|h| h.to_string()).unwrap_or_default();
@@ -210,14 +189,14 @@ pub fn snapshot(mgr: &Manager, preferred: &str) -> Option<MediaInfo> {
                         .and_then(|p| p.Title())
                         .map(|h| h.to_string())
                         .unwrap_or_default();
-                    SessionInfo { app: friendly_app(&oid), playing: is_playing(&o), id: oid, title }
+                    SessionInfo { app: player(&oid).name, playing: is_playing(&o), id: oid, title }
                 })
                 .collect()
         })
         .unwrap_or_default();
-    m.app = friendly_app(&id);
     m.key = format!("{id}|{title}|{artist}");
-    m.exe = exe_for(&id);
+    m.app = who.name;
+    m.exe = who.exe;
     m.pinned = !preferred.is_empty() && preferred == id;
     m.source = source.to_string();
     m.sampled_at = crate::now_ms();
@@ -332,50 +311,29 @@ fn hashed_app_name(id: &str) -> Option<String> {
     found
 }
 
-/// Turns an app id such as `Spotify.exe` or `SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify` into a name.
-fn friendly_app(id: &str) -> String {
-    if let Some(n) = hashed_app_name(id) {
-        return n;
+/// The name Windows has for a session's app: a Firefox-family browser's registration, or the app's
+/// own display name (its Start menu name: "YouTube Music" for the one installed from Chrome).
+/// Looked up once per app id.
+fn display_name(id: &str) -> Option<String> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static NAMES: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+    if id.is_empty() {
+        return None;
     }
-    let mut s = id.rsplit('!').next().unwrap_or(id).to_string();
-    if let Some(p) = s.rfind('\\') {
-        s = s[p + 1..].to_string();
+    if let Some(v) = NAMES.lock().unwrap().get_or_insert_with(HashMap::new).get(id) {
+        return v.clone();
     }
-    if s.to_ascii_lowercase().ends_with(".exe") {
-        s.truncate(s.len() - 4);
-    }
-    match s.to_ascii_lowercase().as_str() {
-        "msedge" => return "Edge".into(),
-        "chrome" => return "Chrome".into(),
-        "firefox" | "308046b0af4a39cb" => return "Firefox".into(),
-        "microsoft.zunemusic" | "zunemusic" => return "Media Player".into(),
-        "app" => {
-            let pkg = id.split('_').next().unwrap_or(id);
-            s = pkg.rsplit('.').next().unwrap_or(pkg).to_string();
-        }
-        _ => {}
-    }
-    let last = s.rsplit('.').next().unwrap_or(&s).to_string();
-    // "AppleMusicWin" -> "Apple Music"
-    let mut words: Vec<String> = vec![];
-    for ch in last.chars() {
-        if ch.is_uppercase() && words.last().is_some_and(|w| w.chars().last().is_some_and(|p| p.is_lowercase())) {
-            words.push(String::new());
-        }
-        match words.last_mut() {
-            Some(w) => w.push(ch),
-            None => words.push(ch.to_string()),
-        }
-    }
-    while words.len() > 1 && matches!(words.last().map(|w| w.as_str()), Some("Win" | "Desktop" | "App" | "Windows")) {
-        words.pop();
-    }
-    let name = words.join(" ");
-    let mut c = name.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
+    let found = hashed_app_name(id).or_else(|| {
+        windows::ApplicationModel::AppInfo::GetFromAppUserModelId(&windows::core::HSTRING::from(id))
+            .and_then(|a| a.DisplayInfo())
+            .and_then(|d| d.DisplayName())
+            .map(|n| n.to_string())
+            .ok()
+            .filter(|n| !n.trim().is_empty())
+    });
+    NAMES.lock().unwrap().get_or_insert_with(HashMap::new).insert(id.to_string(), found.clone());
+    found
 }
 
 /// `media.state` for modules (§4.7): what's playing, or null when nothing is.

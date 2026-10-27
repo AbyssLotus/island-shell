@@ -1,0 +1,167 @@
+{
+ "mod:notion.status": {
+  "configured": true,
+  "workspace": "Example Workspace",
+  "todos": 2,
+  "calendar": 1
+ },
+ "mod:notion.todos": {
+  "todos": [
+   {
+    "id": "p1",
+    "source": "ds-1",
+    "list": "Tasks",
+    "title": "Send the lab write-up",
+    "due": "2026-10-20",
+    "url": "https://www.notion.so/Send-the-lab-write-up-p1"
+   },
+   {
+    "id": "p2",
+    "source": "ds-1",
+    "list": "Tasks",
+    "title": "Book the study room",
+    "due": "2026-10-26T15:00:00.000-04:00",
+    "url": "https://www.notion.so/Book-the-study-room-p2"
+   },
+   {
+    "id": "p3",
+    "source": "ds-2",
+    "list": "Reading list",
+    "title": "Chapter 7: Fourier series",
+    "due": "2026-10-29",
+    "url": "https://www.notion.so/Chapter-7-p3"
+   },
+   {
+    "id": "p4",
+    "source": "ds-1",
+    "list": "Tasks",
+    "title": "Renew the bike-share pass",
+    "due": "2026-11-12",
+    "url": "https://www.notion.so/Renew-p4"
+   },
+   {
+    "id": "p5",
+    "source": "ds-2",
+    "list": "Reading list",
+    "title": "Pick a topic for the final essay",
+    "due": null,
+    "url": "https://www.notion.so/Topic-p5"
+   }
+  ],
+  "problems": []
+ },
+ "mod:notion.done": null,
+ "mod:notion.databases": [
+  {
+   "source": {
+    "id": "ds-1",
+    "title": "Tasks",
+    "url": "https://www.notion.so/aaaa",
+    "todos": true,
+    "calendar": true,
+    "title_prop": "title",
+    "done_prop": "x",
+    "done_kind": "checkbox",
+    "done_names": [],
+    "open_name": "",
+    "date_prop": "d"
+   },
+   "picked": true,
+   "props": [
+    {
+     "id": "d",
+     "name": "Due",
+     "kind": "date"
+    },
+    {
+     "id": "x",
+     "name": "Done",
+     "kind": "checkbox"
+    },
+    {
+     "id": "title",
+     "name": "Name",
+     "kind": "title"
+    }
+   ],
+   "statuses": {}
+  },
+  {
+   "source": {
+    "id": "ds-2",
+    "title": "Reading list",
+    "url": "https://www.notion.so/bbbb",
+    "todos": true,
+    "calendar": false,
+    "title_prop": "title",
+    "done_prop": "s",
+    "done_kind": "status",
+    "done_names": [
+     "Read"
+    ],
+    "open_name": "To read",
+    "date_prop": "d2"
+   },
+   "picked": true,
+   "props": [
+    {
+     "id": "d2",
+     "name": "By",
+     "kind": "date"
+    },
+    {
+     "id": "s",
+     "name": "Status",
+     "kind": "status"
+    },
+    {
+     "id": "title",
+     "name": "Title",
+     "kind": "title"
+    }
+   ],
+   "statuses": {
+    "s": {
+     "done": [
+      "Read"
+     ],
+     "open": "To read",
+     "options": [
+      "To read",
+      "Reading",
+      "Read"
+     ]
+    }
+   }
+  },
+  {
+   "source": {
+    "id": "ds-3",
+    "title": "Meeting notes",
+    "url": "https://www.notion.so/cccc",
+    "todos": false,
+    "calendar": false,
+    "title_prop": "title",
+    "done_prop": "",
+    "done_kind": "",
+    "done_names": [],
+    "open_name": "",
+    "date_prop": "d3"
+   },
+   "picked": false,
+   "props": [
+    {
+     "id": "d3",
+     "name": "Date",
+     "kind": "date"
+    },
+    {
+     "id": "title",
+     "name": "Name",
+     "kind": "title"
+    }
+   ],
+   "statuses": {}
+  }
+ ]
+}

@@ -40,7 +40,7 @@ The first time Island Shell starts, it opens the setup guide. It takes about a m
 | ![The Command Center](screenshots/setup-command-center.jpg) | **The Command Center.** **Win + Space** opens a full-screen search for apps, windows, files, games, settings and commands, with every section as a cube. |
 | ![Pick your look](screenshots/setup-look.jpg) | **Pick your look.** The **Island** (a pill that grows) or the **Bar** (a strip across the top), dark or light. |
 | ![Start with Windows](screenshots/setup-start.jpg) | **Start with Windows.** On by default, so the island is there every time you sign in. |
-| ![Pick your modules](screenshots/setup-connect.jpg) | **Pick your modules.** Everything beyond the island, the Command Center, the Task Manager and your calendar is a module: Music, Discord, Canvas, Destiny 2, Steam & games, Voicemeeter, Wallpaper Engine, VPN and the Tobii eye tracker. **Add** the ones you want (Music is ticked to start with). They install in the background while you finish; the ones that need a key have a **Set up** button (see [step 5](#5-modules-add-what-you-want)). |
+| ![Pick your modules](screenshots/setup-connect.jpg) | **Pick your modules.** Everything beyond the island, the Command Center, the Task Manager and your calendar is a module: Music, Discord, Canvas, Destiny 2, Steam & games, Voicemeeter, Wallpaper Engine, VPN, the Tobii eye tracker, the Focus timer, Notion and Transit. **Add** the ones you want (Music is ticked to start with). They install in the background while you finish; the ones that need a key have a **Set up** button (see [step 5](#5-modules-add-what-you-want)). |
 | ![You're all set](screenshots/setup-done.jpg) | **Done.** You can open the guide again any time: search **Setup guide** in the Command Center. |
 
 ## 4. Everyday use
@@ -68,7 +68,7 @@ Island Shell itself is the island, the Command Center, the Task Manager and stat
 - Modules come from Island Shell's own releases on GitHub, signed, and are checked before anything is unpacked. Keys and tokens you enter are stored encrypted for your Windows account, and stay on your PC.
 
 ### Music
-Nothing to set up. Apple Music, Spotify, your browser and anything else that shows in Windows' media controls appear on the island, with time-synced lyrics from [LRCLIB](https://lrclib.net) when there are some. Apple Music gets extras (album, seek, shuffle, repeat, favorite). Without it, the resting island shows the weather, the date and the clock.
+Nothing to set up. Apple Music, Spotify, Amazon Music, YouTube Music (its desktop app, or installed as an app from Chrome or Edge), your browser and anything else that shows in Windows' media controls appear on the island, with time-synced lyrics from [LRCLIB](https://lrclib.net) when there are some. Apple Music gets extras (album, seek, shuffle, repeat, favorite). Without it, the resting island shows the weather, the date and the clock.
 
 ### Steam & games
 Nothing to set up. Installed games show up in the Games section and cube with your custom artwork, playtime and a Play button. Other launchers (Epic, EA, Ubisoft, Riot, Battle.net…) sit underneath. **Win + G** opens it.
@@ -96,6 +96,20 @@ Your Guardians, loadouts, Xûr and the weekly reset, and DIM docked in the Comma
 
 ### Voicemeeter, Wallpaper Engine, VPN
 Nothing to set up: Voicemeeter's mixer appears in **Audio** (with a mic switch on the top bar), your Wallpaper Engine library in **Wallpaper**, and Tailscale and Radmin VPN in **Network**.
+
+### Focus timer
+Nothing to set up. It takes the place of the Focus card in **Today**: focus stretches and breaks with a long break every few, on the pill while they run. Module notifications wait while you focus (urgent ones still come through) and show when the stretch ends. The gear sets the lengths, whether breaks start by themselves, and a daily goal. With the eye tracker, it pauses when you step away.
+
+### Notion
+Your to-dos in **Today**, and pages with dates in the calendar. Notion needs an integration of your own, about two minutes:
+
+1. Open [Notion's integrations page](https://www.notion.so/profile/integrations), click **New integration**, pick your workspace, keep the type **Internal** and save.
+2. Under **Capabilities**, keep **Read content** and turn on **Update content** (so ticking a to-do on the island ticks it in Notion).
+3. Copy the **Internal Integration Secret** into the Notion section in **Today** and press **Connect**.
+4. In Notion, open each database you want, click **•••** (top right) → **Connections** and add your integration. Back on the island, pick which databases are to-dos and which go in the calendar. It guesses which property means done (a checkbox or a status) and which is the date; you can change both.
+
+### Transit
+The next departures from your stops, in the **Transit** section. Pick **Philadelphia** (SEPTA buses, trolleys, subway and Regional Rail) or give another city's timetable (GTFS) and live feed (GTFS-realtime) addresses; your agency's developer page or the [Mobility Database](https://mobilitydatabase.org/) has them. Then **Add a stop** by name or stop number. Each stop's gear picks its routes and the days and times its next departure shows on the pill, like your commute.
 
 ### Tobii eye tracker
 With a Tobii tracker, the island opens when you look at it, and notifications wait until you've seen them. Turn on **Pause when I step away** in the Music tab (or the Music module's settings) to pause what's playing while you're away.

@@ -50,6 +50,7 @@
           <svg class="mini-ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="trk" cx="10" cy="10" r="8"/><circle class="val" id="pillRing" cx="10" cy="10" r="8"/></svg>
           <b id="pillTimerTxt">25:00</b>
         </span>
+        <span class="pill-tag" id="pillTag" hidden></span>
         <span class="pill-call" id="pillCall" hidden></span>
       </span>
       <span class="pill-right"><span class="pill-date" id="pillDate" hidden></span><span class="pill-time" id="pillTime"></span></span>
@@ -178,7 +179,7 @@
           </div>
           <div class="t-col">
             <div class="card week"><header><b>This week</b><small id="weekRange"></small></header><div class="days" id="days"></div><p class="week-foot" id="weekFoot"></p></div>
-            <div class="card focus">
+            <div class="card focus" data-card="focus">
               <div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="34"/><circle class="val" id="focusRing" cx="40" cy="40" r="34"/></svg><span id="focusTxt">25:00</span></div>
               <div class="f-ctl">
                 <div class="f-head"><b>Focus</b><small id="focusState">Ready</small></div>

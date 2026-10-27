@@ -96,6 +96,17 @@ body.live-eq .eq i { animation: none; height: 100%; transform-origin: 50% 100%; 
 .mini-ring circle { fill: none; stroke-width: 2.6; }
 .mini-ring .trk { stroke: var(--ink-3); }
 .mini-ring .val { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 50.27; transition: stroke-dashoffset .3s linear; }
+/* A module's timer: a break rests in green, a paused one dims. */
+.pill-timer.break { color: var(--good); }
+.pill-timer.break .mini-ring .val { stroke: var(--good); }
+.pill-timer.paused { opacity: .55; }
+/* A module's tag (a `custom` activity): its icon and a few words. */
+.pill-tag { display: inline-flex; align-items: center; gap: 5px; flex: none; margin-left: 6px; white-space: nowrap; font: 600 12.5px/1 var(--f-body); font-variant-numeric: tabular-nums; }
+.pill-tag .i { width: 15px; height: 15px; color: var(--accent-text); }
+.pill-tag.alert .i { color: var(--bad); }
+#island.tagged .pill-dot { display: none; }
+/* A module's section in place of a base card fills the card's spot. */
+.mod-in-place { min-width: 0; }
 
 .peek { height: 84px; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 12px 0 14px; cursor: pointer; }
 .peek .art { width: 56px; height: 56px; border-radius: 14px; }

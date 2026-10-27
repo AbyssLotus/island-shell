@@ -104,7 +104,9 @@ const IC = {
   chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
   phoneoff: '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="m22 2-20 20"/>',
   headoff: '<path d="M21 14h-1.34"/><path d="M9.13 3.47A9 9 0 0 1 21 12v3.34"/><path d="m2 2 20 20"/><path d="M20.41 20.41A2 2 0 0 1 19 21h-1a2 2 0 0 1-2-2v-3"/><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 2.64-6.36"/>',
-  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>'
+  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>',
+  bus: '<path d="M8 6v6M15 6v6M2 12h19.6M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>',
+  train: '<path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1M15 15l1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3M16 19l2 3"/>'
 };
 const icon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 $$('i[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
@@ -167,7 +169,7 @@ function renderTabs() {
   nav.insertAdjacentHTML('beforeend', R.tabs.all().map(t => `<button class="tab" type="button" role="tab" id="tab-${esc(t.id)}" data-tab="${esc(t.id)}" aria-controls="v-${esc(t.id)}">${tabIcon(t)}<span>${esc(t.title)}</span></button>`).join(''));
   TABS = R.tabs.ids(); tabLabelW = null;
 }
-const pillW = () => (S.timer.running ? 236 : 200) + callW();
+const pillW = () => (S.timerOn ? 236 : 200) + callW() + (S.tagW || 0);
 const maxW = () => Math.max(240, innerWidth - 24);
 
 function setMode(m) {
@@ -503,10 +505,10 @@ document.addEventListener('click', e => {
 });
 
 /* ---------- the pill at rest (§4.11) ----------
-   Nothing playing, no call and no timer: the weather's icon and temperature, the date and the
-   clock. With no city (or no reading in 3 hours), just the date and the clock. */
+   Nothing playing, no call, no timer and no module tag: the weather's icon and temperature, the
+   date and the clock. With no city (or no reading in 3 hours), just the date and the clock. */
 function renderRest() {
-  const rest = !S.media && !island.classList.contains('in-call') && !S.timer.running;
+  const rest = !S.media && !island.classList.contains('in-call') && !S.timerOn && !S.tagW;
   const w = rest ? restWeather(store.get('weather', null), S.city, S.unit) : null;
   island.classList.toggle('resting', rest);
   island.classList.toggle('rest-wx', !!w);
@@ -699,6 +701,8 @@ function renderSounds() {
   $('#sndFs').setAttribute('aria-pressed', sounds.fsMute);
   if (document.activeElement !== $('#sndVol')) { $('#sndVol').value = Math.round(sounds.vol * 100); }
   $('#sndVolOut').textContent = Math.round(sounds.vol * 100) + '%';
+  // The bar fills to --p, like the other volume bars (without it, it sat at half whatever the volume).
+  $('#sndVol').style.setProperty('--p', $('#sndVol').value + '%');
   $('#sndList').classList.toggle('off', !sounds.on);
   const opts = kind => {
     const cur = sounds.choice(kind), file = sounds.fileName(kind);
@@ -730,7 +734,7 @@ $('#sndFile').addEventListener('change', async e => {
 });
 $('#sndOn').addEventListener('click', () => { sounds.set({ on: !sounds.on }); if (sounds.on) sounds.sound('glass'); renderSounds(); renderControls(); });
 $('#sndFs').addEventListener('click', () => { sounds.set({ fsMute: !sounds.fsMute }); renderSounds(); });
-$('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; });
+$('#sndVol').addEventListener('input', e => { sounds.set({ vol: +e.target.value / 100 }); $('#sndVolOut').textContent = e.target.value + '%'; e.target.style.setProperty('--p', e.target.value + '%'); });
 $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('mention') !== 'none' ? sounds.choice('mention') : 'glass', 'mention'); renderControls(); });
 
 /* ---------- eye tracking: a module's `presence` (the eye tracking module's) ----------
@@ -739,7 +743,9 @@ $('#sndVol').addEventListener('change', () => { sounds.sound(sounds.choice('ment
 S.gaze = false; S.presence = ''; S.toastWait = null;
 const gazeLive = () => S.presence === 'present' || S.presence === 'looking';
 function onPresence(p) {
+  const was = S.presence;
   S.presence = (p && p.state) || '';
+  if (S.presence !== was) islandEvents.dispatchEvent(new CustomEvent('presence', { detail: S.presence }));
   const looking = S.presence === 'looking';
   if (looking === S.gaze) return;
   S.gaze = looking;
@@ -902,17 +908,40 @@ $('#wInput').addEventListener('keydown', e => {
 });
 $('#wInput').addEventListener('blur', () => { $('#wInput').hidden = true; $('#wCity').hidden = false; layout(); });
 
+/* ---------- timers on the pill: the Today card's own, or a module's `timer` activity ----------
+   A timer activity is { text, ends_at (Unix ms) while it runs, or left (s) with paused, total (s),
+   tone: 'break' for a rest }. The highest one shows on the pill as a ring and the time left. */
+const mmss = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+function renderPillTimer() {
+  const a = topActivity(R.activities.all().filter(x => x.kind === 'timer'));
+  const left = !a ? 0 : a.paused ? Math.max(0, Math.round(+a.left || 0)) : Math.max(0, Math.ceil(((+a.ends_at || 0) - Date.now()) / 1000));
+  const on = !!a && (a.paused || left > 0);
+  if (on) {
+    const tot = Math.max(+a.total || left, 1);
+    $('#pillTimerTxt').textContent = mmss(left); $('#pillRing').style.strokeDashoffset = (50.27 * (1 - left / tot)).toFixed(2);
+    const box = $('#pillTimer');
+    box.classList.toggle('break', a.tone === 'break'); box.classList.toggle('paused', !!a.paused);
+    box.title = a.text || '';
+  }
+  $('#pillTimer').hidden = !on;
+  island.classList.toggle('timing', on);
+  if (on !== !!S.timerOn) { S.timerOn = on; layout(); renderRest(); }
+}
+/** The Today card's timer on the pill, while it runs. */
+function syncBaseTimer() {
+  const T = S.timer;
+  if (T.running) R.activities.set({ id: 'base:timer', kind: 'timer', text: 'Focus', ends_at: T.end, total: T.min * 60, action: 'tab:today', seq: 0 });
+  else R.activities.remove('base:timer');
+  islandEvents.dispatchEvent(new CustomEvent('activities'));
+}
 function renderTimer() {
   const T = S.timer, tot = T.min * 60, frac = T.left / tot;
-  const mm = String(Math.floor(T.left / 60)).padStart(2, '0') + ':' + String(T.left % 60).padStart(2, '0');
-  $('#focusTxt').textContent = mm; $('#focusRing').style.strokeDashoffset = (213.63 * (1 - frac)).toFixed(2);
-  $('#pillTimerTxt').textContent = mm; $('#pillRing').style.strokeDashoffset = (50.27 * (1 - frac)).toFixed(2);
+  $('#focusTxt').textContent = mmss(T.left); $('#focusRing').style.strokeDashoffset = (213.63 * (1 - frac)).toFixed(2);
   $('#focusGo').textContent = T.running ? 'Pause' : (T.left < tot ? 'Resume' : 'Start');
   $('#focusState').textContent = T.running ? 'Running' : (T.left < tot ? 'Paused' : 'Ready');
   $$('#presets .chip').forEach(b => b.setAttribute('aria-pressed', +b.dataset.min === T.min));
-  $('#pillTimer').hidden = !T.running;
-  island.classList.toggle('timing', T.running);
-  renderRest();
+  if (T.running !== R.activities.has('base:timer')) syncBaseTimer();
+  else renderPillTimer();
 }
 const saveTimer = () => store.set('timer', S.timer);
 $('#presets').addEventListener('click', e => {
@@ -927,7 +956,8 @@ $('#focusGo').addEventListener('click', () => {
 });
 $('#focusReset').addEventListener('click', () => { S.timer.running = false; S.timer.left = S.timer.min * 60; saveTimer(); renderTimer(); layout(); });
 setInterval(() => {
-  const T = S.timer; if (!T.running) return;
+  const T = S.timer;
+  if (!T.running) { if (S.timerOn) renderPillTimer(); return; }
   T.left = Math.max(0, Math.ceil((T.end - Date.now()) / 1000));
   if (T.left <= 0) {
     T.running = false; T.left = T.min * 60; saveTimer(); renderTimer(); layout();
@@ -1923,17 +1953,20 @@ const modHost = createModuleHost({
     audio: { appVolume: exe => invoke('app_volume_get', { exe }), setAppVolume: (exe, level) => invoke('app_volume_set', { exe, level }) },
     menu: (x, y, items) => showCtx(x, y, items),
     state: () => ({ mode: S.mode, tab: S.tab, dark: S.dark, style: S.style, cc: !!S.ccOpen, fullscreen: !!S.fullscreen }),
+    /** Whether someone is at the screen, from the eye tracker's `presence` ('' without one). */
+    presence: () => S.presence,
     on: (name, fn) => { const h = e => fn(e.detail); islandEvents.addEventListener(name, h); return () => islandEvents.removeEventListener(name, h); }
   },
   addView: () => syncViews(), removeView: () => syncViews(),
   notify: (module, n) => modToast(module, n),
+  quiet: (module, on, label) => setQuiet(module, on, label),
   open: target => openTarget(target),
   setTiles: () => renderModTiles(), setChips: () => { renderModChips(); renderBar(); },
   activitiesChanged: () => islandEvents.dispatchEvent(new CustomEvent('activities')),
   sectionsChanged: () => syncSections(),
   tabFailed: (tab, name, e) => { const v = views[tab]; if (v) v.querySelector('.mod-fail').textContent = `${name} couldn't load: ${e && e.message || e}`; layout(); }
 });
-/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities', 'level' (the equalizer's, 0–1). */
+/** Island events modules can follow: 'panel' (open or closed), 'tab', 'skin', 'activities', 'level' (the equalizer's, 0–1), 'presence'. */
 const islandEvents = new EventTarget();
 /* ---------- a call on the pill and the top bar (a module's `call` activity, like Discord's) ----------
    Who's in it (up to three faces, a green ring on whoever's talking) and your own mute or deafen,
@@ -1961,8 +1994,26 @@ function renderPillCall() {
   if (w !== S.callW) { S.callW = w; layout(); }
   renderRest();
 }
+/* ---------- a module's tag on the pill (a `custom` activity, like the next bus) ----------
+   The highest one shows as its icon and a few words beside the clock. */
+function renderPillTag() {
+  const a = topActivity(R.activities.all().filter(x => x.kind === 'custom' && x.text));
+  const tag = $('#pillTag');
+  tag.hidden = !a;
+  island.classList.toggle('tagged', !!a);
+  let w = 0;
+  if (a) {
+    setHtml(tag, `${a.icon && !/\./.test(a.icon) ? icon(a.icon) : ''}<span>${esc(clipTxt(a.text, 22))}</span>`);
+    tag.title = a.sub || '';
+    tag.classList.toggle('alert', a.tone === 'alert');
+    w = tag.offsetWidth + 8;
+  }
+  if (w !== (S.tagW || 0)) { S.tagW = w; layout(); renderRest(); }
+}
 islandEvents.addEventListener('activities', renderPillCall);
 islandEvents.addEventListener('activities', syncMedia);
+islandEvents.addEventListener('activities', renderPillTimer);
+islandEvents.addEventListener('activities', renderPillTag);
 /** Views for module tabs come and go with the registry. */
 function syncViews() {
   const box = $('.views');
@@ -1996,19 +2047,55 @@ function syncModViews() {
 function syncSections() {
   for (const s of R.sections.all()) {
     const view = views[s.tab]; if (!view) continue;
-    // A view goes in the tab's own .mod-views box and shows only while it's the one picked.
-    let box = s.view ? view.querySelector('.mod-views') : view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
-    if (!box && s.view) continue;
-    if (!box) { box = Object.assign(document.createElement('div'), { className: 'mod-sections' }); box.dataset.tab = s.tab; view.append(box); }
-    let host = box.querySelector(`[data-sec="${CSS.escape(s.id)}"]`);
-    if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section' }); host.dataset.sec = s.id; box.append(host); }
+    // In place of a base card (`replaces`): the module's section sits where the card was.
+    const card = s.replaces ? view.querySelector(`[data-card="${CSS.escape(s.replaces)}"]`) : null;
+    if (s.replaces && !card) continue;
+    let host = view.querySelector(`[data-sec="${CSS.escape(s.id)}"]`);
+    if (card) {
+      if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section mod-in-place' }); host.dataset.sec = s.id; card.before(host); }
+    } else {
+      // A view goes in the tab's own .mod-views box and shows only while it's the one picked.
+      let box = s.view ? view.querySelector('.mod-views') : view.querySelector(`.mod-sections[data-tab="${s.tab}"]`);
+      if (!box && s.view) continue;
+      if (!box) { box = Object.assign(document.createElement('div'), { className: 'mod-sections' }); box.dataset.tab = s.tab; view.append(box); }
+      if (!host) { host = Object.assign(document.createElement('div'), { className: 'mod-section' }); host.dataset.sec = s.id; box.append(host); }
+    }
     const on = S.mode === 'panel' && S.tab === s.tab && (!s.view || viewOf(s.tab) === s.id);
     host.hidden = !!s.view && viewOf(s.tab) !== s.id;
     modHost.showSection(s.id, host, on);
   }
   $$('.mod-section').forEach(h => { if (!R.sections.has(h.dataset.sec)) h.remove(); });
+  // A base card shows again once no section takes its place.
+  $$('[data-card]').forEach(c => {
+    const taken = R.sections.all().some(s => s.replaces === c.dataset.card && views[s.tab] && views[s.tab].contains(c));
+    if (taken !== c.hidden) { c.hidden = taken; if (taken) cardReplaced(c.dataset.card); }
+  });
+}
+R.sections.on(() => syncSections());
+/** A module's section took the place of a base card: the card's own timer stops. */
+function cardReplaced(card) {
+  if (card === 'focus' && S.timer.running) { S.timer.running = false; S.timer.left = S.timer.min * 60; saveTimer(); renderTimer(); }
+}
+/* ---------- holding notifications (a module's ctx.island.quiet, like Focus) ----------
+   While any module holds them, module notifications wait, except urgent ones. A few seconds after
+   the last one lets go (so its own "done" notification shows first), the one that came in shows, or
+   a count of them with the latest. */
+S.quiet = new Map(); S.held = []; S.heldT = 0;
+function setQuiet(module, on, label) {
+  if (on) S.quiet.set(module, label); else S.quiet.delete(module);
+  S.quietLabel = on ? label : S.quietLabel;
+  clearTimeout(S.heldT);
+  if (!S.quiet.size && S.held.length) S.heldT = setTimeout(flushHeld, 4500);
+}
+function flushHeld() {
+  if (S.quiet.size || !S.held.length) return;
+  const held = S.held; S.held = [];
+  if (held.length === 1) { modToast(held[0].module, held[0].n); return; }
+  const last = held[held.length - 1].n;
+  toast(`${held.length} notifications during ${S.quietLabel || 'quiet time'}`, clipTxt(`Latest: ${last.title}${last.body ? ' · ' + last.body : ''}`, 72), 'bellon', { ms: 6000, sound: last.sound || 'glass' });
 }
 function modToast(module, n) {
+  if (S.quiet.size && !n.urgent) { S.held.push({ module, n }); if (S.held.length > 50) S.held.shift(); return; }
   const tab = n.action && n.action.startsWith('tab:') ? n.action.slice(4) : '';
   toast(clipTxt(n.title || module, 48), clipTxt(n.body || '', 72), n.icon && !/\./.test(n.icon) ? n.icon : 'bellon',
     { img: n.img || '', round: !!n.round, urgent: !!n.urgent, top: !!(n.urgent || n.top), ms: n.ms || (n.urgent ? 8000 : 5500), tab, sound: n.sound || '' });
@@ -2092,11 +2179,12 @@ const cmdCenter = createCommandCenter({
   S, invoke, assetUrl, esc, store, gradFor, glyphOf, icon, closePanel, R, activateModule: id => modHost.activate(id),
   settingsOf: id => modHost.settingsOf(id),
   // Modules with a setup card (their manifest's contributes.setup) join the guide's Connect step.
-  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && m.man.contributes.tabs?.length).map(m => {
-    const t = m.man.contributes.tabs[0], card = R.setup.get(m.man.id);
+  // A module is set up in its own tab, or in the base tab its section is in (Notion in Today).
+  moduleCards: () => [...modHost.mods.values()].filter(m => m.man.contributes?.setup?.card && (m.man.contributes.tabs?.length || m.man.contributes.sections?.length)).map(m => {
+    const t = m.man.contributes.tabs?.[0], card = R.setup.get(m.man.id);
     let state = '';
     try { state = String(((card && card.render && card.render()) || {}).state || ''); } catch (e) {}
-    return { id: m.man.id, icon: /\.svg$/.test(t.icon) ? 'grid' : t.icon, title: m.man.name, sub: m.man.description, tab: t.id, state };
+    return { id: m.man.id, icon: t && !/\.svg$/.test(t.icon) ? t.icon : 'grid', title: m.man.name, sub: m.man.description, tab: t ? t.id : m.man.contributes.sections[0].tab, state };
   }),
   openTab: t => openPanel(t, true),
   hostTab, unhost: () => unhostTab(),

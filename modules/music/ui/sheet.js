@@ -40,7 +40,7 @@ export function createSheet(core) {
         <div class="mus-sources"></div>
       </div>
       <div class="mus-right"><div class="mus-ly" aria-label="Lyrics"></div><small class="mus-lyfoot"></small></div>
-      <div class="mus-empty" hidden><div class="mus-ph">${ic('note')}</div><b>Nothing is playing</b><span>Play something in Apple Music or Spotify and it shows up here.</span></div>`;
+      <div class="mus-empty" hidden><div class="mus-ph">${ic('note')}</div><b>Nothing is playing</b><span>Play something in Apple Music, Spotify, Amazon Music, YouTube Music or any player and it shows up here.</span></div>`;
     metaKey = lyKey = ''; lyIdx = -2; lastSec = -1;
   }
 

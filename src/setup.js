@@ -6,7 +6,7 @@
 
 const STEPS = ['welcome', 'island', 'cc', 'look', 'start', 'modules', 'done'];
 /** The island's own icon for each first-party module (the catalog carries no pictures). */
-const MOD_ICON = { music: 'note', discord: 'chat', canvas: 'cap', destiny: 'orbit', games: 'gamepad', gaze: 'eye', voicemeeter: 'speaker', 'wallpaper-engine': 'image', vpn: 'shield' };
+const MOD_ICON = { music: 'note', discord: 'chat', canvas: 'cap', destiny: 'orbit', games: 'gamepad', gaze: 'eye', voicemeeter: 'speaker', 'wallpaper-engine': 'image', vpn: 'shield', focus: 'timer', notion: 'check', transit: 'bus' };
 const size = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
 export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab, moduleCards }) {
@@ -63,7 +63,7 @@ export function createSetup({ root, invoke, store, ic, esc, S, setDark, openTab,
       }
     }
     // Installed modules the catalog doesn't list (developer mode), with their own setup.
-    for (const m of own) if (!cat.some(c => c.id === m.id)) cards.push(card(m.icon, esc(m.title), esc(m.sub), m.state ? `<span class="su-cst">${esc(m.state)}</span>` : setUp(m.tab), m.state ? ' su-ok' : ''));
+    for (const m of own) if (!cat.some(c => c.id === m.id)) cards.push(card(MOD_ICON[m.id] || m.icon, esc(m.title), esc(m.sub), m.state ? `<span class="su-cst">${esc(m.state)}</span>` : setUp(m.tab), m.state ? ' su-ok' : ''));
     cards.push(card('calendar', 'Calendars', 'Built in: add any calendar’s iCal link (Google, Outlook, school) in the Today cube.', setUp('today')));
     return cards.join('');
   }

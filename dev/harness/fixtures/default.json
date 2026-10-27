@@ -485,5 +485,25 @@
   "present": false,
   "enabled": false
  },
- "topic_last": null
+ "topic_last": null,
+ "mod:notion.status": {
+  "configured": false,
+  "workspace": "",
+  "todos": 0,
+  "calendar": 0
+ },
+ "mod:transit.status": {
+  "city": "",
+  "name": "",
+  "feeds": [],
+  "stops": [],
+  "presets": [
+   {
+    "id": "philadelphia",
+    "name": "Philadelphia",
+    "sub": "SEPTA buses, trolleys, subway and Regional Rail"
+   }
+  ],
+  "custom": null
+ }
 }

@@ -2,7 +2,7 @@
 
 Island Shell is the island, the Command Center, the Task Manager and the calendar. Everything else is a **module** the user installs only if they want it: a folder with a manifest, an optional backend (a small windowless program of its own) and UI the island loads into its page. This is how modules work and how to write one. The exact formats and rules are in [design/modules-handoff.md §4](design/modules-handoff.md#4-definitions-normative); the reasons are in [design/modules.md](design/modules.md).
 
-The nine first-party modules in [`modules/`](../modules) are the best examples:
+The first-party modules in [`modules/`](../modules) are the best examples:
 
 | Module | Shows how to |
 | --- | --- |
@@ -14,6 +14,9 @@ The nine first-party modules in [`modules/`](../modules) are the best examples:
 | `discord` | A `call` activity (faces on the pill), a split docked site, topics it follows, an always-there UI |
 | `music` | A `media` activity the island draws, island services (app volume, bringing an app forward), a topic it publishes |
 | `gaze` | A backend-only feature: a DLL loaded in its own process, topics in and out, a Controls tile |
+| `focus` | A UI-only module (no backend), a section in place of a base card, a `timer` activity, holding notifications, presence from the eye tracker |
+| `notion` | A section in a base tab with no tab of its own, a calendar source, a token setup inside the section |
+| `transit` | A `custom` activity (a tag on the pill), hosts the user enters (`{settings.hosts}` as a list), big downloads kept in the cache folder |
 
 ## What's in a module
 
@@ -48,7 +51,7 @@ Everything in the folder except `src/`, `Cargo.toml` and dotfiles goes into the 
 }
 ```
 
-`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio` and `wallpaper`, where `"view": true` makes it an alternative the tab's header switches to), `cubes` (with `slot`, `size` and an optional docked `site`), `sites` (`url`, `hosts`, `skin`, `default`, `split`, and a `reader` with its `readPage`: see [Reading a docked site](#reading-a-docked-site)), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
+`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio`, `wallpaper` and `today`, where `"view": true` makes it an alternative the tab's header switches to, and `"replaces": "focus"` puts it in place of Today's Focus card), `cubes` (with `slot`, `size` and an optional docked `site`), `sites` (`url`, `hosts`, `skin`, `default`, `split`, and a `reader` with its `readPage`: see [Reading a docked site](#reading-a-docked-site)), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
 
 ## The backend
 
@@ -87,7 +90,7 @@ fn main() { island_module::run(Hello); }
   - `host.data_dir()` for settings and DPAPI-encrypted keys (`island_module::secrets`).
   - `host.cache_dir()` for what can be fetched again; its UI loads images from here as `ctx.cacheUrl(name)`.
   - `host.take_legacy(name, to)` moves a 0.1.x file over.
-- **Its network is `island_module::http`**, which only reaches the manifest's `hosts`.
+- **Its network is `island_module::http`**, which only reaches the manifest's `hosts`. A `{settings.<key>}` host is read from the module's settings.json when a request goes out, and may be one host or a list of them.
 - **When it runs** (`backend.run`):
   - `always`.
   - `while-process`, while one of `backend.process` runs. A UI call also starts it, so it can open its app or be set up, and it then stops after `idle`.
@@ -120,8 +123,10 @@ export function deactivate() {}
   - Registering things: `tabs`, `sections`, `cubes` (a stat line and an optional full sheet), `tiles`, `chips`, `search`, `commands`, `activity`, `notify`, `settings.mount` (your page in the Modules cube) and `setup.card`.
   - Getting around: `open('tab:…' | 'cube:…' | 'cube:…:web')` (`:web` opens the cube on its docked site) and `openWeb(url)`, which never opens in Edge.
   - `sites.read(site, args)` runs the site's reader (below).
-  - The island's own services through `island`: `layout()`, `showing(tab)`, `closePanel()`, `state()`, `on('panel' | 'tab' | 'skin' | 'activities' | 'level')`, `apps`, `focusApp({ id, exe, hwnd })` (the island is in front when the user asks, so it can bring an app forward), and `audio.appVolume(exe)` / `setAppVolume(exe, level)`.
+  - The island's own services through `island`: `presence()` and `on('presence')` (the eye tracker: looking, present, away, off, or '' without one), `quiet(on, label)` (holds module notifications, all but urgent ones, until the module lets go), `layout()`, `showing(tab)`, `closePanel()`, `state()`, `on('panel' | 'tab' | 'skin' | 'activities' | 'level')`, `apps`, `focusApp({ id, exe, hwnd })` (the island is in front when the user asks, so it can bring an app forward), and `audio.appVolume(exe)` / `setAppVolume(exe, level)`.
 - **Activities the island draws itself:**
+  - A `timer` activity (`text`, `ends_at` in Unix ms while it runs or `left` in seconds with `paused`, `total`, `tone: 'break'`) becomes the ring and time left on the pill; Today's own timer is one too.
+  - A `custom` activity (`icon`, `text`, `sub`, `tone: 'alert'`) becomes a short tag beside the clock.
   - A `media` activity (title, artist, art, position, `exe`, `lyric`, `run(action)`) becomes the pill's cover and equalizer, the peek, the Controls card and the bar chip.
   - A `call` activity with `avatars` becomes faces on the pill.
 - **Module UI isn't a security boundary.** It runs in the island's page; trust comes from the signed catalog.
