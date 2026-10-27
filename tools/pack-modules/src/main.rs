@@ -463,8 +463,10 @@ mod tests {
         let bins = root.join("bins");
         std::fs::create_dir_all(&bins).unwrap();
         let modules = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules");
+        let mut zips = vec![];
         for dir in module_dirs(&modules).unwrap() {
             let m: Manifest = serde_json::from_slice(&std::fs::read(dir.join("module.json")).unwrap()).unwrap();
+            zips.push(format!("{}-{}.zip", m.id, m.version));
             if let Some(b) = m.backend {
                 std::fs::write(bins.join(b.exe), "MZ").unwrap();
             }
@@ -472,7 +474,11 @@ mod tests {
         let mut o = opts(&modules, &bins, root.join("out"), &root);
         o.installer = None;
         let summary = pack(&o).unwrap();
-        assert!(summary.contains("destiny-1.0.0.zip") && summary.contains("games-1.0.0.zip"), "{summary}");
+        // Each at the version its manifest says.
+        for z in &zips {
+            assert!(summary.contains(z.as_str()), "{z} missing from:
+{summary}");
+        }
         verify(&root.join("out"), TEST_PUB).unwrap();
         let _ = std::fs::remove_dir_all(root);
     }

@@ -1,7 +1,7 @@
 {
   "id": "wallpaper-engine",
   "name": "Wallpaper Engine",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "description": "Your Wallpaper Engine wallpapers in the Wallpaper tab: search them, put one on, pause or mute it, with the accent following along.",
   "icon": "ui/icon.svg",
