@@ -2187,6 +2187,8 @@ const cmdCenter = createCommandCenter({
     return { id: m.man.id, icon: t && !/\.svg$/.test(t.icon) ? t.icon : 'grid', title: m.man.name, sub: m.man.description, tab: t ? t.id : m.man.contributes.sections[0].tab, state };
   }),
   openTab: t => openPanel(t, true),
+  /** A right-click menu (a cube's: rank it, take it off). */
+  menu: (x, y, items) => showCtx(x, y, items),
   hostTab, unhost: () => unhostTab(),
   relayout: () => { lastRect = ''; layout(); },
   setDark: on => { S.dark = on; store.set('dark', on); applySkin(); },

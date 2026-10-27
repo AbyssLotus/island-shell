@@ -1,7 +1,7 @@
 // The registries' rules (src/registry.js): ordering, cube slots, activities, the resting pill, hotkeys.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { List, createRegistry, placeCubes, SLOTS, sortActivities, topActivity, weatherIcon, restWeather, restDate, hotkeyTable, keywordHit } from '../../src/registry.js';
+import { List, createRegistry, layoutCubes, rankCubes, farness, moveInOrder, swapInOrder, FIXED, NEAR, CSIZE, WIDE, MORE, sortActivities, topActivity, weatherIcon, restWeather, restDate, hotkeyTable, keywordHit } from '../../src/registry.js';
 
 test('lists keep order, refuse duplicates and tell listeners', () => {
   const r = createRegistry();
@@ -24,30 +24,65 @@ test('lists keep order, refuse duplicates and tell listeners', () => {
   assert.deepEqual(l.ids(), ['a', 'b']);
 });
 
-test('base cubes keep their slots, module cubes take theirs or a spare', () => {
-  const base = ['apps', 'audio', 'today', 'network', 'clipboard', 'stats', 'modules'].map(id => ({ id }));
-  // No modules: only the base slots draw.
-  assert.deepEqual(placeCubes(base).map(p => p.slot.name), ['apps', 'audio', 'today', 'network', 'clipboard', 'stats', 'modules']);
-  const mods = [
-    { id: 'destiny', module: 'destiny', slot: 'destiny' },
-    { id: 'music', module: 'music', slot: 'music' },
-    { id: 'pomodoro', module: 'pomodoro' }, // no slot of its own: the first spare
-    { id: 'clock', module: 'clock', slot: 'apps' } // a base slot: refused, gets the next spare
-  ];
-  const placed = placeCubes([...base, ...mods]);
-  const at = Object.fromEntries(placed.map(p => [p.cube.id, p.slot.name]));
-  assert.equal(at.destiny, 'destiny');
-  assert.equal(at.music, 'music');
-  assert.equal(at.pomodoro, 'discord');
-  assert.equal(at.clock, 'canvas');
-  assert.equal(at.apps, 'apps');
-  // Slots come back in slot order, with their position and size.
-  assert.deepEqual(placed.map(p => p.slot.name), SLOTS.map(s => s[0]).filter(n => Object.values(at).includes(n)));
-  const d = placed.find(p => p.cube.id === 'destiny').slot;
-  assert.deepEqual([d.x, d.y, d.size], [3.3, -0.84, 'S']);
-  // More module cubes than spare slots: the extra ones aren't shown.
-  const many = Array.from({ length: 8 }, (_, i) => ({ id: 'm' + i, module: 'm' + i }));
-  assert.equal(placeCubes([...base, ...many]).length, base.length + 5);
+const base = ['apps', 'audio', 'today', 'network', 'clipboard', 'stats', 'modules'].map(id => ({ id }));
+const seatOf = (l, id) => (l.placed.find(p => p.cube.id === id) || {}).seat;
+const near = i => ({ x: NEAR[i][0], y: NEAR[i][1], size: NEAR[i][2] });
+
+test('six cubes stay put; the rest take the seats nearest the eclipse in rank order', () => {
+  const mods = [{ id: 'music', module: 'music', slot: 'apps', size: 'L' }, { id: 'games', module: 'games' }, { id: 'discord', module: 'discord' }, { id: 'canvas', module: 'canvas' }, { id: 'destiny', module: 'destiny' }];
+  const l = layoutCubes([...base, ...mods]);
+  // Fixed places, whatever a manifest asks for (Music wanted Apps's slot and a big size).
+  for (const [id, x, y, size] of FIXED) assert.deepEqual(seatOf(l, id), { x, y, size }, id);
+  // With no ranking of the user's: the island's arrangement from before.
+  assert.deepEqual(l.ranked.map(c => c.id), ['discord', 'network', 'canvas', 'destiny', 'today', 'stats']);
+  l.ranked.forEach((c, i) => assert.deepEqual(seatOf(l, c.id), near(i), c.id));
+  // The user's ranking wins; cubes it doesn't name follow in the default order.
+  const mine = layoutCubes([...base, ...mods], { order: ['stats', 'canvas'] });
+  assert.deepEqual(mine.ranked.map(c => c.id), ['stats', 'canvas', 'discord', 'network', 'destiny', 'today']);
+  assert.deepEqual(seatOf(mine, 'stats'), near(0));
+  // Hidden cubes aren't placed; a fixed one can't be hidden.
+  const hid = layoutCubes([...base, ...mods], { hidden: ['today', 'apps'] });
+  assert.equal(seatOf(hid, 'today'), undefined);
+  assert.deepEqual(hid.hidden.map(c => c.id), ['today']);
+  assert.ok(seatOf(hid, 'apps'));
+  // Keyboard order: the fixed ones, the ranking, then Modules.
+  assert.deepEqual(l.keys, ['apps', 'audio', 'games', 'clipboard', 'music', 'discord', 'network', 'canvas', 'destiny', 'today', 'stats', 'modules']);
+});
+
+test('35 modules all get a seat on a wide screen, none overlapping, all on screen', () => {
+  const many = Array.from({ length: 35 }, (_, i) => ({ id: 'm' + i, module: 'm' + i }));
+  const l = layoutCubes([...base, ...many]);
+  assert.equal(l.overflow.length, 0);
+  assert.equal(l.placed.length, base.length + 35);
+  const s = l.placed.map(p => ({ ...p.seat, id: p.cube.id }));
+  for (const a of s) {
+    const [w, h] = CSIZE[a.size];
+    assert.ok(a.x - w / 2 >= WIDE.left && a.x + w / 2 <= WIDE.right && a.y - h / 2 >= WIDE.top && a.y + h / 2 <= WIDE.bottom, `${a.id} off screen`);
+    for (const b of s) if (a !== b) assert.ok(!(Math.abs(a.x - b.x) < (w + CSIZE[b.size][0]) / 2 && Math.abs(a.y - b.y) < (h + CSIZE[b.size][1]) / 2), `${a.id} overlaps ${b.id}`);
+  }
+  // Better ranked is never further out (for the screen's shape).
+  const d = c => farness(seatOf(l, c.id), WIDE);
+  const ranks = l.ranked.slice(NEAR.length).map(d);
+  ranks.forEach((r, i) => i && assert.ok(r >= ranks[i - 1] - 1e-9));
+});
+
+test('a small screen shows what fits and puts the rest in "+N more"; moving and swapping', () => {
+  const small = { left: -3.9, right: 3.9, top: -2.2, bottom: 2.4 };
+  const many = Array.from({ length: 20 }, (_, i) => ({ id: 'm' + i, module: 'm' + i }));
+  const l = layoutCubes([...base, ...many], { bounds: small });
+  const more = l.placed.find(p => p.cube.id === MORE);
+  assert.ok(more && l.overflow.length > 0);
+  assert.equal(more.cube.title, `${l.overflow.length} more`);
+  assert.deepEqual(more.cube.more, l.overflow.map(c => c.id));
+  assert.equal(l.placed.length - 1 + l.overflow.length, base.length + 20);
+  // A missing fixed cube (no Music) leaves its place to a ranked one.
+  assert.ok(l.placed.some(p => !p.fixed && p.seat.x === 0 && p.seat.y === 1.62));
+  // Moving and swapping work on the ranking as it stands.
+  const r = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.deepEqual(moveInOrder(r, 'c', -1), ['a', 'c', 'b']);
+  assert.deepEqual(moveInOrder(r, 'a', -5), ['a', 'b', 'c']);
+  assert.deepEqual(swapInOrder(r, 'a', 'c'), ['c', 'b', 'a']);
+  assert.deepEqual(rankCubes([{ id: 'x' }, { id: 'today' }, { id: 'discord' }]).map(c => c.id), ['discord', 'today', 'x']);
 });
 
 test('activities: priority, then the most recent', () => {

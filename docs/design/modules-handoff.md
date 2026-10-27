@@ -98,7 +98,7 @@ DPAPI in 0.1.x uses `CryptProtectData` with no entropy and no flags (`util.rs`).
 | `backend` | object | | `{ "exe": "<file>.exe", "run": "always" \| "while-process" \| "scheduled" \| "on-demand", "process": ["Discord.exe"], "every": "15m", "idle": "60s" }`. `process` is for `while-process`, `every` for `scheduled`, and `idle` for `on-demand` (default `60s`). |
 | `ui` | object | | `{ "entry": "ui/<id>.js", "css": ["ui/<id>.css"] }`. |
 | `contributes.tabs` | array | | `{ id, title, icon, order }` — an island tab. `order` is a number; base tabs use multiples of 10. |
-| `contributes.cubes` | array | | `{ id, title, icon, size: "S"\|"M"\|"L"\|"W", slot?, site? }` — a Command Center cube (§4.12). |
+| `contributes.cubes` | array | | `{ id, title, icon, size?, slot?, site? }` — a Command Center cube; `size` and `slot` are ignored since 0.3 (D18). |
 | `contributes.sites` | array | | `{ id, label, url, hosts: [..], skin?, default?, split?, reader?, readPage? }`. `url` may hold `{settings.<key>}`; `hosts` are where the skin and the reader apply. `reader` is a `.js` file of the module's (one function expression), run by `ctx.sites.read` in a hidden copy of the site that shares its sign-in; `readPage` is the path it opens (needs a `reader`). |
 | `contributes.calendar` | array | | `{ source, name, color }`. |
 | `contributes.hotkeys` | array | | `{ key: "G", opens: "tab:games" }` — the Win + letter. Letters the base uses are taken (§4.13). |
@@ -275,6 +275,8 @@ This shows whenever there's no activity.
 | `snow` | 71–77, 85, 86 |
 
 ### 4.12 Cube layout
+
+> **Superseded by D18 (0.3).** The island places cubes itself: six fixed ones, the rest by the user's ranking (`src/registry.js`, `layoutCubes`). A manifest's `slot` and `size` are ignored. What follows is the 0.2 design.
 
 `cc.js` has 11 fixed cube positions. They become **12 named slots**; the 12th is new, for the Modules cube.
 
@@ -635,6 +637,7 @@ Extra conditions:
 | D15 | Installs the guide, search and migration ask for go through one background queue (`mod_queue`, modules/queue.json): one at a time, kept until each is in place, retried at the next start or check when offline. Migration runs when the page has `setupDone` from 0.1.x but not `modulesMigrated` (settings.json can't tell, the base writes it every start): it queues Music, plus each module whose 0.1.x file is there or whose app is on the PC. The catalog carries each module's `keywords` and `preselect` | implementation, 2026-10-26 |
 | D16 | New module kinds, owner's picks (Transit, Notion, Focus timer, more players for Music): a section may take the place of a base card (`sections[].replaces`, only Today's `focus` card); the pill draws the top `timer` activity (Today's own timer is one) and the top `custom` activity as a tag beside the clock; `ctx.island.quiet(on, label)` holds module notifications (urgent ones pass) and shows them afterwards as one or a count; `ctx.island.presence()` and the `presence` event give module UIs the eye tracker's state; a module may have no backend (Focus), with a lib crate that only tests its manifest | implementation, 2026-10-27 |
 | D17 | A `{settings.<key>}` host may be a list (a city's transit feeds on several servers). Transit covers any city through GTFS + GTFS-realtime, with Philadelphia (SEPTA) built in; a trip the live feed says is running counts whatever the timetable's calendar says, and a day the timetable doesn't cover borrows the nearest same weekday (SEPTA publishes its next timetable before it starts and drops the current one) | implementation, 2026-10-27 |
+| D18 | Command Center cubes are placed by the island, never a manifest: Modules, Apps, Audio, Games, Clipboard and Music are fixed; every other cube goes by the user's ranking (`ccOrder`, then the island's default order, then install order) into seats nearest the eclipse first: today's six, then a staggered grid filling an oval shaped like the screen, smaller further out; a missing fixed cube's place is a seat too. More cubes than seats: the last seat is "+N more" (a sheet with the rest and the ones taken off, `ccHidden`). Ranking: drag a cube onto another to swap, a cube's right-click menu, or the Modules sheet's Layout list. A manifest's `size` is optional and, like `slot`, ignored | owner, 2026-10-27 |
 
 ## Progress tracker
 
@@ -681,6 +684,7 @@ Update your row in your PR: **todo** → **in review** (with a PR link). The own
 | M4.2 | Music: Amazon Music, YouTube Music, Spotify by name (players.rs) | M2.7 | in review | more-modules |
 | M4.3 | Notion module (to-dos in Today, dated pages in the calendar) | M1.3 | in review | more-modules |
 | M4.4 | Transit module (GTFS + GTFS-realtime, Philadelphia preset, pill tag) | M1.3 | in review | more-modules |
+| M4.5 | Dynamic Command Center cube layout (D18) | M1.3 | in review | cube-layout |
 
 ## Starting a session
 

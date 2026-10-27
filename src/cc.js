@@ -19,7 +19,7 @@ import { createTaskManager } from './cc-taskmgr.js';
 import { createApps } from './cc-apps.js';
 import { createModules } from './cc-modules.js';
 import { createSetup } from './setup.js';
-import { placeCubes } from './registry.js';
+import { layoutCubes, moveInOrder, swapInOrder, CSIZE, MORE } from './registry.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -51,10 +51,11 @@ const SETTINGS = [
   ['Startup apps', 'rocket', 'ms-settings:startupapps', 'run at login boot'], ['About this PC', 'cpu', 'ms-settings:about', 'specs system info rename']
 ];
 
-/* Cubes come from the registry (src/registry.js) and sit in its named slots: [x, y] from the
-   eclipse's center in radii, and a size. A cube opens its island tab in a sheet, its own app there
+/* Cubes come from the registry and the island places them (src/registry.js, layoutCubes): six stay
+   put, the rest go by the user's ranking, nearest the eclipse first, with "+N more" when there are
+   more than fit. Rank them by dragging one cube onto another, from a cube's right-click menu, or in
+   the Modules sheet's Layout list. A cube opens its island tab in a sheet, its own app there
    (registry sheets), or a real website docked in (registry sites). */
-const CSIZE = { L: [.9, .9], M: [.74, .74], S: [.52, .52], W: [1.14, .72] };
 
 const KIND = { app: 'App', window: 'Window', game: 'Game', folder: 'Folder', drive: 'Drive', file: 'File', setting: 'Settings', command: 'Command', calc: 'Calculator' };
 const GROUP = [['app', 'Apps'], ['window', 'Open windows'], ['game', 'Games'], ['folder', 'Folders & drives'], ['file', 'Files'], ['setting', 'Windows settings'], ['command', 'Commands']];
@@ -117,15 +118,101 @@ export function createCommandCenter(ctx) {
   const cal = createCalendar({ invoke, esc, ic, store, S, flash });
   /** Sections that are their own app in a sheet (mounted there instead of the island's view). */
   const aps = createApps({ S, invoke, esc, ic, assetUrl, store, flash, close: after => close(after, true), gradFor: ctx.gradFor, glyphOf: ctx.glyphOf, apps: ctx.apps });
-  const mds = createModules({ invoke, listen: ctx.listen, esc, ic, flash, settingsOf: ctx.settingsOf || (() => null) });
+  const mds = createModules({ invoke, listen: ctx.listen, esc, ic, flash, settingsOf: ctx.settingsOf || (() => null), layout: { get: () => layoutApi.get(), move: (id, by) => layoutApi.move(id, by), hide: (id, on) => layoutApi.hide(id, on), reset: () => layoutApi.reset() } });
   // The base's own cubes, sheets and docked sites; modules register theirs (src/modhost.js).
   [['apps', 'Apps', 'grid'], ['audio', 'Audio', 'speaker'], ['today', 'Today', 'calendar'],
     ['network', 'Network', 'wifi'], ['clipboard', 'Clipboard', 'clip'], ['stats', 'Stats', 'pulse']]
     .forEach(([id, title, icon]) => REG.cubes.add({ id, title, icon, stat: () => cubeStat(id) }));
   REG.cubes.add({ id: 'modules', title: 'Modules', icon: 'layers', stat: () => mds.stat() });
   for (const [id, app] of Object.entries({ apps: aps, today: cal, modules: mds })) REG.sheets.add({ id, ...app, mount: app.mount, unmount: app.unmount, key: app.key });
-  /** The cubes as placed in slots right now, in slot (keyboard) order. */
-  const cubes = () => placeCubes(REG.cubes.all());
+  // "+N more": the cubes that didn't fit, and the ones taken off the screen.
+  let moreEl = null;
+  REG.sheets.add({
+    id: MORE,
+    mount(host) {
+      moreEl = document.createElement('div'); moreEl.className = 'cc-more'; host.append(moreEl);
+      moreEl.addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openSheet(b.dataset.open); else if (e.target.closest('[data-arrange]')) arrange(); });
+      renderMore();
+    },
+    unmount() { moreEl?.remove(); moreEl = null; },
+    key: () => false
+  });
+  /* ---------- where the cubes go ---------- */
+  // The user's ranking (cube ids, nearest the eclipse first) and the cubes they took off the screen.
+  let order = store.get('ccOrder', []), hiddenIds = store.get('ccHidden', []);
+  /** The eclipse's size and the room around it, in eclipse radii, for this screen. */
+  function room() {
+    const W = innerWidth, H = innerHeight, r = clamp(Math.min(W / 9.8, H / 4.4), 84, 210), cy = H / 2 + 4;
+    return { r, cy, bounds: { left: -(W / 2 - 24) / r, right: (W / 2 - 24) / r, top: -(cy - 72) / r, bottom: (H - cy - 28) / r } };
+  }
+  /** Where every cube goes on this screen (layoutCubes). */
+  const lay = () => layoutCubes(REG.cubes.all(), { order, hidden: hiddenIds, bounds: room().bounds });
+  /** The placed cubes, as before: [{ cube, slot }]. */
+  const cubes = () => lay().placed.map(p => ({ cube: p.cube, slot: p.seat, fixed: p.fixed }));
+  function setOrder(ids) { order = ids; store.set('ccOrder', ids); renderCubes(); mds.layoutChanged(); }
+  function setHidden(id, on) {
+    hiddenIds = on ? [...new Set([...hiddenIds, id])] : hiddenIds.filter(x => x !== id);
+    store.set('ccHidden', hiddenIds); renderCubes(); mds.layoutChanged();
+  }
+  /** The sheets in keyboard order (arrows and 1–9): the fixed cubes, the ranking, Modules, then "More". */
+  function sheetKeys() { const l = lay(); return [...l.keys, ...(l.overflow.length || l.hidden.length ? [MORE] : [])]; }
+  /** "+N more": tiles for the cubes that didn't fit and the ones taken off the screen. */
+  function renderMore() {
+    if (!moreEl) return;
+    const l = lay(), tile = (c, off) => `<button class="cc-mtile${off ? ' off' : ''}" type="button" data-open="${esc(c.id)}">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small>${esc(off ? 'Taken off the Command Center' : statOf(c.id))}</small></button>`;
+    moreEl.innerHTML = `<div class="sh-bar"><h3>More <small>${l.overflow.length + l.hidden.length}</small></h3><span class="grow"></span><button class="cc-btn" type="button" data-arrange>${ic('grid')}Arrange cubes…</button></div>
+      ${l.overflow.length ? `<p class="cc-mnote">These didn’t fit around the eclipse. Rank them higher to bring them in, or make room by taking others off.</p><div class="cc-mgrid">${l.overflow.map(c => tile(c, false)).join('')}</div>` : ''}
+      ${l.hidden.length ? `<h4 class="cc-mh">Taken off the Command Center</h4><div class="cc-mgrid">${l.hidden.map(c => tile(c, true)).join('')}</div>` : ''}
+      ${!l.overflow.length && !l.hidden.length ? '<p class="cc-mnote">Every cube has a place around the eclipse.</p>' : ''}`;
+  }
+  /** The Modules sheet's Layout list. */
+  function arrange() { if (openSheet('modules')) mds.show(null, 'layout'); }
+  /** Right-click on a cube: rank it, take it off, or arrange them all. */
+  function cubeMenu(id, x, y) {
+    if (!ctx.menu) return;
+    const l = lay(), i = l.ranked.findIndex(c => c.id === id);
+    const items = [];
+    if (id === MORE || i < 0) items.push({ heading: id === MORE ? 'More cubes' : 'This one stays where it is' });
+    else {
+      const name = l.ranked[i].title;
+      items.push({ heading: name });
+      if (i > 0) items.push({ label: 'Move nearer the middle', icon: 'star', action: () => layoutApi.move(id, -1) });
+      if (i < l.ranked.length - 1) items.push({ label: 'Move further out', icon: 'down', action: () => layoutApi.move(id, 1) });
+      if (i > 0) items.push({ label: 'Put it nearest the middle', icon: 'orbit', action: () => layoutApi.move(id, -i) });
+      items.push({ label: 'Take it off the Command Center', icon: 'eye', action: () => { layoutApi.hide(id, true); flash(`${name} is in More now`); } });
+    }
+    items.push({ sep: true }, { label: 'Arrange cubes…', icon: 'grid', action: arrange });
+    ctx.menu(x, y, items);
+  }
+  /* Dragging a ranked cube onto another trades their places. */
+  let drag = null, dragged = false;
+  function dragStart(e) {
+    const w = e.target.closest('.cc-cw'); if (!w || e.button !== 0 || w.classList.contains('fixed') || w.classList.contains('more')) return;
+    drag = { w, id: w.dataset.cube, x: e.clientX, y: e.clientY, on: false, over: null, pid: e.pointerId };
+  }
+  function dragMove(e) {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) { if (Math.hypot(dx, dy) < 8) return; drag.on = true; drag.w.classList.add('dragging'); try { drag.w.setPointerCapture(e.pointerId); } catch (err) {} }
+    drag.w.style.translate = `${dx}px ${dy}px`;
+    const over = document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('.cc-cw')).find(w => w && w !== drag.w && !w.classList.contains('fixed') && !w.classList.contains('more')) || null;
+    if (over !== drag.over) { drag.over?.classList.remove('drop'); over?.classList.add('drop'); drag.over = over; }
+  }
+  function dragEnd(e) {
+    if (!drag || (e && e.pointerId !== drag.pid)) return;
+    const d = drag; drag = null;
+    if (!d.on) return;
+    d.w.classList.remove('dragging'); d.w.style.translate = ''; d.over?.classList.remove('drop');
+    dragged = true; setTimeout(() => { dragged = false; }, 0);
+    if (d.over && e && e.type === 'pointerup') { const a = REG.cubes.get(d.id), b = REG.cubes.get(d.over.dataset.cube); setOrder(swapInOrder(lay().ranked, d.id, d.over.dataset.cube)); if (a && b) flash(`${a.title} and ${b.title} traded places`); }
+  }
+  /** What the Modules sheet's Layout list shows and does. */
+  const layoutApi = {
+    get: () => { const l = lay(); return { fixed: l.placed.filter(p => p.fixed).map(p => p.cube), ranked: l.ranked, overflow: l.overflow.map(c => c.id), hidden: l.hidden }; },
+    move: (id, by) => setOrder(moveInOrder(lay().ranked, id, by)),
+    hide: (id, on) => setHidden(id, on),
+    reset: () => { order = []; hiddenIds = []; store.set('ccOrder', []); store.set('ccHidden', []); renderCubes(); mds.layoutChanged(); }
+  };
   const siteOf = tab => { const c = REG.cubes.get(tab); return c && c.site ? REG.sites.get(c.site) || null : null; };
   const NATIVE = new Proxy({}, { get: (_, k) => REG.sheets.get(k), has: (_, k) => REG.sheets.has(k) });
   REG.cubes.on(() => { if (isOpen) renderCubes(); });
@@ -350,10 +437,13 @@ export function createCommandCenter(ctx) {
     }
   }
   const cubeIcon = n => (/\.svg$/.test(n || '') ? `<img class="i" src="${esc(n)}" alt="">` : ic(n));
-  const statOf = id => { const c = REG.cubes.get(id); try { return c && c.stat ? String(c.stat() || '') : ''; } catch (e) { return ''; } };
+  const statOf = id => {
+    if (id === MORE) { const l = lay(); return l.overflow.map(c => c.title).slice(0, 3).join(', ') + (l.overflow.length > 3 ? '…' : ''); }
+    const c = REG.cubes.get(id); try { return c && c.stat ? String(c.stat() || '') : ''; } catch (e) { return ''; }
+  };
   function renderCubes() {
-    $('.cc-cubes').innerHTML = cubes().map(({ cube: c, slot }, i) => `<div class="cc-cw ${slot.x < 0 ? 'l' : slot.x > 0 ? 'r' : 'c'} sz-${slot.size}" data-cube="${esc(c.id)}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(c.title)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small data-stat="${esc(c.id)}">${esc(statOf(c.id))}</small></span></button></div></div>`).join('');
-    layout();
+    $('.cc-cubes').innerHTML = cubes().map(({ cube: c, slot, fixed }, i) => `<div class="cc-cw ${slot.x < 0 ? 'l' : slot.x > 0 ? 'r' : 'c'} sz-${slot.size}${fixed ? ' fixed' : ''}${c.id === MORE ? ' more' : ''}" data-cube="${esc(c.id)}" style="--dl:${(-i * 1.37).toFixed(2)}s;--fd:${(5.2 + (i % 4) * .95).toFixed(2)}s"><div class="cc-fl"><button class="cc-cube" type="button" aria-label="${esc(c.title)}"><span class="cc-f f-back"></span><span class="cc-f f-left"></span><span class="cc-f f-right"></span><span class="cc-f f-top"></span><span class="cc-f f-bottom"></span><span class="cc-f f-front">${cubeIcon(c.icon)}<b>${esc(c.title)}</b><small data-stat="${esc(c.id)}">${esc(statOf(c.id))}</small></span></button></div></div>`).join('');
+    layout(); renderMore();
     // A module's cube stat comes from its UI, so the cubes on screen load theirs.
     for (const m of new Set(REG.cubes.all().map(c => c.module).filter(Boolean))) ctx.activateModule(m).then(renderCubeStats, () => {});
   }
@@ -366,14 +456,14 @@ export function createCommandCenter(ctx) {
   function resize() {
     DPR = Math.min(devicePixelRatio || 1, 1.5) * CANVAS_Q;
     cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
-    layout();
+    renderCubes();
   }
   /** Lets go of the canvas's pixels while nothing shows it (a sheet covers it, or it's closed). */
   function sleepCanvas() { cv.width = cv.height = 1; }
   function wakeCanvas() { if (isOpen && !running) { resize(); running = true; lastT = 0; requestAnimationFrame(frame); } }
   function layout() {
     const W = innerWidth, H = innerHeight;
-    R = clamp(Math.min(W / 9.8, H / 4.4), 84, 210); CX = W / 2; CY = H / 2 + 4;
+    R = room().r; CX = W / 2; CY = H / 2 + 4;
     const at = new Map(cubes().map(p => [p.cube.id, p.slot]));
     $$('.cc-cw').forEach(el => {
       const s = at.get(el.dataset.cube); if (!s) return;
@@ -512,7 +602,7 @@ export function createCommandCenter(ctx) {
     const sc = e.target.closest('[data-scope]'); if (sc) { scope = sc.dataset.scope; sel = 0; search(); input.focus(); return; }
     const r = e.target.closest('.cc-res'); if (r) { sel = +r.dataset.n; run(flat[sel]); return; }
     const a = e.target.closest('[data-act]'); if (a) { run(flat[sel], +a.dataset.act); return; }
-    const cw = e.target.closest('.cc-cw'); if (cw) { openSheet(cw.dataset.cube, cw); return; }
+    const cw = e.target.closest('.cc-cw'); if (cw) { if (!dragged) openSheet(cw.dataset.cube, cw); return; }
     if (e.target.closest('[data-cc="back"]')) { closeSheet(); return; }
     const st = e.target.closest('[data-sheet]'); if (st) { openSheet(st.dataset.sheet); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); return; }
@@ -526,6 +616,11 @@ export function createCommandCenter(ctx) {
     // A click on the empty void goes back to the search box.
     if (!e.target.closest('input, button, a')) input.focus({ preventScroll: true });
   });
+  root.addEventListener('contextmenu', e => { const w = e.target.closest('.cc-cw'); if (!w) return; e.preventDefault(); cubeMenu(w.dataset.cube, e.clientX, e.clientY); });
+  root.addEventListener('pointerdown', dragStart);
+  root.addEventListener('pointermove', dragMove);
+  root.addEventListener('pointerup', dragEnd);
+  root.addEventListener('pointercancel', dragEnd);
   root.addEventListener('mousemove', e => { const r = e.target.closest('.cc-res'); if (r && +r.dataset.n !== sel) setSel(+r.dataset.n); });
   root.addEventListener('pointerover', e => {
     const w = e.target.closest('.cc-cw'); if (!w) return;
@@ -541,10 +636,10 @@ export function createCommandCenter(ctx) {
     if (sheetTab) {
       if (nativeOn && NATIVE[nativeOn].key(e)) { e.preventDefault(); e.stopPropagation(); return; }
       const typing = e.target.matches && e.target.matches('input, textarea, select') && e.target !== input;
-      const order = cubes().map(p => p.cube.id), i = order.indexOf(sheetTab);
+      const keys = sheetKeys(), i = keys.indexOf(sheetTab);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (typing) e.target.blur(); else closeSheet(); return; }
-      if (!typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); e.stopPropagation(); openSheet(order[(i + (e.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length]); return; }
-      if (!typing && /^[1-9]$/.test(e.key)) { e.stopPropagation(); if (order[+e.key - 1]) openSheet(order[+e.key - 1]); return; }
+      if (!typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); e.stopPropagation(); openSheet(keys[(i + (e.key === 'ArrowRight' ? 1 : -1) + keys.length) % keys.length]); return; }
+      if (!typing && /^[1-9]$/.test(e.key)) { e.stopPropagation(); if (keys[+e.key - 1]) openSheet(keys[+e.key - 1]); return; }
       return; // everything else belongs to the section
     }
     e.stopPropagation();
@@ -559,13 +654,14 @@ export function createCommandCenter(ctx) {
   /* ---------- sheets: each section full size ---------- */
   /** `mode` ('island' or 'web') overrides the view the sheet remembers. */
   function openSheet(tab, fromEl, mode) {
-    if (!isOpen || busy || !cubes().some(p => p.cube.id === tab)) return false;
+    // Any cube opens, on screen or not ("+N more", or taken off it).
+    if (!isOpen || busy || !(REG.cubes.has(tab) || tab === MORE)) return false;
     if (tab === 'stats') { openTM(); return true; }
     tm.close();
     const sheet = $('.cc-sheet'), first = !sheetTab;
     invoke('cc_embed_hide').catch(() => {}); clearTimeout(embedT);
     sheetTab = tab;
-    $('.cc-tabs').innerHTML = cubes().map(({ cube: c }) => `<button class="cc-chip" type="button" data-sheet="${esc(c.id)}" aria-pressed="${c.id === tab}">${cubeIcon(c.icon)}${esc(c.title)}</button>`).join('');
+    $('.cc-tabs').innerHTML = sheetKeys().map(id => { const c = id === MORE ? { title: 'More', icon: 'grid' } : REG.cubes.get(id); return `<button class="cc-chip" type="button" data-sheet="${esc(id)}" aria-pressed="${id === tab}">${cubeIcon(c.icon)}${esc(c.title)}</button>`; }).join('');
     if (first) {
       const src = fromEl || $(`.cc-cw[data-cube="${tab}"]`);
       if (src) { const r = src.getBoundingClientRect(); sheet.style.setProperty('--ox', (r.left + r.width / 2 - 32) + 'px'); sheet.style.setProperty('--oy', (r.top + r.height / 2 - 72) + 'px'); }

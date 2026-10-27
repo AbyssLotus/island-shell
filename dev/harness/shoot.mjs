@@ -21,10 +21,10 @@ export const SHOTS = {
   clipboard: 'tab=clipboard', apps: 'tab=apps', wallpaper: 'tab=wallpaper', 'wallpaper-base': 'tab=wallpaper&mods=0', power: 'tab=power',
   'power-update': 'tab=power&scenario=update',
   bar: 'style=bar',
-  cc: 'cc=1',
+  cc: 'cc=1', 'cc-many': 'cc=1&scenario=manycubes',
   'cc-today': 'sheet=today', 'cc-discord': 'sheet=discord', 'cc-network': 'sheet=network',
 };
-const BIG = new Set(['cc']);
+const BIG = new Set(['cc', 'cc-many']);
 
 const only = process.argv.slice(2);
 const names = only.length ? only : Object.keys(SHOTS);

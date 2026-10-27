@@ -51,7 +51,7 @@ Everything in the folder except `src/`, `Cargo.toml` and dotfiles goes into the 
 }
 ```
 
-`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio`, `wallpaper` and `today`, where `"view": true` makes it an alternative the tab's header switches to, and `"replaces": "focus"` puts it in place of Today's Focus card), `cubes` (with `slot`, `size` and an optional docked `site`), `sites` (`url`, `hosts`, `skin`, `default`, `split`, and a `reader` with its `readPage`: see [Reading a docked site](#reading-a-docked-site)), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
+`contributes` can hold `tabs`, `sections` (in a base tab: `network`, `audio`, `wallpaper` and `today`, where `"view": true` makes it an alternative the tab's header switches to, and `"replaces": "focus"` puts it in place of Today's Focus card), `cubes` (a title, an icon and an optional docked `site`; the island decides where a cube goes and how big, from the user's ranking, so `slot` and `size` are ignored, though a module for 0.2 islands still gives a `size`), `sites` (`url`, `hosts`, `skin`, `default`, `split`, and a `reader` with its `readPage`: see [Reading a docked site](#reading-a-docked-site)), `calendar` sources, `hotkeys` (`{ "key": "G", "opens": "tab:games" }`) and `setup` (`{ "card": true, "preselect": false }`). A test in each module (`manifest_is_valid`) runs the island's own validation over its manifest.
 
 ## The backend
 

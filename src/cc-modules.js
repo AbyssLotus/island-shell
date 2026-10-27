@@ -3,16 +3,18 @@
 // what their process uses, what they talk to, their settings page and their recent log, with Turn
 // off, Restart, Update and Remove (keeping or forgetting their keys and data). Available ones come
 // from the signed release catalog, ready to install; Updates lists newer versions. Developer mode
-// loads an unpacked module folder (unsigned, and badged so). Backend: modules.rs and updater.rs.
+// loads an unpacked module folder (unsigned, and badged so). Layout ranks the Command Center's cubes
+// (nearest the eclipse first) and takes some off it (cc.js does the placing). Backend: modules.rs
+// and updater.rs.
 
 import { modUrl, shadowFor } from './modhost.js';
 
-const VIEWS = [['installed', 'Installed'], ['available', 'Available'], ['updates', 'Updates']];
+const VIEWS = [['installed', 'Installed'], ['available', 'Available'], ['updates', 'Updates'], ['layout', 'Layout']];
 const STATE = { running: 'Running', starting: 'Starting…', stopped: 'Not running', backoff: 'Restarting after a crash', failed: 'Stopped after crashing', disabled: 'Turned off' };
 const RUNS = { always: 'all the time', 'while-process': 'while its app is open', scheduled: 'now and then, on a schedule', 'on-demand': 'when you use it' };
 const size = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
-export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
+export function createModules({ invoke, listen, esc, ic, flash, settingsOf, layout }) {
   let el = null, view = 'installed', sel = '', list = [], broken = [], catalog = [], upd = {}, usage = {}, logs = '', logsFor = '', timer = 0, offs = [], confirmRemove = false, settingsFor = '';
   const $ = s => el && el.querySelector(s);
   const installed = id => list.find(m => m.id === id);
@@ -73,6 +75,31 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
     if (view === 'available') return available().map(c => ({ id: c.id, name: c.name, man: null, sub: `Version ${c.version} · ${size(c.size)}`, tone: '' }));
     return updates().map(u => ({ id: u.id, name: u.name, man: installed(u.id) && installed(u.id).manifest, sub: `${u.from} → ${u.to}`, tone: 'update' }));
   }
+  /* ---------- the Command Center's layout ---------- */
+  const cubeIc = n => (/\.svg$/.test(n || '') ? `<img class="i" src="${esc(n)}" alt="">` : ic(n || 'layers'));
+  function renderLayout() {
+    const l = layout.get(), last = l.ranked.length - 1;
+    const row = (c, i) => {
+      const out = l.overflow.includes(c.id);
+      return `<div class="mds-lrow${out ? ' out' : ''}" data-id="${esc(c.id)}"><em>${i + 1}</em><span class="mds-ic">${cubeIc(c.icon)}</span><span class="mds-t"><b>${esc(c.title)}</b><small>${out ? 'In “More”: no room around the eclipse' : i === 0 ? 'Nearest the eclipse' : ''}</small></span>
+        <button class="cc-ib up" type="button" data-lay="up" title="Nearer the middle" aria-label="Move ${esc(c.title)} nearer the middle"${i === 0 ? ' disabled' : ''}>${ic('down')}</button>
+        <button class="cc-ib" type="button" data-lay="down" title="Further out" aria-label="Move ${esc(c.title)} further out"${i === last ? ' disabled' : ''}>${ic('down')}</button>
+        <button class="cc-ib" type="button" data-lay="hide" title="Take it off the Command Center" aria-label="Take ${esc(c.title)} off the Command Center">${ic('eye')}</button></div>`;
+    };
+    $('.mds-list').innerHTML = `<div class="mds-lay">
+      <h4>By priority <small>nearest the eclipse first</small></h4>
+      ${l.ranked.length ? l.ranked.map(row).join('') : '<p class="mds-quiet">Nothing to rank yet.</p>'}
+      ${l.hidden.length ? `<h4>Taken off <small>still in More and in search</small></h4>${l.hidden.map(c => `<div class="mds-lrow off" data-id="${esc(c.id)}"><span class="mds-ic">${cubeIc(c.icon)}</span><span class="mds-t"><b>${esc(c.title)}</b></span><button class="cc-btn" type="button" data-lay="show">Put it back</button></div>`).join('')}` : ''}
+      <h4>Stay put</h4>
+      <div class="mds-fixed">${l.fixed.map(c => `<span class="mds-chip">${cubeIc(c.icon)}${esc(c.title)}</span>`).join('')}</div>
+    </div>`;
+    $('.mds-side').dataset.for = '';
+    $('.mds-side').innerHTML = `<div class="mds-card"><div class="mds-head"><span class="mds-ic big">${ic('grid')}</span><div><h2>Command Center layout</h2><small>${l.ranked.length} ranked · ${l.fixed.length} that stay put</small></div></div>
+      <p class="mds-desc">Modules, Apps, Audio, Games, Clipboard and Music always keep their places. Every other cube goes by this ranking: the first ones sit nearest the eclipse, and the rest fill outward, smaller the further out, as many as your screen has room for. The others wait in <b>More</b>.</p>
+      <p class="mds-desc">In the Command Center you can also drag one cube onto another to trade their places, or right-click a cube to move it or take it off.</p>
+      <div class="mds-acts"><button class="cc-btn" type="button" data-a="layout-reset">${ic('restart')}Back to the island’s order</button></div></div>`;
+  }
+
   function render() {
     if (!el) return;
     el.querySelectorAll('.sh-chips [data-v]').forEach(b => {
@@ -81,6 +108,7 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
     });
     $('.sh-bar h3 small').textContent = `${list.length} installed`;
     $('[data-a="updateall"]').hidden = !(view === 'updates' && updates().length);
+    if (view === 'layout') { renderLayout(); return; }
     const r = rows();
     if (!r.some(x => x.id === sel)) sel = r.length ? r[0].id : '';
     let empty = '';
@@ -160,6 +188,7 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
   const fail = e => flash(String((e && e.message) || e));
   async function act(a) {
     const m = installed(sel), c = catalog.find(x => x.id === sel);
+    if (a === 'layout-reset') { layout.reset(); flash('Back to the island’s order'); return; }
     if (a === 'check') { flash('Checking for updates…'); try { upd = await invoke('update_check'); catalog = (await invoke('mod_catalog')) || []; render(); flash(upd.state === 'error' ? `Couldn't check: ${upd.error}` : 'Checked'); } catch (e) { fail(e); } return; }
     if (a === 'folder') { try { const info = await invoke('mod_load_folder', { path: null }); if (info) { view = 'installed'; sel = info.id; await load(); flash(`${info.manifest.name} loaded (developer mode)`); } } catch (e) { fail(e); } return; }
     if (a === 'updateall') { try { const done = await invoke('update_modules'); flash(done && done.length ? `Updated ${done.length}` : 'Nothing to update'); await load(); } catch (e) { fail(e); } return; }
@@ -179,6 +208,13 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
   function onClick(e) {
     const v = e.target.closest('[data-v]');
     if (v) { view = v.dataset.v; confirmRemove = false; render(); return; }
+    const lay = e.target.closest('[data-lay]');
+    if (lay && !lay.disabled) {
+      const id = lay.closest('[data-id]').dataset.id, k = lay.dataset.lay;
+      if (k === 'up' || k === 'down') layout.move(id, k === 'up' ? -1 : 1);
+      else layout.hide(id, k === 'hide');
+      return;
+    }
     const row = e.target.closest('.mds-row');
     if (row) { if (sel !== row.dataset.id) { sel = row.dataset.id; confirmRemove = false; logs = ''; } render(); return; }
     const a = e.target.closest('[data-a]');
@@ -191,7 +227,7 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
   }
   /** Keys while the sheet shows: up and down through the list. */
   function key(e) {
-    if (!el || (e.target.matches && e.target.matches('input, textarea, select'))) return false;
+    if (!el || view === 'layout' || (e.target.matches && e.target.matches('input, textarea, select'))) return false;
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return false;
     const r = rows(), i = r.findIndex(x => x.id === sel);
     const n = r[Math.max(0, Math.min(r.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
@@ -218,6 +254,8 @@ export function createModules({ invoke, listen, esc, ic, flash, settingsOf }) {
     unmount() { clearTimeout(timer); for (const off of offs) { try { off(); } catch (e) {} } offs = []; if (el) el.remove(); el = null; settingsFor = ''; },
     key,
     /** For the cube's line before the sheet was ever opened. */
-    refresh: load
+    refresh: load,
+    /** The Command Center's cubes moved: the Layout list follows. */
+    layoutChanged() { if (el && view === 'layout') renderLayout(); }
   };
 }
