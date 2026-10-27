@@ -35,7 +35,12 @@ jobs:
       NOTES: ${{ inputs.notes }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      # Pinned, like the Tauri CLI: a module whose version didn't change keeps its last package only if
+      # it builds to the same bytes, and a new Rust builds different bytes. Moving to a newer Rust means
+      # bumping every module with a backend too (docs/BUILDING.md).
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v5
         with:
