@@ -505,5 +505,67 @@
    }
   ],
   "custom": null
- }
+ },
+ "wifi_list": {
+  "adapter": true,
+  "networks": [
+   {
+    "ssid": "Harbor-5G",
+    "signal": 92,
+    "bars": 4,
+    "security": "wpa2",
+    "saved": true,
+    "connected": true
+   },
+   {
+    "ssid": "Harbor-2G",
+    "signal": 71,
+    "bars": 3,
+    "security": "wpa3",
+    "saved": true,
+    "connected": false
+   },
+   {
+    "ssid": "Corner Cafe Guest",
+    "signal": 64,
+    "bars": 3,
+    "security": "open",
+    "saved": false,
+    "connected": false
+   },
+   {
+    "ssid": "Campus Secure",
+    "signal": 58,
+    "bars": 2,
+    "security": "enterprise",
+    "saved": false,
+    "connected": false
+   },
+   {
+    "ssid": "Apartment 4B",
+    "signal": 43,
+    "bars": 2,
+    "security": "wpa2",
+    "saved": false,
+    "connected": false
+   },
+   {
+    "ssid": "Printer-Direct-7F",
+    "signal": 31,
+    "bars": 1,
+    "security": "wpa2",
+    "saved": false,
+    "connected": false
+   },
+   {
+    "ssid": "Old Router",
+    "signal": 12,
+    "bars": 0,
+    "security": "wep",
+    "saved": false,
+    "connected": false
+   }
+  ]
+ },
+ "wifi_scan": null
 }

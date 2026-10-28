@@ -66,6 +66,33 @@
     // like the hidden copy of the site takes; anything else it's asked to do just works.
     mod_site_read: ({ args }) => new Promise(done => setTimeout(() => done(args && args.action !== 'read' ? { id: 901 } : structuredClone(fixtures.mod_site_read ?? { signedIn: false })), 900)),
     log: ({ msg }) => { console.debug('[page log]', msg); return null; },
+    // Wi-Fi: joining takes a moment; the password "wrongpass" (or anything under 8) is refused.
+    // "wifi_list_error" in a scenario is what listing fails with (the location message, say).
+    // Sorted like wifi.rs: the one you're on, then saved ones, then by signal.
+    wifi_list: () => {
+      if (fixtures.wifi_list_error) throw fixtures.wifi_list_error;
+      const w = structuredClone(fixtures.wifi_list ?? null);
+      if (w) w.networks.sort((a, b) => b.connected - a.connected || b.saved - a.saved || b.signal - a.signal || a.ssid.localeCompare(b.ssid));
+      return w;
+    },
+    wifi_connect: ({ ssid, password }) => new Promise((done, fail) => setTimeout(() => {
+      const nets = (fixtures.wifi_list && fixtures.wifi_list.networks) || [], n = nets.find(x => x.ssid === ssid);
+      if (!n || password === 'wrongpass' || (password != null && password.length < 8)) return fail(`Couldn't connect to ${ssid}. Check the password and try again.`);
+      for (const x of nets) x.connected = x === n;
+      n.saved = true;
+      if (fixtures.get_status) fixtures.get_status.net = { kind: 'wifi', name: ssid, bars: n.bars };
+      done(null);
+    }, 1200)),
+    wifi_disconnect: () => {
+      for (const x of (fixtures.wifi_list && fixtures.wifi_list.networks) || []) x.connected = false;
+      if (fixtures.get_status) fixtures.get_status.net = { kind: 'none', name: '', bars: null };
+      return null;
+    },
+    wifi_forget: ({ ssid }) => {
+      const n = ((fixtures.wifi_list && fixtures.wifi_list.networks) || []).find(x => x.ssid === ssid);
+      if (n) Object.assign(n, { saved: false, connected: false });
+      return null;
+    },
   };
 
   async function invoke(cmd, args = {}) {
