@@ -1,7 +1,7 @@
 {
   "id": "transit",
   "name": "Transit",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "api": 1,
   "description": "Live departures for the stops you use, from your city's public transit feeds, with the next one on the pill when you usually leave. Philadelphia (SEPTA buses, trolleys, subway and Regional Rail) is ready to go.",
   "icon": "ui/icon.svg",
@@ -9,9 +9,11 @@
   "ui": { "entry": "ui/transit.js", "css": ["ui/transit.css"], "eager": true },
   "contributes": {
     "tabs": [{ "id": "transit", "title": "Transit", "icon": "bus", "order": 55 }],
+    "cubes": [{ "id": "transit", "title": "Transit", "icon": "bus", "site": "planner" }],
+    "sites": [{ "id": "planner", "label": "Trip planner", "url": "https://transitapp.com/en/trip", "hosts": ["transitapp.com"], "skin": "skins/transit-skin.css" }],
     "setup": { "card": true }
   },
-  "talksTo": ["Your transit agency's public timetable and live feed: SEPTA (www3.septa.org) for Philadelphia, or the addresses you enter for another city"],
+  "talksTo": ["Your transit agency's public timetable and live feed: SEPTA (www3.septa.org) for Philadelphia, or the addresses you enter for another city", "The Transit app's trip planner (transitapp.com), when you open it in the Command Center"],
   "hosts": ["www3.septa.org", "{settings.hosts}"],
   "keywords": ["transit", "bus", "train", "subway", "trolley", "septa", "regional rail", "departures", "commute", "gtfs"]
 }

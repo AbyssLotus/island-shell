@@ -303,6 +303,17 @@ export function activate(c) {
   ctx = c;
   ctx.tabs.register({ id: 'transit', mount, show() { shown = true; load().then(() => schedulePill(false)); }, hide() { shown = false; clearTimeout(T); } });
   ctx.setup.card(() => ({ state: ctx.store.get('city', '') }));
+  // The Command Center's cube: the soonest departure from the saved stops (as last read), else what
+  // its sheet also holds, the Transit app's trip planner.
+  ctx.cubes.register({
+    id: 'transit',
+    stat: () => {
+      const now = Date.now() / 1000, next = Object.values((ctx.store.get('next', {}) || {}).next || {}).filter(d => d.at >= now - 30).sort((a, b) => a.at - b.at)[0];
+      if (!next || minsTo(next.at, now) > 90) return 'Trip planner';
+      const m = minsTo(next.at, now);
+      return `${next.label} · ${m <= 0 ? 'Due' : `${m} min`}`;
+    }
+  });
   ctx.search.register({
     id: 'stops', kind: 'stop', label: 'Transit', icon: 'bus',
     items: () => {

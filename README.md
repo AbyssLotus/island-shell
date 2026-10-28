@@ -50,7 +50,7 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 | 🛡️ | **VPN** | Tailscale and Radmin VPN in Network, with a switch in Controls. |
 | ⏱️ | **Focus timer** | Focus stretches and breaks, Pomodoro style, in Today and on the pill. Notifications wait while you focus, and with the eye tracker it pauses when you step away. |
 | ✅ | **Notion** | To-dos from your Notion databases in Today, ticked off from the island, and pages with dates in the calendar. |
-| 🚌 | **Transit** | Live departures for your stops from your city's transit feeds, with the next one on the pill when you usually leave. Philadelphia (SEPTA) is built in. |
+| 🚌 | **Transit** | Live departures for your stops from your city's transit feeds, with the next one on the pill when you usually leave, and the Transit app's trip planner docked in the Command Center. Philadelphia (SEPTA) is built in. |
 
 ## What it is
 
