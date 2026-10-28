@@ -35,9 +35,9 @@ jobs:
       NOTES: ${{ inputs.notes }}
     steps:
       - uses: actions/checkout@v5
-      # Pinned, like the Tauri CLI: a module whose version didn't change keeps its last package only if
-      # it builds to the same bytes, and a new Rust builds different bytes. Moving to a newer Rust means
-      # bumping every module with a backend too (docs/BUILDING.md).
+      # Pinned, like the Tauri CLI, so a release builds the same way every time. Moving to a newer Rust
+      # needs no module bumps: pack-modules judges whether a module changed by its own source, not its
+      # built exe, so a module nobody touched keeps its last package (docs/BUILDING.md).
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.1
@@ -73,6 +73,16 @@ jobs:
           New-Item -ItemType Directory -Force prev | Out-Null
           gh release download --pattern modules.json --dir prev 2>$null
           if (-not (Test-Path prev/modules.json)) { Write-Output "No earlier catalog: every module is packed new." }
+          else {
+            # A catalog from 0.3.1 or before has no source hashes, so pack-modules compares those
+            # modules with their zips instead (from whichever release first carried each one).
+            $ProgressPreference = 'SilentlyContinue'
+            foreach ($m in (Get-Content prev/modules.json -Raw | ConvertFrom-Json).modules) {
+              if ($m.source) { continue }
+              try { Invoke-WebRequest $m.url -OutFile (Join-Path prev ($m.url -split '/')[-1]) }
+              catch { Write-Output "::warning::Couldn't download $($m.url): $_" }
+            }
+          }
           $global:LASTEXITCODE = 0
 
       - name: Pack
