@@ -350,19 +350,19 @@ fn reader_script(reader: &str, args: &serde_json::Value, key: &str) -> String {
 mod tests {
     /// The skin rides into the site's page as a JSON string inside this script; the test also writes
     /// each site's script to target/<site>-skin-script.js so it can be checked with `node --check`.
-    /// The Discord module's skin, the biggest one.
-    const DISCORD_SKIN: &str = include_str!("../../modules/discord/skins/discord-skin.css");
+    /// The Canvas module's skin, the biggest one.
+    const CANVAS_SKIN: &str = include_str!("../../modules/canvas/skins/canvas-skin.css");
 
     #[test]
     fn skin_script_shape() {
-        let hosts = vec!["discord.com".to_string()];
-        let on = super::skin_script(DISCORD_SKIN, &hosts, true);
+        let hosts = vec!["school.instructure.com".to_string()];
+        let on = super::skin_script(CANVAS_SKIN, &hosts, true);
         assert!(on.starts_with("(()=>{") && on.ends_with("})();"));
-        assert!(on.contains("el.media='all'") && super::skin_script(DISCORD_SKIN, &hosts, false).contains("el.media='not all'"));
-        assert!(on.contains("--neutral-69-hsl") && on.contains("Rubik"));
-        assert!(on.contains(r#"["discord.com"].some"#));
-        let js = super::skin_script(DISCORD_SKIN, &["example.edu".to_string()], true);
-        let _ = std::fs::write(format!("{}/target/discord-skin-script.js", env!("CARGO_MANIFEST_DIR")), js);
+        assert!(on.contains("el.media='all'") && super::skin_script(CANVAS_SKIN, &hosts, false).contains("el.media='not all'"));
+        assert!(on.contains("--ic-brand-button--primary-bgd") && on.contains("invert(1)"));
+        assert!(on.contains(r#"["school.instructure.com"].some"#));
+        let js = super::skin_script(CANVAS_SKIN, &["example.edu".to_string()], true);
+        let _ = std::fs::write(format!("{}/target/canvas-skin-script.js", env!("CARGO_MANIFEST_DIR")), js);
     }
 
     /// The reader rides into the page wrapped in a call; the test writes one to

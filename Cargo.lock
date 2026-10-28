@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "discord-module"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "island-module",
  "island-win",

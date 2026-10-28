@@ -57,10 +57,16 @@
     mod_call: ({ id, method }) => {
       const k = `mod:${id}.${method}`;
       if (!(k in fixtures)) throw { code: -32601, message: `${id} has no ${method} in the harness fixtures` };
-      // `"at": "now"` in a fixture is the time of the call (Canvas's "read just now").
+      // `"at": "now"` in a fixture is the time of the call (Canvas's "read just now"); any "now-40s" or
+      // "now+90s" in it is that long before or after (Discord's call timer, its pings).
       const v = structuredClone(fixtures[k]);
       if (v && v.at === 'now') v.at = Date.now();
-      return v;
+      const when = x => {
+        if (typeof x === 'string') { const t = /^now([+-]\d+)s$/.exec(x); return t ? Date.now() + +t[1] * 1000 : x; }
+        if (x && typeof x === 'object') for (const key of Object.keys(x)) x[key] = when(x[key]);
+        return x;
+      };
+      return when(v);
     },
     // A docked site's reader: "mod_site_read" is what it reads (Canvas's own answers), after a moment,
     // like the hidden copy of the site takes; anything else it's asked to do just works.

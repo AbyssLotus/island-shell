@@ -74,7 +74,7 @@ Nothing to set up. Apple Music, Spotify, Amazon Music, YouTube Music (its deskto
 Nothing to set up. Installed games show up in the Games section and cube with your custom artwork, playtime and a Play button. Other launchers (Epic, EA, Ubisoft, Riot, Battle.net…) sit underneath. **Win + G** opens it.
 
 ### Discord
-Your call (who's talking, mute, deafen, leave) and your @mentions on the island, and Discord docked in the Command Center. Discord needs a small "application" of your own, which takes about two minutes:
+Your call as a fireteam (who's talking, mute, deafen, leave, rejoin) and your @mentions on the island, and a Discord sheet in the Command Center with your servers, voice channels and pings. Discord needs a small "application" of your own, which takes about two minutes:
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it **Apple Music** if you'd like your status to read "Listening to Apple Music".
 2. On the app's **OAuth2** page, add the redirect `http://localhost` and save.

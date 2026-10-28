@@ -139,7 +139,6 @@ modules/<id>/        each module: module.json, src/main.rs (its backend), ui/ (i
   music, discord, canvas, destiny, games, gaze, voicemeeter, vpn, wallpaper-engine
 tools/
   pack-modules         module zips, the signed catalog, `verify`, and `stage` for developer mode
-  discord-skin         generates the Discord module's skin from Discord's own colour scales
 dev/
   harness              the page in an ordinary browser with a mocked backend and made-up data
   tests                front-end tests (`node --test "dev/tests/**/*.js"`)
