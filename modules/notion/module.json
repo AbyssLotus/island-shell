@@ -1,7 +1,7 @@
 {
   "id": "notion",
   "name": "Notion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "description": "To-dos from your Notion databases in Today, ticked off right from the island, and pages with dates in the island's calendar.",
   "icon": "ui/icon.svg",

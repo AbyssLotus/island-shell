@@ -209,11 +209,25 @@ pub fn local_offset_ms() -> i64 {
 
 /// Runs the module on stdin and stdout until the base says `island.shutdown` or goes away, then exits.
 pub fn run<M: Module>(module: M) -> ! {
+    keep_com();
     let out = take_stdout();
     let input = BufReader::new(std::io::stdin());
     run_with(module, input, out);
     std::process::exit(0)
 }
+
+/// Keeps COM's multithreaded apartment up for as long as the module runs. Each call runs on a thread
+/// of its own, and Windows tears the apartment down when the last thread in it ends, freeing the
+/// WinRT class factories that windows-rs keeps for the whole process: the next HTTP request (or any
+/// WinRT call) then went through a freed one and the module crashed (0xC0000005) one call after a
+/// thread finished, e.g. Canvas right after linking its calendar feed.
+#[cfg(windows)]
+fn keep_com() {
+    let _ = unsafe { windows::Win32::System::Com::CoIncrementMTAUsage() };
+}
+
+#[cfg(not(windows))]
+fn keep_com() {}
 
 /// The protocol's stdout, with the process's own stdout pointed at nothing, so stray prints can't
 /// break the framing. The protocol pipes stop being inheritable, so an app the module starts can't
@@ -484,5 +498,24 @@ mod tests {
         input.extend_from_slice(b"garbage line\n");
         run_with(Shared(module.clone()), Cursor::new(input), Sink::default());
         assert_eq!(module.stopped.load(Ordering::Relaxed), 1);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod com_tests {
+    /// Calls run on threads of their own: a WinRT class made after the thread before has ended
+    /// still works. Without keep_com this crashed the test process (0xC0000005).
+    #[test]
+    fn winrt_after_a_call_thread_ends() {
+        super::keep_com();
+        for _ in 0..3 {
+            std::thread::spawn(|| {
+                let _ = unsafe { windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED) };
+                windows::Web::Http::Filters::HttpBaseProtocolFilter::new().unwrap();
+            })
+            .join()
+            .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
     }
 }
