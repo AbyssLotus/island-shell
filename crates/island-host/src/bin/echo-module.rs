@@ -14,8 +14,10 @@ struct Echo {
 impl Module for Echo {
     fn init(&self, host: &Host, init: &Init) -> Result<(), RpcError> {
         // A file named slow-init in the module folder holds how many ms init should take (the host
-        // treats a missed init as a crash).
-        if let Some(ms) = std::fs::read_to_string("slow-init").ok().and_then(|v| v.trim().parse().ok()) {
+        // treats a missed init as a crash). The folder is the exe's as started (argv[0]: on Linux the
+        // tests link the exe, and current_exe would follow the link); the working folder is the data folder.
+        let slow = std::env::args_os().next().map(std::path::PathBuf::from).and_then(|exe| exe.parent().map(|d| d.join("slow-init")));
+        if let Some(ms) = slow.and_then(|f| std::fs::read_to_string(f).ok()).and_then(|v| v.trim().parse().ok()) {
             std::thread::sleep(std::time::Duration::from_millis(ms));
         }
         eprintln!("echo started for {}", init.id);
@@ -27,6 +29,7 @@ impl Module for Echo {
         match method {
             "echo" => Ok(params),
             "pid" => Ok(json!(std::process::id())),
+            "cwd" => Ok(json!(std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default())),
             "crash" => std::process::exit(3),
             "sleep" => {
                 std::thread::sleep(std::time::Duration::from_millis(params["ms"].as_u64().unwrap_or(100)));

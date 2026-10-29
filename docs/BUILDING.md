@@ -55,7 +55,7 @@ The dev harness (`dev/harness`, see its README) shows the page and every module'
 Island Shell updates itself, and its modules, from a **signed catalog** attached to every GitHub release: `modules.json` (crates/island-catalog) and its minisign signature `modules.json.minisig`. The island checks it at most once a day (Power → *Check daily*) and when asked (Power → *Check now*, or the tray's *Check for updates*). Everything it downloads is kept only if its size and sha256 match what the signed catalog says.
 
 - **Island Shell itself:** Power shows the new version; *Update* downloads the installer, runs it with `/UPDATE` and quits (the installer quits a running island first and opens the new one).
-- **Modules:** newer versions of installed modules are swapped in by the island. The old folder is kept aside until the new one is in place, and an update cut short is undone at the next start. With *Check daily* on, they update by themselves; otherwise Power shows *Update modules*.
+- **Modules:** newer versions of installed modules are swapped in by the island. The old folder is kept aside until the new one is in place, and an update cut short is undone at the next start. If an app the module opened still has its folder open (Discord opened from the Discord module, before 0.3.3), the files inside are swapped instead. Backends run in their data folder, so the apps they open don't hold their code folder. With *Check daily* on, they update by themselves; otherwise Power shows *Update modules*.
 
 ### One-time setup (the owner)
 
