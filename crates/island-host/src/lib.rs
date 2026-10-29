@@ -536,7 +536,9 @@ fn spawn(inner: &Arc<Inner>, slot: &mut Slot) -> Result<Arc<Proc>, String> {
     let _ = std::fs::create_dir_all(&data_dir);
     let _ = std::fs::create_dir_all(&cache_dir);
     let mut cmd = Command::new(slot.dir.join(&backend.exe));
-    cmd.current_dir(&slot.dir).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // It works in its data folder, not its code folder: apps it opens (Discord, a browser) inherit the
+    // working folder and hold it open while they run, and the code folder has to move for an update.
+    cmd.current_dir(&data_dir).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

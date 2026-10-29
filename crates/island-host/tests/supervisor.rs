@@ -288,6 +288,9 @@ fn disable_and_failed_init() {
     assert!(sup.call(&id, "echo", Value::Null).unwrap_err().message.contains("turned off"));
     sup.set_enabled(&id, true).unwrap();
     assert_eq!(sup.call(&id, "echo", json!(5)).unwrap(), json!(5));
+    // It works in its data folder, so nothing it opens holds its code folder (updates move that).
+    let cwd = PathBuf::from(sup.call(&id, "cwd", Value::Null).unwrap().as_str().unwrap());
+    assert_eq!(cwd.canonicalize().unwrap(), r.join("data").join(&id).canonicalize().unwrap());
     // An init that misses its timeout counts as a crash.
     let slow = module(&r, "echo-h", json!({}));
     std::fs::write(slow.join("slow-init"), "4000").unwrap();
