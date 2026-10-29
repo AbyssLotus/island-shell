@@ -12,7 +12,10 @@
 //!   `files` filled in (the sha256 of every file), its UI and assets, and its backend exe from
 //!   `--bins` (default `target/release`). The zips are deterministic: the same files make the same
 //!   bytes. A module whose version is already in `--previous` (the last release's catalog) keeps that
-//!   release's zip and link, and must not have changed.
+//!   release's zip and link, and must not have changed since: judged by its own source (`source` in
+//!   the catalog, see `source_hash`), not its built exe, which also changes with the shared crates,
+//!   Rust or the linker. A catalog without source hashes (0.3.1 and before) is judged by the module's
+//!   zip from that release, put beside it: the same files but for the backend exe counts as unchanged.
 //! - `IslandShellSetup.exe`, a copy of `--installer`, for the built-in updater.
 //! - `modules.json`, the catalog (crates/island-catalog), and `modules.json.minisig`, its minisign
 //!   signature made with the key in `ISLAND_SIGNING_KEY` (the text of the key file `cargo tauri
@@ -118,6 +121,7 @@ fn pack(o: &Opts) -> Result<String, String> {
     let mut modules = vec![];
     for dir in module_dirs(&o.modules)? {
         let (manifest, json, files) = collect(&dir, &o.bins)?;
+        let source = source_hash(&dir)?;
         let zip = package::write(&json, &files)?;
         // What the installer will do with it, before it goes anywhere.
         package::read(&zip).map_err(|e| format!("{}: {e}", manifest.id))?;
@@ -125,12 +129,23 @@ fn pack(o: &Opts) -> Result<String, String> {
         let name = format!("{}-{}.zip", manifest.id, manifest.version);
         let kept = previous.as_ref().and_then(|p| p.modules.iter().find(|m| m.id == manifest.id && m.version == manifest.version));
         let entry = match kept {
-            Some(m) if m.sha256 == sha => {
-                summary.push(format!("{name}: unchanged, kept from the last release"));
+            Some(m) => {
+                let unchanged = match &m.source {
+                    Some(s) => *s == source,
+                    None => m.sha256 == sha || same_but_the_exe(o.previous.as_deref().unwrap_or(Path::new(".")), m, &manifest, &json, &files)?,
+                };
+                if !unchanged {
+                    return Err(format!("{} changed since the last release but is still version {}: bump its version", manifest.id, manifest.version));
+                }
+                summary.push(if m.sha256 == sha {
+                    format!("{name}: unchanged, kept from the last release")
+                } else {
+                    // The shared crates, Rust or the linker; the old program still speaks the same API.
+                    format!("{name}: its own files are unchanged, kept from the last release (only its exe built differently)")
+                });
                 // The package is the same; what the guide and search say about it comes from the manifest.
-                island_catalog::Module { keywords: manifest.keywords.clone(), preselect: preselect(&manifest), ..m.clone() }
+                island_catalog::Module { keywords: manifest.keywords.clone(), preselect: preselect(&manifest), source: Some(source), ..m.clone() }
             }
-            Some(_) => return Err(format!("{} changed since the last release but is still version {}: bump its version", manifest.id, manifest.version)),
             None => {
                 std::fs::write(o.out.join(&name), &zip).map_err(|e| e.to_string())?;
                 summary.push(format!("{name}: {} bytes", zip.len()));
@@ -146,6 +161,7 @@ fn pack(o: &Opts) -> Result<String, String> {
                     sha256: sha,
                     keywords: manifest.keywords.clone(),
                     preselect: preselect(&manifest),
+                    source: Some(source),
                 }
             }
         };
@@ -197,7 +213,7 @@ fn collect(dir: &Path, bins: &Path) -> Result<(Manifest, Vec<u8>, BTreeMap<Strin
     let manifest: Manifest = serde_json::from_value(json.clone()).map_err(|e| at(e.to_string()))?;
     manifest.validate().map_err(at)?;
     let mut files = BTreeMap::new();
-    walk(dir, dir, &mut files).map_err(|e| at(e.to_string()))?;
+    walk(dir, dir, skip, &mut files).map_err(|e| at(e.to_string()))?;
     if let Some(b) = &manifest.backend {
         // Cargo names the binary like the exe, without .exe off Windows.
         let exe = [bins.join(&b.exe), bins.join(b.exe.trim_end_matches(".exe"))].into_iter().find(|p| p.is_file()).ok_or_else(|| at(format!("its backend {} isn't in {} (build it first)", b.exe, bins.display())))?;
@@ -215,24 +231,96 @@ fn preselect(m: &Manifest) -> bool {
     m.contributes.setup.as_ref().is_some_and(|s| s.preselect)
 }
 
-/// Not packed: the manifest itself (written separately), Rust sources and build output, dotfiles.
+/// Not packed: the manifest itself (written separately), Rust sources, and what isn't source.
 fn skip(rel: &str) -> bool {
-    rel == "module.json" || rel == "Cargo.toml" || rel.starts_with("src/") || rel.starts_with("target/") || rel.split('/').any(|p| p.starts_with('.'))
+    rel == "module.json" || rel == "Cargo.toml" || rel.starts_with("src/") || not_source(rel)
 }
 
-fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) -> std::io::Result<()> {
+/// Not part of a module's source: build output and dotfiles.
+fn not_source(rel: &str) -> bool {
+    rel.starts_with("target/") || rel.split('/').any(|p| p.starts_with('.'))
+}
+
+fn walk(root: &Path, dir: &Path, skip: fn(&str) -> bool, out: &mut BTreeMap<String, Vec<u8>>) -> std::io::Result<()> {
     for e in std::fs::read_dir(dir)? {
         let p = e?.path();
         let rel = p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
         if p.is_dir() {
             if !skip(&format!("{rel}/")) {
-                walk(root, &p, out)?;
+                walk(root, &p, skip, out)?;
             }
         } else if !skip(&rel) {
             out.insert(rel, std::fs::read(&p)?);
         }
     }
     Ok(())
+}
+
+/// A module's own source, as one sha256 (the catalog's `source`): every file in its folder (its
+/// manifest without the `files` map, UI, skins, readers, Rust sources and Cargo.toml), by sorted
+/// path. Text counts with LF line ends and the manifest as sorted JSON, so neither a checkout's
+/// line endings nor how serde_json orders keys changes it. The built exe isn't in it: that also
+/// changes with the shared crates, Rust or the linker, which don't make the module a new version.
+fn source_hash(dir: &Path) -> Result<String, String> {
+    let at = |e: String| format!("{}: {e}", dir.display());
+    let mut files = BTreeMap::new();
+    walk(dir, dir, not_source, &mut files).map_err(|e| at(e.to_string()))?;
+    let mut list = String::new();
+    for (rel, bytes) in files {
+        let bytes = if rel == "module.json" {
+            serde_json::to_vec(&sorted(without_files(&bytes).map_err(at)?)).map_err(|e| at(e.to_string()))?
+        } else {
+            lf(&bytes)
+        };
+        list += &format!("{} {rel}\n", sha256_hex(&bytes));
+    }
+    Ok(sha256_hex(list.as_bytes()))
+}
+
+/// A manifest without its `files` map (which packing fills in).
+fn without_files(json: &[u8]) -> Result<serde_json::Value, String> {
+    let mut v: serde_json::Value = serde_json::from_slice(json).map_err(|e| format!("module.json: {e}"))?;
+    if let Some(o) = v.as_object_mut() {
+        o.remove("files");
+    }
+    Ok(v)
+}
+
+/// The same JSON with every object's keys in order.
+fn sorted(v: serde_json::Value) -> serde_json::Value {
+    match v {
+        serde_json::Value::Object(o) => {
+            let mut pairs: Vec<_> = o.into_iter().collect();
+            pairs.sort_by(|a, b| a.0.cmp(&b.0));
+            serde_json::Value::Object(pairs.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        serde_json::Value::Array(a) => serde_json::Value::Array(a.into_iter().map(sorted).collect()),
+        v => v,
+    }
+}
+
+/// Text with CRLF made LF. Binary (a NUL byte, as git sees it) is left as it is.
+fn lf(b: &[u8]) -> Vec<u8> {
+    if b.contains(&0) {
+        return b.to_vec();
+    }
+    b.iter().enumerate().filter(|&(i, &c)| !(c == b'\r' && b.get(i + 1) == Some(&b'\n'))).map(|(_, &c)| c).collect()
+}
+
+/// For a module the last catalog lists without a source hash (0.3.1 and before): whether its zip
+/// from that release, beside the catalog, holds what this one does but for the backend exe. Line
+/// endings don't count here either: the runner checks out CRLF, a tool may have written LF.
+fn same_but_the_exe(catalog: &Path, m: &Module, manifest: &Manifest, json: &[u8], files: &BTreeMap<String, Vec<u8>>) -> Result<bool, String> {
+    let name = m.url.rsplit('/').next().unwrap_or_default();
+    let path = catalog.parent().unwrap_or(Path::new("")).join(name);
+    let old = std::fs::read(&path).map_err(|_| {
+        format!("{} {} isn't byte-identical to the last release's, whose catalog has no source hash to judge it by: put that release's {name} beside the catalog (the Release workflow downloads it) to check whether only its exe changed, or bump its version", m.id, m.version)
+    })?;
+    island_catalog::check_download(&old, m.size, &m.sha256).map_err(|e| format!("{}: {e}", path.display()))?;
+    let old = package::read(&old).map_err(|e| format!("{}: {e}", path.display()))?;
+    let exe = manifest.backend.as_ref().map(|b| b.exe.as_str());
+    let same_files = old.files.iter().filter(|(p, _)| Some(p.as_str()) != exe).map(|(p, b)| (p, lf(b))).eq(files.iter().filter(|(p, _)| Some(p.as_str()) != exe).map(|(p, b)| (p, lf(b))));
+    Ok(same_files && without_files(&old.json)? == without_files(json)?)
 }
 
 /// A minisign signature over `data` (prehashed, as minisign and Tauri make them).
@@ -423,21 +511,141 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    /// The next release's options (0.2.1), after the one packed into `root/prev`.
+    fn next(modules: &Path, bins: &Path, root: &Path, prev: &str) -> Opts {
+        let mut o = opts(modules, bins, root.join("v2"), root);
+        o.version = "0.2.1".into();
+        o.release_url = "https://github.com/AbyssLotus/island-shell/releases/download/v0.2.1".into();
+        o.previous = Some(root.join(prev).join("modules.json"));
+        o
+    }
+
+    fn catalog(dir: &Path) -> Catalog {
+        serde_json::from_slice(&std::fs::read(dir.join("modules.json")).unwrap()).unwrap()
+    }
+
     #[test]
     fn unchanged_modules_keep_the_last_release() {
         let (modules, bins, root) = fixture("previous");
         pack(&opts(&modules, &bins, root.join("v1"), &root)).unwrap();
-        let mut o = opts(&modules, &bins, root.join("v2"), &root);
-        o.version = "0.2.1".into();
-        o.release_url = "https://github.com/AbyssLotus/island-shell/releases/download/v0.2.1".into();
-        o.previous = Some(root.join("v1/modules.json"));
-        pack(&o).unwrap();
-        let c: Catalog = serde_json::from_slice(&std::fs::read(root.join("v2/modules.json")).unwrap()).unwrap();
+        let o = next(&modules, &bins, &root, "v1");
+        assert!(pack(&o).unwrap().contains("sample-1.0.0.zip: unchanged, kept from the last release"));
+        let c = catalog(&root.join("v2"));
         assert!(c.modules[0].url.contains("/v0.2.0/"), "kept from the last release");
         assert!(!root.join("v2/sample-1.0.0.zip").exists());
-        // Changed but not bumped: refused.
+        assert_eq!(c.modules[0].source, catalog(&root.join("v1")).modules[0].source);
+        assert_eq!(c.modules[0].source, Some(source_hash(&modules.join("sample")).unwrap()));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_new_exe_alone_keeps_the_last_package() {
+        // The shared crates, Rust or the linker changed: the module's own files didn't.
+        let (modules, bins, root) = fixture("exe-only");
+        pack(&opts(&modules, &bins, root.join("v1"), &root)).unwrap();
+        std::fs::write(bins.join("sample-module.exe"), "MZ built by a newer linker").unwrap();
+        let summary = pack(&next(&modules, &bins, &root, "v1")).unwrap();
+        assert!(summary.contains("sample-1.0.0.zip: its own files are unchanged, kept from the last release (only its exe built differently)"), "{summary}");
+        let (v1, v2) = (catalog(&root.join("v1")), catalog(&root.join("v2")));
+        assert_eq!(v2.modules[0], v1.modules[0], "the same package, link and source");
+        assert!(!root.join("v2/sample-1.0.0.zip").exists());
+        verify(&root.join("v2"), TEST_PUB).unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn own_changes_need_a_bump() {
+        let (modules, bins, root) = fixture("own-changes");
+        let m = modules.join("sample");
+        pack(&opts(&modules, &bins, root.join("v1"), &root)).unwrap();
+        let o = next(&modules, &bins, &root, "v1");
+        // Packed files and sources alike, even with the exe unchanged.
+        for (file, text) in [
+            ("ui/sample.js", "export function activate() { /* new */ }"),
+            ("src/main.rs", "fn main() { println!(\"new\"); }"),
+            ("Cargo.toml", "[package]\nversion = \"1.0.0\""),
+            ("skins/site.css", "body {}"),
+        ] {
+            let before = std::fs::read(m.join(file)).ok();
+            std::fs::create_dir_all(m.join(file).parent().unwrap()).unwrap();
+            std::fs::write(m.join(file), text).unwrap();
+            let err = pack(&o).unwrap_err();
+            assert!(err.contains("sample changed since the last release but is still version 1.0.0: bump its version"), "{file}: {err}");
+            match before {
+                Some(b) => std::fs::write(m.join(file), b).unwrap(),
+                None => std::fs::remove_file(m.join(file)).unwrap(),
+            }
+        }
+        let manifest = std::fs::read_to_string(m.join("module.json")).unwrap();
+        std::fs::write(m.join("module.json"), manifest.replace("A sample.", "A changed sample.")).unwrap();
+        assert!(pack(&o).unwrap_err().contains("bump its version"));
+        // Bumped: packed anew, in this release.
+        std::fs::write(m.join("ui/sample.js"), "export function activate() { /* new */ }").unwrap();
+        std::fs::write(m.join("module.json"), manifest.replace("\"1.0.0\"", "\"1.0.1\"")).unwrap();
+        assert!(pack(&o).unwrap().contains("sample-1.0.1.zip: "));
+        let c = catalog(&root.join("v2"));
+        assert_eq!((c.modules[0].version.as_str(), c.modules[0].url.as_str()), ("1.0.1", "https://github.com/AbyssLotus/island-shell/releases/download/v0.2.1/sample-1.0.1.zip"));
+        assert_eq!(c.modules[0].source, Some(source_hash(&m).unwrap()));
+        verify(&root.join("v2"), TEST_PUB).unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn catalogs_without_source_hashes_compare_the_zip() {
+        // 0.3.1 and before: the last catalog has no `source`, so the old zip beside it decides.
+        let (modules, bins, root) = fixture("no-source");
+        let v1 = root.join("v1");
+        // Packed on the runner, from a CRLF checkout.
+        std::fs::write(modules.join("sample/ui/sample.js"), "export function activate() {}\r\n").unwrap();
+        pack(&opts(&modules, &bins, v1.clone(), &root)).unwrap();
+        let mut old = catalog(&v1);
+        old.modules[0].source = None;
+        std::fs::write(v1.join("modules.json"), serde_json::to_vec_pretty(&old).unwrap()).unwrap();
+        let o = next(&modules, &bins, &root, "v1");
+        // Only the exe differs (and a line ending): kept, and from now on judged by its source.
+        std::fs::write(modules.join("sample/ui/sample.js"), "export function activate() {}\n").unwrap();
+        std::fs::write(bins.join("sample-module.exe"), "MZ built by a newer linker").unwrap();
+        assert!(pack(&o).unwrap().contains("only its exe built differently"));
+        let c = catalog(&root.join("v2"));
+        assert_eq!((c.modules[0].url.as_str(), c.modules[0].sha256.as_str()), (old.modules[0].url.as_str(), old.modules[0].sha256.as_str()));
+        assert_eq!(c.modules[0].source, Some(source_hash(&modules.join("sample")).unwrap()));
+        // A packed file differs too: refused.
         std::fs::write(modules.join("sample/ui/sample.js"), "export function activate() { /* new */ }").unwrap();
         assert!(pack(&o).unwrap_err().contains("bump its version"));
+        // No old zip to compare with: refused, saying what would help.
+        std::fs::remove_file(v1.join("sample-1.0.0.zip")).unwrap();
+        assert!(pack(&o).unwrap_err().contains("put that release's sample-1.0.0.zip beside the catalog"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn source_hash_is_the_module_s_own_files() {
+        let (modules, _, root) = fixture("source");
+        let m = modules.join("sample");
+        let first = source_hash(&m).unwrap();
+        // Not counted: line endings, the manifest's `files` map and key order, build output, dotfiles.
+        std::fs::write(m.join("ui/sample.js"), "export function activate() {}\r\n").unwrap();
+        let lf = source_hash(&m).unwrap();
+        std::fs::write(m.join("ui/sample.js"), "export function activate() {}\n").unwrap();
+        assert_eq!(source_hash(&m).unwrap(), lf, "CRLF and LF hash the same");
+        let mut json: serde_json::Value = serde_json::from_slice(&std::fs::read(m.join("module.json")).unwrap()).unwrap();
+        json["files"] = serde_json::json!({ "ui/icon.svg": "sha256-x" });
+        let mut pairs: Vec<_> = json.as_object().unwrap().clone().into_iter().collect();
+        pairs.reverse();
+        std::fs::write(m.join("module.json"), serde_json::to_vec(&serde_json::Map::from_iter(pairs)).unwrap()).unwrap();
+        std::fs::create_dir_all(m.join("target/release")).unwrap();
+        std::fs::write(m.join("target/release/sample-module.exe"), "MZ").unwrap();
+        std::fs::write(m.join(".editorconfig"), "root = true").unwrap();
+        assert_eq!(source_hash(&m).unwrap(), lf);
+        // Counted: a binary file's every byte, and any other file.
+        std::fs::write(m.join("ui/pic.png"), b"\x89PNG\r\n\x1a\n\0").unwrap();
+        let png = source_hash(&m).unwrap();
+        std::fs::write(m.join("ui/pic.png"), b"\x89PNG\n\x1a\n\0").unwrap();
+        assert_ne!(source_hash(&m).unwrap(), png);
+        assert_ne!(png, lf);
+        std::fs::remove_file(m.join("ui/pic.png")).unwrap();
+        std::fs::write(m.join("ui/sample.js"), "export function activate() {}").unwrap();
+        assert_eq!(source_hash(&m).unwrap(), first);
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -480,6 +688,7 @@ mod tests {
 {summary}");
         }
         verify(&root.join("out"), TEST_PUB).unwrap();
+        assert!(catalog(&root.join("out")).modules.iter().all(|m| m.source.as_ref().is_some_and(|s| s.len() == 64)), "every module has a source hash");
         let _ = std::fs::remove_dir_all(root);
     }
 

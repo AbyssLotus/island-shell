@@ -71,6 +71,12 @@ pub struct Module {
     /// Ticked to start with in the setup guide's module step (Music).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub preselect: bool,
+    /// Lowercase hex, of the module's own source: its folder's files, not the built program
+    /// (tools/pack-modules, `source_hash`). Releases compare it to tell a module that changed from
+    /// one whose program only built differently; the island doesn't use it. Catalogs up to 0.3.1
+    /// don't have it, and islands up to 0.3.1 skip it (nothing here denies unknown fields).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,6 +271,22 @@ mod tests {
         let data = serde_json::to_vec_pretty(&sample()).unwrap();
         let sig = sign(&kp, &data);
         assert_eq!(parse_verified(&data, &sig, &pk).unwrap(), sample());
+    }
+
+    #[test]
+    fn new_and_unknown_fields() {
+        // Installed islands parse catalogs from later releases: a field they don't know is skipped.
+        let mut json = serde_json::to_value(sample()).unwrap();
+        json["modules"][0]["later"] = "a field from a later release".into();
+        json["later"] = 1.into();
+        let c: Catalog = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(c, sample());
+        // `source` is optional both ways: older catalogs lack it, and it's left out when unset.
+        assert!(!serde_json::to_string(&sample()).unwrap().contains("source"));
+        json["modules"][0]["source"] = sha256_hex(b"src").into();
+        let c: Catalog = serde_json::from_value(json).unwrap();
+        assert_eq!(c.modules[0].source.as_deref(), Some(sha256_hex(b"src").as_str()));
+        assert!(check(&c).is_ok());
     }
 
     #[test]

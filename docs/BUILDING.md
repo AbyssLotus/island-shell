@@ -65,10 +65,10 @@ Island Shell updates itself, and its modules, from a **signed catalog** attached
 
 ### Making a release
 
-1. Bump the version in **both** `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the updater compares the latter), and the version in a module's `module.json` (and its `Cargo.toml`) for every module that changed. A change to the shared crates (`crates/island-module`, `island-module-proto`, `island-win`) changes every module with a backend, since each program is built with them: bump all of those. Builds are reproducible (`.cargo/config.toml` links with `/Brepro`), so a module nothing touched comes out byte-identical and keeps its old package. The Release workflow pins Rust (1.99.1) for the same reason: a newer Rust builds different bytes, so moving to one means bumping every module with a backend as well.
+1. Bump the version in **both** `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the updater compares the latter), and the version in a module's `module.json` (and its `Cargo.toml`) for every module that changed: anything in its own folder (its manifest, `ui/`, `skins/`, `readers/`, `src/`, `Cargo.toml`). That's what decides it, as a hash in the catalog (`source`), not the module's built program. So a change to the shared crates (`crates/island-module`, `island-module-proto`, `island-win`), a newer Rust or a new linker on the runner doesn't force any bumps: a module nobody touched keeps its last package, and its old program keeps working (the module API is unchanged). Bump a module anyway when it should ship with a shared-crate change, such as a fix it needs. The Release workflow pins Rust (1.99.1) and builds are reproducible (`.cargo/config.toml` links with `/Brepro`), so a release builds the same way each time.
 2. Run **Actions → Release → Run workflow**, with a sentence or two of notes for the update prompt.
    - It builds the installer and every module's backend.
-   - It runs `pack-modules`, which writes a deterministic zip per module (a module whose version is in the last release's catalog keeps that release's zip, and is refused if it changed without a version bump). It also writes the catalog with the installer in it, and signs it.
+   - It runs `pack-modules`, which writes a deterministic zip per module (a module whose version is in the last release's catalog keeps that release's zip, and is refused if its own files changed without a version bump). A catalog from 0.3.1 or before has no source hashes, so for those modules the workflow downloads their zips and compares the files in them instead, all but the backend exe. It also writes the catalog with the installer in it, and signs it.
    - It checks the signed catalog against `src-tauri/catalog.pub`, then creates a **draft** release with `IslandShellSetup.exe`, the zips, `modules.json` and `modules.json.minisig`.
 3. Review the draft and publish it. Installs see it on their next check (they read the *latest* release, so drafts are invisible to them).
 
@@ -82,7 +82,7 @@ cargo run -p pack-modules -- pack --out dist --version 0.2.0 --release-url https
 cargo run -p pack-modules -- verify dist --key src-tauri\catalog.pub
 ```
 
-`pack` signs with the key in `ISLAND_SIGNING_KEY` (and `ISLAND_SIGNING_KEY_PASSWORD`). `tools/pack-modules/testdata/` holds a key named `test-only` (password `test-only`) for the tool's tests; never sign a release with it.
+With `--previous`, a module the catalog lists without a `source` hash (0.3.1 and before) is compared with its zip from that release, which must sit beside the catalog. `pack` signs with the key in `ISLAND_SIGNING_KEY` (and `ISLAND_SIGNING_KEY_PASSWORD`). `tools/pack-modules/testdata/` holds a key named `test-only` (password `test-only`) for the tool's tests; never sign a release with it.
 
 ## Layout
 
