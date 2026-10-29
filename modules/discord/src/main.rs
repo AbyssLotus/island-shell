@@ -1,8 +1,14 @@
 //! Discord, an Island Shell module backend (docs/design/modules.md), through the Discord desktop
-//! app's local RPC pipe (`\\.\pipe\discord-ipc-N`); its UI is ui/discord.js.
+//! app's local RPC pipe (`\\.\pipe\discord-ipc-N`); its UI is ui/discord.js (the Fireteam tab, and
+//! the Command Center sheet in ui/sheet.js).
 //!
-//! - Voice: the call you're in, who's in it and who's talking; mute, deafen, leave.
-//! - Notifications: Discord's message notifications that @mention you, shown by the island.
+//! - Voice: the call you're in, who's in it and who's talking; mute, deafen, leave; each person's
+//!   volume and mute for you; joining a voice channel; Discord's own voice settings (devices, voice
+//!   activity or push to talk, both volumes); and your last call, to rejoin it.
+//! - Servers: yours, their voice channels with who's in each, and their text channels, which open
+//!   in Discord (the local connection can read messages but not send them).
+//! - Notifications: Discord's message notifications that @mention you, shown by the island and kept
+//!   for a day as pings.
 //! - Rich Presence: "Listening to Apple Music" with the song, artist, album art and a time bar,
 //!   from the `media.state` topic (whatever publishes it: the Music module, or the base before it).
 //!
@@ -17,14 +23,18 @@
 //! synchronous pipe handle, so instead of a blocking reader on its own thread, the loop peeks for
 //! data and writes in turn.
 //!
-//! The UI gets `status` (the whole state, when it changes) and `speaking` ({ id, speaking }, the
-//! one thing that flips many times a second).
+//! The UI gets `status` (the whole state, when it changes), `speaking` ({ id, speaking }, the
+//! one thing that flips many times a second) and `browse` (servers and channels, after it asks).
 //!
 //! RPC methods: `status`, `configure { client_id, secret }`, `action { action }` (authorize | mute |
-//! unmute | deafen | undeafen | leave | forget), `options { presence?, notify? }`, `open_app`.
+//! unmute | deafen | undeafen | leave | forget), `options { presence?, notify? }`, `open_app`,
+//! `open { guild?, channel?, message?, user? }` (that place in the Discord app), `join { channel_id }`,
+//! `user_voice { id, volume?, mute? }`, `voice { input?, output?, ptt?, input_volume?, output_volume? }`,
+//! `browse { guild?, all? }` (answers what's known and looks again; `browse` events follow) and
+//! `pings { seen?, clear? }`.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -46,9 +56,14 @@ struct Member {
     id: String,
     name: String,
     avatar: String,
+    /// Their mic is off (by them or the server).
     mute: bool,
     deaf: bool,
     speaking: bool,
+    /// Their volume for you: Discord's per-person setting, 0–200 (100 is as they are).
+    volume: f64,
+    /// Muted for you only.
+    muted: bool,
 }
 
 #[derive(Serialize, Clone, Default, PartialEq)]
@@ -56,7 +71,100 @@ struct Voice {
     channel_id: String,
     name: String,
     guild: String,
+    /// "" in a direct call.
+    guild_id: String,
+    /// When the island saw you join (Unix ms).
+    since: u64,
     members: Vec<Member>,
+}
+
+/// The call you were last in, for Rejoin.
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(default)]
+struct LastCall {
+    channel_id: String,
+    name: String,
+    guild: String,
+    guild_id: String,
+    /// When you left (Unix ms).
+    left_at: u64,
+}
+
+#[derive(Serialize, Clone, Default, PartialEq)]
+struct Device {
+    id: String,
+    name: String,
+}
+
+/// Discord's own voice settings.
+#[derive(Serialize, Clone, Default, PartialEq)]
+struct Devices {
+    inputs: Vec<Device>,
+    outputs: Vec<Device>,
+    input: String,
+    output: String,
+    /// 0–100.
+    input_volume: f64,
+    /// 0–200.
+    output_volume: f64,
+    /// Push to talk, rather than voice activity.
+    ptt: bool,
+}
+
+/// What's on your status, in full.
+#[derive(Serialize, Clone, Default, PartialEq)]
+struct Playing {
+    title: String,
+    artist: String,
+    album: String,
+    art: String,
+    /// Unix ms; 0 when the song's length isn't known.
+    start: i64,
+    end: i64,
+}
+
+/// A message that @mentioned you.
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(default)]
+struct Ping {
+    /// The message's id.
+    id: String,
+    channel_id: String,
+    /// "@me" for a direct message; "" until the channel has been looked up.
+    guild_id: String,
+    /// "#homework", or "Direct message".
+    channel: String,
+    author: String,
+    avatar: String,
+    text: String,
+    at: u64,
+    /// Not seen in the tab or the sheet yet.
+    new: bool,
+}
+
+/// Your servers and their channels (`browse` events).
+#[derive(Serialize, Clone, Default)]
+struct Browse {
+    guilds: Vec<Guild>,
+    /// By server id.
+    channels: BTreeMap<String, Vec<Chan>>,
+}
+
+#[derive(Serialize, Clone, Default, PartialEq)]
+struct Guild {
+    id: String,
+    name: String,
+    icon: String,
+}
+
+#[derive(Serialize, Clone, Default, PartialEq)]
+struct Chan {
+    id: String,
+    name: String,
+    /// A voice (or stage) channel; otherwise text.
+    voice: bool,
+    /// Who's in a voice channel.
+    people: Vec<Member>,
 }
 
 #[derive(Serialize, Clone, Default, PartialEq)]
@@ -79,6 +187,13 @@ struct Status {
     notify: bool,
     /// What's on the status right now ("" when nothing).
     presence_now: String,
+    playing: Option<Playing>,
+    devices: Option<Devices>,
+    last: Option<LastCall>,
+    /// Who's in your last call now (while you're in none; looked up on `browse`).
+    last_people: Vec<Member>,
+    /// @mentions from the last day, newest first.
+    pings: Vec<Ping>,
     error: String,
 }
 
@@ -101,6 +216,10 @@ struct Saved {
     presence: bool,
     #[serde(default = "yes")]
     notify: bool,
+    #[serde(default)]
+    last: Option<LastCall>,
+    #[serde(default)]
+    pings: Vec<Ping>,
 }
 
 fn yes() -> bool {
@@ -109,9 +228,13 @@ fn yes() -> bool {
 
 impl Default for Saved {
     fn default() -> Self {
-        Saved { client_id: String::new(), secret: String::new(), access: String::new(), refresh: String::new(), expires_at: 0, presence: true, notify: true }
+        Saved { client_id: String::new(), secret: String::new(), access: String::new(), refresh: String::new(), expires_at: 0, presence: true, notify: true, last: None, pings: Vec::new() }
     }
 }
+
+const DAY_MS: u64 = 86_400_000;
+/// Pings kept, at most.
+const PINGS: usize = 20;
 
 fn load(path: &PathBuf) -> Saved {
     std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
@@ -163,6 +286,12 @@ enum Cmd {
     Leave,
     Options { presence: Option<bool>, notify: Option<bool> },
     Forget,
+    Join(String),
+    UserVoice { id: String, volume: Option<f64>, mute: Option<bool> },
+    /// SET_VOICE_SETTINGS's arguments (voice_args).
+    Voice(Value),
+    Browse { guild: Option<String>, all: bool },
+    Pings { seen: bool, clear: bool },
 }
 
 /// What the module and its pipe thread share.
@@ -170,6 +299,8 @@ enum Cmd {
 struct Shared {
     status: Mutex<Option<Status>>,
     media: Mutex<Option<Media>>,
+    /// The last `browse` sent.
+    browse: Mutex<Value>,
 }
 
 // ---------- the pipe ----------
@@ -265,6 +396,16 @@ enum Pending {
     Channel,
     Guild(String),
     VoiceSettings,
+    Guilds,
+    /// A server's channels; `first` puts its voice channels at the front of the lookups.
+    Channels { guild: String, first: bool },
+    /// Who's in a voice channel of this server.
+    Lookup(String),
+    LastChannel,
+    /// Where a ping (this message id) was.
+    PingChannel(String),
+    UserVoice,
+    Join,
     Other,
 }
 
@@ -283,6 +424,19 @@ struct Client {
     activity_key: String,
     activity_started: i64,
     last_presence: Instant,
+    browse: Browse,
+    /// Server and channel lookups still out (the `browse` event waits for them, a little).
+    browsing: usize,
+    browse_dirty: bool,
+    browse_sent: Instant,
+    guilds_at: Option<Instant>,
+    /// The last look through every server.
+    all_at: Option<Instant>,
+    /// Look through every server once the list of them arrives.
+    scan_all: bool,
+    scanned: HashMap<String, Instant>,
+    /// Voice channels to look into (server, channel), a few each turn of the loop so Discord isn't flooded.
+    lookups: VecDeque<(String, String)>,
 }
 
 fn run(host: Host, shared: Arc<Shared>, path: PathBuf, rx: Receiver<Cmd>) {
@@ -301,7 +455,18 @@ fn run(host: Host, shared: Arc<Shared>, path: PathBuf, rx: Receiver<Cmd>) {
         activity_key: String::new(),
         activity_started: 0,
         last_presence: Instant::now(),
+        browse: Browse::default(),
+        browsing: 0,
+        browse_dirty: false,
+        browse_sent: Instant::now(),
+        guilds_at: None,
+        all_at: None,
+        scan_all: false,
+        scanned: HashMap::new(),
+        lookups: VecDeque::new(),
     };
+    let day_ago = now_ms().saturating_sub(DAY_MS);
+    c.saved.pings.retain(|p| p.at >= day_ago);
     c.refresh_flags();
     c.publish();
     let mut next_try = Instant::now();
@@ -330,11 +495,13 @@ fn run(host: Host, shared: Arc<Shared>, path: PathBuf, rx: Receiver<Cmd>) {
                 };
                 c.frame(frame.0, frame.1);
             }
+            c.lookups_tick();
             if c.last_presence.elapsed() > Duration::from_secs(2) {
                 c.last_presence = Instant::now();
                 c.presence_tick();
             }
         }
+        c.browse_tick();
         std::thread::sleep(Duration::from_millis(if c.pipe.is_some() { 25 } else { 250 }));
     }
 }
@@ -346,6 +513,8 @@ impl Client {
         self.st.has_secret = !self.saved.secret.is_empty();
         self.st.presence = self.saved.presence;
         self.st.notify = self.saved.notify;
+        self.st.last = self.saved.last.clone();
+        self.st.pings = self.saved.pings.clone();
     }
 
     fn publish(&mut self) {
@@ -401,6 +570,18 @@ impl Client {
         self.st.authorized = false;
         self.st.voice = None;
         self.st.presence_now.clear();
+        self.st.playing = None;
+        self.st.devices = None;
+        self.st.last_people.clear();
+        self.lookups.clear();
+        self.browsing = 0;
+        self.guilds_at = None;
+        self.all_at = None;
+        self.scanned.clear();
+        if !self.browse.guilds.is_empty() {
+            self.browse = Browse::default();
+            self.browse_dirty = true;
+        }
         self.publish();
     }
 
@@ -409,8 +590,9 @@ impl Client {
             Cmd::Configure { client_id, secret } => {
                 let id = client_id.trim().to_string();
                 if id != self.saved.client_id {
-                    // A different app: old tokens don't apply.
-                    self.saved = Saved { client_id: id, presence: self.saved.presence, notify: self.saved.notify, ..Default::default() };
+                    // A different app: old tokens don't apply (your last call and pings still do).
+                    let (last, pings) = (self.saved.last.take(), std::mem::take(&mut self.saved.pings));
+                    self.saved = Saved { client_id: id, presence: self.saved.presence, notify: self.saved.notify, last, pings, ..Default::default() };
                     self.disconnected("new application");
                 }
                 if !secret.trim().is_empty() {
@@ -444,17 +626,45 @@ impl Client {
                     }
                     self.activity_key.clear();
                 }
+                // Notifications keep coming either way (they're the pings); this only turns the island's off.
                 if let Some(n) = notify {
-                    let was = self.saved.notify;
                     self.saved.notify = n;
-                    if n && !was && self.st.authorized {
-                        self.subscribe("NOTIFICATION_CREATE", json!({}));
-                    } else if !n && was && self.st.authorized {
-                        self.send("UNSUBSCRIBE", json!({}), Some("NOTIFICATION_CREATE"), Pending::Other);
-                    }
                 }
                 save(&self.path, &self.saved);
                 self.refresh_flags();
+                self.publish();
+            }
+            Cmd::Join(id) => self.send("SELECT_VOICE_CHANNEL", json!({ "channel_id": id, "force": true }), None, Pending::Join),
+            Cmd::UserVoice { id, volume, mute } => {
+                let volume = volume.map(|v| v.clamp(0.0, 200.0));
+                // Shown at once; Discord's answer confirms it.
+                if let Some(m) = self.st.voice.as_mut().and_then(|v| v.members.iter_mut().find(|m| m.id == id)) {
+                    m.volume = volume.unwrap_or(m.volume);
+                    m.muted = mute.unwrap_or(m.muted);
+                }
+                let mut args = json!({ "user_id": id });
+                if let Some(v) = volume {
+                    args["volume"] = json!(v);
+                }
+                if let Some(m) = mute {
+                    args["mute"] = json!(m);
+                }
+                self.send("SET_USER_VOICE_SETTINGS", args, None, Pending::UserVoice);
+                self.publish();
+            }
+            Cmd::Voice(args) => {
+                if args.as_object().is_some_and(|o| !o.is_empty()) {
+                    self.send("SET_VOICE_SETTINGS", args, None, Pending::VoiceSettings);
+                }
+            }
+            Cmd::Browse { guild, all } => self.browse(guild, all),
+            Cmd::Pings { seen, clear } => {
+                if clear {
+                    self.saved.pings.clear();
+                } else if seen {
+                    self.saved.pings.iter_mut().for_each(|p| p.new = false);
+                }
+                self.sync_pings();
                 self.publish();
             }
             Cmd::Forget => {
@@ -504,6 +714,12 @@ impl Client {
                         self.st.error = "Discord signed the island out; authorize again.".into();
                     }
                 }
+                Some(Pending::Join) => self.st.error = format!("Couldn't join that channel: {msg}"),
+                Some(Pending::LastChannel) => self.st.last_people.clear(),
+                Some(Pending::Guilds) | Some(Pending::Channels { .. }) | Some(Pending::Lookup(_)) => {
+                    self.browse_done();
+                    self.host.warn(format!("{} failed: {msg}", v["cmd"].as_str().unwrap_or("?")));
+                }
                 _ => self.host.warn(format!("{} failed: {msg}", v["cmd"].as_str().unwrap_or("?"))),
             }
             self.publish();
@@ -551,23 +767,31 @@ impl Client {
             ("DISPATCH", "NOTIFICATION_CREATE") => {
                 // Only messages that @mention you yourself (not @everyone, @here or a role).
                 let me = self.st.user.as_ref().map(|u| u.id.as_str()).unwrap_or("");
-                if !self.saved.notify || !mentions(&data["message"], me) {
+                if !mentions(&data["message"], me) {
                     return;
                 }
+                let ping = ping_from(data, now_ms());
+                if !ping.channel_id.is_empty() {
+                    self.send("GET_CHANNEL", json!({ "channel_id": ping.channel_id }), None, Pending::PingChannel(ping.id.clone()));
+                }
+                self.saved.pings.retain(|p| p.id.is_empty() || p.id != ping.id);
+                self.saved.pings.insert(0, ping);
+                self.sync_pings();
                 let icon = data["icon_url"].as_str().filter(|u| u.starts_with("https://cdn.discordapp.com/") || u.starts_with("https://media.discordapp.net/"));
                 // On top of everything (fullscreen games too): it's someone asking for you.
-                self.host.notify(Notify {
-                    title: data["title"].as_str().unwrap_or("Discord").to_string(),
-                    body: data["body"].as_str().unwrap_or("").to_string(),
-                    icon: Some("chat".into()),
-                    img: icon.map(String::from),
-                    round: icon.is_some(),
-                    urgent: true,
-                    top: true,
-                    action: Some("tab:discord".into()),
-                    sound: Some("mention".into()),
-                });
-                return;
+                if self.saved.notify {
+                    self.host.notify(Notify {
+                        title: data["title"].as_str().unwrap_or("Discord").to_string(),
+                        body: data["body"].as_str().unwrap_or("").to_string(),
+                        icon: Some("chat".into()),
+                        img: icon.map(String::from),
+                        round: icon.is_some(),
+                        urgent: true,
+                        top: true,
+                        action: Some("tab:discord".into()),
+                        sound: Some("mention".into()),
+                    });
+                }
             }
             ("AUTHORIZE", _) => {
                 if let Some(code) = data["code"].as_str() {
@@ -586,9 +810,7 @@ impl Client {
                 self.host.info("signed in");
                 self.subscribe("VOICE_CHANNEL_SELECT", json!({}));
                 self.subscribe("VOICE_SETTINGS_UPDATE", json!({}));
-                if self.saved.notify {
-                    self.subscribe("NOTIFICATION_CREATE", json!({}));
-                }
+                self.subscribe("NOTIFICATION_CREATE", json!({}));
                 self.send("GET_SELECTED_VOICE_CHANNEL", json!({}), None, Pending::SelectedChannel);
                 self.send("GET_VOICE_SETTINGS", json!({}), None, Pending::VoiceSettings);
             }
@@ -600,6 +822,53 @@ impl Client {
                     }
                 }
                 Some(Pending::VoiceSettings) => self.voice_settings(data),
+                Some(Pending::Guilds) => {
+                    self.browse.guilds = guilds_from(data);
+                    let ids: Vec<String> = self.browse.guilds.iter().map(|g| g.id.clone()).collect();
+                    self.browse.channels.retain(|g, _| ids.contains(g));
+                    if std::mem::take(&mut self.scan_all) {
+                        for g in ids.into_iter().take(50) {
+                            self.scan_guild(g, false);
+                        }
+                    }
+                    self.browse_done();
+                }
+                Some(Pending::Channels { guild, first }) => {
+                    let old = self.browse.channels.remove(&guild).unwrap_or_default();
+                    let mut list = chans_from(data);
+                    for ch in list.iter_mut().filter(|c| c.voice) {
+                        // Who was in it, until the lookup says who is now.
+                        ch.people = old.iter().find(|o| o.id == ch.id).map(|o| o.people.clone()).unwrap_or_default();
+                        self.lookup(&guild, &ch.id, first);
+                    }
+                    self.browse.channels.insert(guild, list);
+                    self.browse_done();
+                }
+                Some(Pending::Lookup(guild)) => {
+                    let id = data["id"].as_str().unwrap_or("");
+                    if let Some(ch) = self.browse.channels.get_mut(&guild).and_then(|l| l.iter_mut().find(|c| c.id == id)) {
+                        ch.people = people_of(data);
+                    }
+                    self.browse_done();
+                }
+                Some(Pending::LastChannel) => {
+                    if self.st.voice.is_none() {
+                        self.st.last_people = people_of(data);
+                    }
+                }
+                Some(Pending::PingChannel(msg)) => {
+                    if let Some(p) = self.saved.pings.iter_mut().find(|p| p.id == msg) {
+                        ping_place(p, data);
+                        self.sync_pings();
+                    }
+                }
+                Some(Pending::UserVoice) => {
+                    let id = data["user_id"].as_str().unwrap_or("");
+                    if let Some(m) = self.st.voice.as_mut().and_then(|v| v.members.iter_mut().find(|m| m.id == id)) {
+                        m.volume = data["volume"].as_f64().unwrap_or(m.volume);
+                        m.muted = data["mute"].as_bool().unwrap_or(m.muted);
+                    }
+                }
                 _ => {}
             },
         }
@@ -613,6 +882,98 @@ impl Client {
         if let Some(d) = data["deaf"].as_bool() {
             self.st.deaf = d;
         }
+        self.st.devices = devices_from(self.st.devices.take(), data);
+    }
+
+    // ---------- servers and channels ----------
+
+    /// The list of servers (again after a minute), the one asked for, every one (at most every 45 s,
+    /// for "where your people are"), and who's in your last call.
+    fn browse(&mut self, guild: Option<String>, all: bool) {
+        if !self.st.authorized {
+            return;
+        }
+        if self.guilds_at.is_none_or(|t| t.elapsed() > Duration::from_secs(60)) {
+            self.guilds_at = Some(Instant::now());
+            self.browsing += 1;
+            self.send("GET_GUILDS", json!({}), None, Pending::Guilds);
+        }
+        if all && self.all_at.is_none_or(|t| t.elapsed() > Duration::from_secs(45)) {
+            self.all_at = Some(Instant::now());
+            if self.browse.guilds.is_empty() {
+                self.scan_all = true;
+            } else {
+                let ids: Vec<String> = self.browse.guilds.iter().take(50).map(|g| g.id.clone()).collect();
+                for g in ids {
+                    self.scan_guild(g, false);
+                }
+            }
+        }
+        if let Some(g) = guild {
+            self.scan_guild(g, true);
+        }
+        if self.st.voice.is_none() {
+            if let Some(id) = self.st.last.as_ref().map(|l| l.channel_id.clone()) {
+                self.send("GET_CHANNEL", json!({ "channel_id": id }), None, Pending::LastChannel);
+            }
+        }
+        // What's known goes out now, even when nothing new is asked for.
+        self.browse_dirty = true;
+    }
+
+    fn scan_guild(&mut self, guild: String, first: bool) {
+        if self.scanned.get(&guild).is_some_and(|t| t.elapsed() < Duration::from_secs(8)) {
+            return;
+        }
+        self.scanned.insert(guild.clone(), Instant::now());
+        self.browsing += 1;
+        self.send("GET_CHANNELS", json!({ "guild_id": guild }), None, Pending::Channels { guild, first });
+    }
+
+    fn lookup(&mut self, guild: &str, channel: &str, first: bool) {
+        if self.lookups.len() >= 200 || self.lookups.iter().any(|(_, c)| c == channel) {
+            return;
+        }
+        self.browsing += 1;
+        let item = (guild.to_string(), channel.to_string());
+        if first {
+            self.lookups.push_front(item);
+        } else {
+            self.lookups.push_back(item);
+        }
+    }
+
+    fn lookups_tick(&mut self) {
+        for _ in 0..4 {
+            let Some((guild, channel)) = self.lookups.pop_front() else { break };
+            self.send("GET_CHANNEL", json!({ "channel_id": channel }), None, Pending::Lookup(guild));
+        }
+    }
+
+    fn browse_done(&mut self) {
+        self.browsing = self.browsing.saturating_sub(1);
+        self.browse_dirty = true;
+    }
+
+    /// Sends `browse` once everything asked for is in, or every 400 ms while it comes.
+    fn browse_tick(&mut self) {
+        if !self.browse_dirty || (self.browsing > 0 && self.browse_sent.elapsed() < Duration::from_millis(400)) {
+            return;
+        }
+        self.browse_dirty = false;
+        self.browse_sent = Instant::now();
+        let v = serde_json::to_value(&self.browse).unwrap_or(Value::Null);
+        self.host.emit("browse", &v);
+        *self.shared.browse.lock().unwrap() = v;
+    }
+
+    /// Pings older than a day go, and all but the newest few; saved, and on the status.
+    fn sync_pings(&mut self) {
+        let day_ago = now_ms().saturating_sub(DAY_MS);
+        self.saved.pings.retain(|p| p.at >= day_ago);
+        self.saved.pings.truncate(PINGS);
+        save(&self.path, &self.saved);
+        self.st.pings = self.saved.pings.clone();
     }
 
     /// Signs in with the saved token (refreshing it first when it has expired).
@@ -672,13 +1033,21 @@ impl Client {
             }
             self.channel_subs = id.clone();
         }
+        let prev = self.st.voice.take();
+        if let Some(p) = prev.as_ref().filter(|p| id.as_ref() != Some(&p.channel_id)) {
+            // Left it (or moved on): remembered for Rejoin.
+            self.saved.last = Some(LastCall { channel_id: p.channel_id.clone(), name: p.name.clone(), guild: p.guild.clone(), guild_id: p.guild_id.clone(), left_at: now_ms() });
+            save(&self.path, &self.saved);
+            self.st.last = self.saved.last.clone();
+            self.st.last_people = if id.is_none() { p.members.iter().filter(|m| Some(&m.id) != self.st.user.as_ref().map(|u| &u.id)).cloned().collect() } else { Vec::new() };
+        }
         let Some(id) = id else {
-            self.st.voice = None;
             return;
         };
-        let members = ch["voice_states"].as_array().map(|a| a.iter().map(|s| member_of(&s["user"], Some(s))).collect()).unwrap_or_default();
-        let guild = self.st.voice.as_ref().filter(|v| v.channel_id == id).map(|v| v.guild.clone()).unwrap_or_default();
-        self.st.voice = Some(Voice { channel_id: id.clone(), name: ch["name"].as_str().unwrap_or("Voice").to_string(), guild, members });
+        let same = prev.filter(|v| v.channel_id == id);
+        let (guild, since) = same.map(|v| (v.guild, v.since)).unwrap_or_else(|| (String::new(), now_ms()));
+        let guild_id = ch["guild_id"].as_str().unwrap_or("").to_string();
+        self.st.voice = Some(Voice { channel_id: id.clone(), name: ch["name"].as_str().unwrap_or("Voice").to_string(), guild, guild_id, since, members: people_of(ch) });
         if let Some(g) = ch["guild_id"].as_str() {
             self.send("GET_GUILD", json!({ "guild_id": g }), None, Pending::Guild(id));
         } else if let Some(vc) = self.st.voice.as_mut() {
@@ -694,6 +1063,7 @@ impl Client {
         }
         self.activity_key.clear();
         self.st.presence_now.clear();
+        self.st.playing = None;
     }
 
     /// Every couple of seconds: put what Apple Music is playing on the status, or take it off.
@@ -740,6 +1110,8 @@ impl Client {
         }
         self.send("SET_ACTIVITY", json!({ "pid": std::process::id(), "activity": activity }), None, Pending::Other);
         self.st.presence_now = format!("{} · {}", m.title, m.artist);
+        let end = if m.duration > 0.0 { started + (m.duration * 1000.0) as i64 } else { 0 };
+        self.st.playing = Some(Playing { title: m.title.clone(), artist: m.artist.clone(), album: m.album.clone(), art, start: if end > 0 { started } else { 0 }, end });
         self.publish();
     }
 
@@ -810,9 +1182,145 @@ fn member_of(user: &Value, vs: Option<&Value>) -> Member {
         id: user["id"].as_str().unwrap_or("").to_string(),
         name,
         avatar: avatar(user),
-        mute: flag("mute") || flag("self_mute") || vs.and_then(|v| v["mute"].as_bool()).unwrap_or(false),
+        mute: flag("mute") || flag("self_mute"),
         deaf: flag("deaf") || flag("self_deaf"),
         speaking: false,
+        // Beside the voice state: your own settings for them.
+        volume: vs.and_then(|v| v["volume"].as_f64()).unwrap_or(100.0),
+        muted: vs.and_then(|v| v["mute"].as_bool()).unwrap_or(false),
+    }
+}
+
+/// Who's in a voice channel (GET_CHANNEL's answer).
+fn people_of(ch: &Value) -> Vec<Member> {
+    ch["voice_states"].as_array().map(|a| a.iter().map(|s| member_of(&s["user"], Some(s))).collect()).unwrap_or_default()
+}
+
+fn guilds_from(data: &Value) -> Vec<Guild> {
+    let list = data["guilds"].as_array().map(Vec::as_slice).unwrap_or_default();
+    list.iter()
+        .filter_map(|g| {
+            Some(Guild {
+                id: g["id"].as_str()?.to_string(),
+                name: g["name"].as_str().unwrap_or("Server").to_string(),
+                icon: g["icon_url"].as_str().filter(|u| u.starts_with("https://cdn.discordapp.com/")).unwrap_or("").to_string(),
+            })
+        })
+        .collect()
+}
+
+/// A server's text channels (text, announcements, forums) and voice ones (voice, stage), in
+/// Discord's order; categories, threads and the rest are left out.
+fn chans_from(data: &Value) -> Vec<Chan> {
+    let list = data["channels"].as_array().map(Vec::as_slice).unwrap_or_default();
+    list.iter()
+        .filter_map(|c| {
+            let voice = match c["type"].as_u64()? {
+                0 | 5 | 15 => false,
+                2 | 13 => true,
+                _ => return None,
+            };
+            Some(Chan { id: c["id"].as_str()?.to_string(), name: c["name"].as_str().unwrap_or("").to_string(), voice, people: Vec::new() })
+        })
+        .collect()
+}
+
+/// Discord's voice settings (GET_VOICE_SETTINGS, VOICE_SETTINGS_UPDATE) over what was known; the
+/// parts it leaves out stay as they were.
+fn devices_from(old: Option<Devices>, data: &Value) -> Option<Devices> {
+    if !(data["input"].is_object() || data["output"].is_object() || data["mode"].is_object()) {
+        return old;
+    }
+    fn side(v: &Value, list: &mut Vec<Device>, id: &mut String, volume: &mut f64) {
+        if let Some(a) = v["available_devices"].as_array() {
+            *list = a.iter().filter_map(|x| Some(Device { id: x["id"].as_str()?.to_string(), name: x["name"].as_str().unwrap_or("").to_string() })).collect();
+        }
+        if let Some(s) = v["device_id"].as_str() {
+            *id = s.to_string();
+        }
+        if let Some(x) = v["volume"].as_f64() {
+            *volume = x;
+        }
+    }
+    let mut d = old.unwrap_or_default();
+    side(&data["input"], &mut d.inputs, &mut d.input, &mut d.input_volume);
+    side(&data["output"], &mut d.outputs, &mut d.output, &mut d.output_volume);
+    if let Some(t) = data["mode"]["type"].as_str() {
+        d.ptt = t == "PUSH_TO_TALK";
+    }
+    Some(d)
+}
+
+/// SET_VOICE_SETTINGS's arguments from the UI's `voice` call, with the volumes in Discord's ranges.
+fn voice_args(p: &Value) -> Value {
+    let mut a = json!({});
+    let device = |k: &str| p[k].as_str().filter(|s| !s.is_empty() && s.len() < 300);
+    if let Some(d) = device("input") {
+        a["input"]["device_id"] = json!(d);
+    }
+    if let Some(v) = p["input_volume"].as_f64() {
+        a["input"]["volume"] = json!(v.clamp(0.0, 100.0));
+    }
+    if let Some(d) = device("output") {
+        a["output"]["device_id"] = json!(d);
+    }
+    if let Some(v) = p["output_volume"].as_f64() {
+        a["output"]["volume"] = json!(v.clamp(0.0, 200.0));
+    }
+    if let Some(t) = p["ptt"].as_bool() {
+        a["mode"]["type"] = json!(if t { "PUSH_TO_TALK" } else { "VOICE_ACTIVITY" });
+    }
+    a
+}
+
+/// A ping from a NOTIFICATION_CREATE; where it was comes after (ping_place).
+fn ping_from(data: &Value, now: u64) -> Ping {
+    let msg = &data["message"];
+    let author = &msg["author"];
+    let name = author["global_name"].as_str().filter(|n| !n.is_empty()).or(author["username"].as_str()).unwrap_or("Someone");
+    let icon = data["icon_url"].as_str().filter(|u| u.starts_with("https://cdn.discordapp.com/") || u.starts_with("https://media.discordapp.net/"));
+    let text = data["body"].as_str().filter(|b| !b.is_empty()).or(msg["content"].as_str()).unwrap_or("");
+    Ping {
+        id: msg["id"].as_str().unwrap_or("").to_string(),
+        channel_id: data["channel_id"].as_str().or(msg["channel_id"].as_str()).unwrap_or("").to_string(),
+        author: name.to_string(),
+        avatar: icon.map(String::from).unwrap_or_else(|| if author.is_object() { avatar(author) } else { String::new() }),
+        text: text.chars().take(240).collect(),
+        at: now,
+        new: true,
+        ..Default::default()
+    }
+}
+
+/// Where a ping was, from GET_CHANNEL: a server's channel, or a direct message (one to one or a group).
+fn ping_place(p: &mut Ping, ch: &Value) {
+    match (ch["type"].as_u64(), ch["guild_id"].as_str()) {
+        (Some(1) | Some(3), _) | (_, None) => {
+            p.guild_id = "@me".into();
+            p.channel = "Direct message".into();
+        }
+        (_, Some(g)) => {
+            p.guild_id = g.to_string();
+            p.channel = format!("#{}", ch["name"].as_str().unwrap_or(""));
+        }
+    }
+}
+
+/// A Discord id: digits only.
+fn snowflake(v: &Value) -> Option<&str> {
+    v.as_str().filter(|s| !s.is_empty() && s.len() <= 24 && s.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The Discord app's own link to a person, a channel or a message (the `open` call).
+fn open_url(p: &Value) -> String {
+    if let Some(u) = snowflake(&p["user"]) {
+        return format!("discord://-/users/{u}");
+    }
+    let Some(c) = snowflake(&p["channel"]) else { return "discord://-/channels/@me".into() };
+    let g = snowflake(&p["guild"]).unwrap_or("@me");
+    match snowflake(&p["message"]) {
+        Some(m) => format!("discord://-/channels/{g}/{c}/{m}"),
+        None => format!("discord://-/channels/{g}/{c}"),
     }
 }
 
@@ -870,8 +1378,23 @@ impl Module for Discord {
                 other => return Err(RpcError::bad_params(format!("unknown Discord action {other}"))),
             }),
             "options" => self.send(Cmd::Options { presence: params["presence"].as_bool(), notify: params["notify"].as_bool() }),
-            // Brings up the Discord app (or starts it).
+            // Brings up the Discord app (or starts it), or a place in it.
             "open_app" => island_win::shell::open("discord://-/channels/@me").map(|_| Value::Null).map_err(RpcError::failed),
+            "open" => island_win::shell::open(&open_url(&params)).map(|_| Value::Null).map_err(RpcError::failed),
+            "join" => match snowflake(&params["channel_id"]) {
+                Some(id) => self.send(Cmd::Join(id.to_string())),
+                None => Err(RpcError::bad_params("join needs a channel_id")),
+            },
+            "user_voice" => match snowflake(&params["id"]) {
+                Some(id) => self.send(Cmd::UserVoice { id: id.to_string(), volume: params["volume"].as_f64(), mute: params["mute"].as_bool() }),
+                None => Err(RpcError::bad_params("user_voice needs an id")),
+            },
+            "voice" => self.send(Cmd::Voice(voice_args(&params))),
+            "browse" => {
+                self.send(Cmd::Browse { guild: snowflake(&params["guild"]).map(String::from), all: params["all"].as_bool().unwrap_or(false) })?;
+                Ok(self.shared.browse.lock().unwrap().clone())
+            }
+            "pings" => self.send(Cmd::Pings { seen: params["seen"].as_bool().unwrap_or(false), clear: params["clear"].as_bool().unwrap_or(false) }),
             _ => Err(RpcError::unknown_method(method)),
         }
     }
@@ -901,6 +1424,65 @@ mod tests {
         assert_eq!(m.avatar, "https://cdn.discordapp.com/avatars/80351110224678912/8342729096ea3675442027381ff50dfe.png?size=64");
         let plain = member_of(&json!({ "id": "80351110224678912", "username": "x" }), None);
         assert!(plain.avatar.starts_with("https://cdn.discordapp.com/embed/avatars/"));
+    }
+
+    #[test]
+    fn your_settings_for_someone() {
+        let vs = json!({ "mute": true, "volume": 140.0, "voice_state": { "self_mute": false } });
+        let m = member_of(&json!({ "id": "1", "username": "x" }), Some(&vs));
+        assert!(m.muted && !m.mute);
+        assert_eq!(m.volume, 140.0);
+        assert_eq!(member_of(&json!({ "id": "1" }), None).volume, 100.0);
+    }
+
+    #[test]
+    fn servers_and_channels() {
+        let g = guilds_from(&json!({ "guilds": [{ "id": "5", "name": "Signals class", "icon_url": "https://cdn.discordapp.com/icons/5/a.png" }, { "id": "6", "name": "Odd", "icon_url": "https://example.com/x.png" }, { "name": "no id" }] }));
+        assert_eq!(g.len(), 2);
+        assert_eq!((g[0].icon.as_str(), g[1].icon.as_str()), ("https://cdn.discordapp.com/icons/5/a.png", ""));
+        let c = chans_from(&json!({ "channels": [{ "id": "1", "name": "homework", "type": 0 }, { "id": "2", "name": "Study hall", "type": 2 }, { "id": "3", "name": "Classes", "type": 4 }, { "id": "4", "name": "Stage", "type": 13 }, { "id": "5", "name": "a thread", "type": 11 }] }));
+        assert_eq!(c.iter().map(|c| (c.id.as_str(), c.voice)).collect::<Vec<_>>(), [("1", false), ("2", true), ("4", true)]);
+        assert!(guilds_from(&Value::Null).is_empty() && chans_from(&Value::Null).is_empty());
+    }
+
+    #[test]
+    fn voice_settings_both_ways() {
+        let all = json!({ "input": { "device_id": "default", "volume": 70.0, "available_devices": [{ "id": "default", "name": "Default" }, { "id": "{abc}", "name": "Microphone (USB Audio)" }] }, "output": { "device_id": "{def}", "volume": 150.0, "available_devices": [] }, "mode": { "type": "PUSH_TO_TALK" }, "mute": false });
+        let d = devices_from(None, &all).unwrap();
+        assert_eq!((d.inputs.len(), d.input.as_str(), d.input_volume, d.output_volume, d.ptt), (2, "default", 70.0, 150.0, true));
+        // An update with only part of it keeps the rest.
+        let d2 = devices_from(Some(d), &json!({ "mode": { "type": "VOICE_ACTIVITY" } })).unwrap();
+        assert!(!d2.ptt && d2.inputs.len() == 2);
+        assert!(devices_from(None, &json!({ "mute": true })).is_none());
+        assert_eq!(voice_args(&json!({ "input": "{abc}", "input_volume": 30, "output_volume": 900, "ptt": false })), json!({ "input": { "device_id": "{abc}", "volume": 30.0 }, "output": { "volume": 200.0 }, "mode": { "type": "VOICE_ACTIVITY" } }));
+        assert_eq!(voice_args(&json!({ "input": "" })), json!({}));
+    }
+
+    #[test]
+    fn pings_and_where_they_were() {
+        let n = json!({ "channel_id": "77", "title": "Kiwi (#homework, Signals class)", "body": "@You can you send the lab notes?", "icon_url": "https://cdn.discordapp.com/avatars/1/a.png", "message": { "id": "999", "author": { "id": "1", "username": "kiwi", "global_name": "Kiwi" }, "content": "<@100> can you send the lab notes?" } });
+        let mut p = ping_from(&n, 5);
+        assert_eq!((p.id.as_str(), p.channel_id.as_str(), p.author.as_str(), p.text.as_str(), p.new), ("999", "77", "Kiwi", "@You can you send the lab notes?", true));
+        assert_eq!(p.avatar, "https://cdn.discordapp.com/avatars/1/a.png");
+        ping_place(&mut p, &json!({ "id": "77", "name": "homework", "type": 0, "guild_id": "5" }));
+        assert_eq!((p.guild_id.as_str(), p.channel.as_str()), ("5", "#homework"));
+        ping_place(&mut p, &json!({ "id": "77", "type": 1 }));
+        assert_eq!((p.guild_id.as_str(), p.channel.as_str()), ("@me", "Direct message"));
+        // Settings saved before pings and the last call existed still read.
+        let s: Saved = serde_json::from_value(json!({ "client_id": "1", "presence": false })).unwrap();
+        assert!(s.pings.is_empty() && s.last.is_none() && s.notify && !s.presence);
+        let s: Saved = serde_json::from_value(json!({ "pings": [{ "id": "1", "at": 3 }], "last": { "channel_id": "2" } })).unwrap();
+        assert_eq!((s.pings[0].at, s.last.unwrap().channel_id.as_str()), (3, "2"));
+    }
+
+    #[test]
+    fn links_into_the_app() {
+        assert_eq!(open_url(&json!({ "guild": "5", "channel": "77", "message": "999" })), "discord://-/channels/5/77/999");
+        assert_eq!(open_url(&json!({ "channel": "77" })), "discord://-/channels/@me/77");
+        assert_eq!(open_url(&json!({ "user": "1" })), "discord://-/users/1");
+        // Anything but digits is left out.
+        assert_eq!(open_url(&json!({ "guild": "5", "channel": "77/../x" })), "discord://-/channels/@me");
+        assert_eq!(open_url(&json!({ "guild": "@me&x", "channel": "77" })), "discord://-/channels/@me/77");
     }
 
     #[test]

@@ -40,7 +40,7 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 | | Module | What you get |
 | :---: | --- | --- |
 | 🎵 | **Music** | Apple Music, Spotify, Amazon Music, YouTube Music and any player Windows knows: artwork, seek, shuffle, repeat, time-synced lyrics, and a full-screen Music sheet. Apple Music gets album, favorite and more. |
-| 💬 | **Discord** | Your call (who's talking, mute, deafen, leave), @mentions on the island, and the Discord web app docked in the Command Center with an island skin. |
+| 💬 | **Discord** | Your call as a fireteam (who's talking, each person's volume, mute, deafen, leave, rejoin), @mentions on the island, and a Command Center sheet of its own: your servers, voice channels to join, voice settings and pings. |
 | 🎓 | **Canvas** | Due dates, grades, recent scores, missing work and announcements from your school's Canvas, with notifications, plus your Canvas website docked in the Command Center. Sign in there once: no access token needed. |
 | ⭐ | **Destiny 2 (with DIM)** | Your Guardians, loadouts, current activity, Xûr and the weekly reset through the Bungie API, and Destiny Item Manager docked in the Command Center in the island's look. |
 | 🎮 | **Steam & games** | Your library with your custom artwork, playtime, Play / Update, your other launchers, and Win + G. |
@@ -113,7 +113,7 @@ There are no accounts, no telemetry and no servers of its own. Everything stays 
 | Google Fonts | The island's typefaces |
 | GitHub (this repository's releases) | At most once a day, and when you ask: the signed update catalog, and the updates you install (Power → *Check daily* turns the daily check off) |
 
-The docked websites in the Command Center (Discord, DIM, your Canvas) are those websites, opened like a browser would.
+The docked websites in the Command Center (DIM, your Canvas) are those websites, opened like a browser would.
 
 ## Build it yourself
 

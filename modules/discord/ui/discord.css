@@ -1,30 +1,161 @@
-/* The Discord tab (ui/discord.js), inside its shadow root; the kit (kit.css) brings the setup card
-   (.k-setup, .k-steps, .k-link, .k-form, .k-fine), the service header (.k-head, .k-logo, .k-title),
-   buttons, fields, switches, the empty state and the note. Moved from the island's style.css. The
-   call on the pill and the top bar is drawn by the island itself (a `call` activity and chip). */
-.dc-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; align-items: start; }
-@container (max-width: 560px) { .dc-grid { grid-template-columns: 1fr; } }
-.dc-voice { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 196px; }
-.dc-voice .empty { flex: 1; display: grid; place-content: center; gap: 10px; justify-items: center; }
-.dc-voice .empty .i { width: 26px; height: 26px; color: var(--faint); }
-.dc-members { display: grid; gap: 2px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; margin: 0 -4px; }
-.dc-m { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px; border-radius: 11px; }
-.dc-m b { flex: 1; min-width: 0; font: 500 12.5px/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dc-m .i { width: 14px; height: 14px; flex: none; color: var(--bad); }
-/* Taken: the row under the pointer catches a thin edge of light. */
-.dc-m:hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
-.dc-av { width: 30px; height: 30px; flex: none; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 2px transparent; transition: box-shadow .12s; }
-.dc-av.talk { box-shadow: 0 0 0 2px var(--ink-2), 0 0 0 4px var(--good); }
-.dc-side { display: flex; flex-direction: column; gap: 11px; padding: 14px; }
-.dc-side .k-head .dc-av { width: 38px; height: 38px; }
-.dc-ctl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.dc-ctl[hidden] { display: none; }
-.dc-b { display: grid; justify-items: center; gap: 5px; padding: 9px 4px 8px; border: 0; border-radius: 13px; background: var(--ink-3); color: var(--fg); font: 600 11px/1 var(--f-body); cursor: pointer; transition: background .2s, color .2s, transform .15s, opacity .2s; }
-.dc-b .i { width: 17px; height: 17px; }
-.dc-b:active { transform: scale(.95); }
-.dc-b[aria-pressed="true"] { background: var(--bad); color: #fff; }
-.dc-b.bad:not(:disabled) { color: var(--bad); }
-.dc-b:disabled { opacity: .4; cursor: default; transform: none; }
-.dc-now { margin: -6px 0 0 38px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dc-now:empty { display: none; }
-.dc-foot { display: flex; align-items: center; padding-top: 2px; }
+/* The Discord tab, as a fireteam (ui/tab.js), and what the Command Center sheet (sheet.css) shares
+   with it: the cards, the Mic/Sound/Leave tiles, the chips, the empty fireteam, the person menu.
+   Inside a shadow root, with the kit (kit.css: buttons, fields, switches, the note) and the theme's
+   custom properties, so the island's light skin comes through. Taken: void, cold light at the edges,
+   Destiny's brackets on whoever's talking; Leave is the only warm colour. */
+:host { --warm: #ffb27a; }
+:host-context([data-skin="light"]) { --warm: #a9531a; }
+
+.ft { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.ft-main, .ft-setup { display: flex; flex-direction: column; gap: 12px; }
+.ft-main[hidden], .ft-setup[hidden] { display: none; }
+.ft-sigil { flex: none; color: var(--accent); filter: drop-shadow(0 0 6px rgba(var(--glow), .7)); }
+
+/* ---------- the header: the sigil, the channel, how long you've been in it ---------- */
+.ft-head { display: flex; align-items: center; gap: 11px; min-height: 36px; padding: 0 4px; }
+.ft-ht { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ft-ht h2 { margin: 0; font: 600 13px/1.1 var(--f-display); letter-spacing: .18em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-head.idle h2 { color: color-mix(in oklab, var(--fg) 78%, transparent); }
+.ft-ht p { margin: 0; font-size: 11.5px; line-height: 1.15; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-time { font: 400 11px var(--f-mono); font-variant-numeric: tabular-nums; }
+.ft-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; flex: none; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--muted); font: 500 11.5px/1 var(--f-body); cursor: pointer; transition: color .15s, background .15s; }
+.ft-link:hover { color: var(--fg); background: var(--ink-2); }
+.ft-link .i { width: 13px; height: 13px; }
+.ft-gear { width: 30px; height: 30px; flex: none; color: var(--muted); }
+.ft-gear .i { width: 15px; height: 15px; }
+.ft-step { flex: none; font: 500 10px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- the fireteam: a card each (a tall banner in the sheet) ---------- */
+.ft-roster { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; height: 188px; }
+.ft-roster.all { height: auto; max-height: 300px; grid-auto-rows: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+.ft-allhead { display: flex; align-items: center; justify-content: space-between; margin: 0 4px -4px; font: 500 10px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ft-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; padding: 22px 8px 14px; border-radius: 12px; background: var(--ink-2); box-shadow: inset 0 0 0 1px rgba(var(--glow), .05); transition: background .2s, box-shadow .2s; }
+.ft-card b { max-width: 100%; font: 500 13px/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Everyone's drained of colour; whoever's talking gets theirs back. */
+.ft-av { width: 56px; height: 56px; flex: none; border-radius: 50%; object-fit: cover; background: var(--ink-3); box-shadow: 0 0 0 1px rgba(var(--glow), .16); filter: grayscale(1) brightness(.85); transition: filter .25s, box-shadow .2s, opacity .2s; }
+.ft-st { display: flex; align-items: center; gap: 5px; font: 400 10px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.ft-st .i { width: 12px; height: 12px; flex: none; }
+.ft-you { position: absolute; top: 8px; right: 8px; padding: 3px 5px; border-radius: 5px; background: rgba(var(--glow), .07); font: 500 9px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+:is(.ft-card, .fs-b).talk::before { content: ""; position: absolute; inset: 7px; color: var(--accent); background: var(--brackets); pointer-events: none; filter: drop-shadow(0 0 3px rgba(var(--glow), .85)); }
+.ft-card.talk { background: color-mix(in oklab, var(--accent) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 42%, transparent), inset 0 -2px 0 var(--accent), 0 12px 28px -10px color-mix(in oklab, var(--accent) 60%, transparent); }
+:is(.ft-card, .fs-b).talk .ft-av { filter: none; box-shadow: 0 0 0 2px var(--ink-solid), 0 0 0 3.5px var(--accent), 0 0 22px color-mix(in oklab, var(--accent) 75%, transparent); }
+:is(.ft-card, .fs-b).talk b { font-weight: 600; }
+:is(.ft-card, .fs-b).talk .ft-st { color: var(--accent-text, var(--accent)); font-weight: 500; text-shadow: 0 0 10px rgba(var(--glow), .7); }
+:is(.ft-card, .fs-b).off .ft-av { opacity: .55; }
+:is(.ft-card, .fs-b).off b { opacity: .85; }
+:is(.ft-card, .fs-b):is(.deaf, .muted) .ft-av { opacity: .4; }
+:is(.ft-card, .fs-b):is(.deaf, .muted) b { opacity: .7; }
+.ft-card:is(.deaf, .muted) { background: rgba(var(--glow), .03); }
+/* Hover someone: a thin edge of light, and their volume for you in place of their state. */
+.ft-card:not(.me):not(.talk):is(:hover, :focus-within) { background: rgba(var(--glow), .07); box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent), inset 0 0 0 1px rgba(var(--glow), .08); }
+.ft-vol { display: none; width: 100%; flex-direction: column; gap: 7px; font: 400 10px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-text, var(--accent)); cursor: default; }
+.ft-vol > span { display: flex; justify-content: space-between; }
+.ft-card:not(.me):is(:hover, :focus-within) .ft-vol { display: flex; }
+.ft-card:not(.me):is(:hover, :focus-within) .ft-st { display: none; }
+/* More than five: the fifth card holds the rest. */
+.ft-more { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 14px 8px; border: 0; border-radius: 12px; background: rgba(var(--glow), .03); box-shadow: inset 0 0 0 1px rgba(var(--glow), .08); color: var(--fg); cursor: pointer; transition: box-shadow .15s; }
+.ft-more:hover { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent), inset 0 0 0 1px rgba(var(--glow), .1); }
+.ft-faces { display: grid; grid-template-columns: repeat(3, 22px); gap: 4px; }
+.ft-faces img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: var(--ink-3); filter: grayscale(1) brightness(.85); }
+.ft-faces img.talk { filter: none; box-shadow: 0 0 8px rgba(var(--glow), .8); }
+.ft-more b { font: 600 22px/1 var(--f-display); }
+.ft-more small { font: 400 10px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* A slider: a thin lit line and a sliver of light for its knob. --p is how far it's lit. */
+.ft-range { -webkit-appearance: none; appearance: none; width: 100%; height: 14px; margin: 0; background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 14%, transparent), color-mix(in oklab, var(--accent) 46%, transparent) var(--p, 50%), rgba(var(--glow), .09) var(--p, 50%)) center / 100% 4px no-repeat; cursor: pointer; }
+.ft-range::-webkit-slider-thumb { -webkit-appearance: none; width: 3px; height: 12px; border: 0; border-radius: 0; background: var(--accent); box-shadow: 0 0 10px 1px var(--accent); }
+.ft-range:focus-visible { outline: none; }
+.ft-range:focus-visible::-webkit-slider-thumb { width: 5px; }
+
+/* ---------- Mic, Sound, Leave ---------- */
+.ft-ctl { display: flex; align-items: center; gap: 8px; min-height: 52px; }
+.ft-tile { display: flex; align-items: center; gap: 10px; width: 132px; height: 52px; flex: none; padding: 0 12px; border: 0; border-radius: 14px; background: var(--ink-2); box-shadow: inset 0 0 0 1px rgba(var(--glow), .05); color: var(--fg); text-align: left; cursor: pointer; transition: background .2s, box-shadow .2s, transform .15s, opacity .2s; }
+.ft-tile:hover:not(:disabled) { box-shadow: inset 0 0 0 1px rgba(var(--glow), .14); }
+.ft-tile:active:not(:disabled) { transform: scale(.96); }
+.ft-ti { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(var(--glow), .09); transition: background .2s, color .2s, box-shadow .2s; }
+.ft-ti .i { width: 16px; height: 16px; }
+.ft-tile > span:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ft-tile b { font: 600 12.5px/1 var(--f-body); }
+.ft-tile small { font-size: 11px; line-height: 1.1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Cut (muted, deafened): a lit edge and the slashed icon, not a solid red. */
+.ft-tile[aria-pressed="true"] { background: color-mix(in oklab, var(--accent) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent), inset 0 -2px 0 var(--accent), 0 10px 24px -12px color-mix(in oklab, var(--accent) 60%, transparent); }
+.ft-tile[aria-pressed="true"] .ft-ti { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 60%, transparent); }
+.ft-tile[aria-pressed="true"] small { color: var(--accent-text, var(--accent)); }
+.ft-tile.leave { color: var(--warm); background: color-mix(in oklab, var(--warm) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warm) 16%, transparent); }
+.ft-tile.leave .ft-ti { background: color-mix(in oklab, var(--warm) 12%, transparent); }
+.ft-tile.leave small { color: color-mix(in oklab, var(--warm) 80%, transparent); }
+.ft-tile.leave:hover:not(:disabled) { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warm) 45%, transparent), 0 10px 24px -14px color-mix(in oklab, var(--warm) 70%, transparent); }
+.ft-tile:disabled { color: var(--muted); background: rgba(var(--glow), .03); box-shadow: none; opacity: .55; cursor: default; }
+.ft-tile:disabled .ft-ti { background: rgba(var(--glow), .06); }
+.ft-tile:disabled small { color: inherit; }
+/* The status and @mention switches, small, so the call stays the main thing. */
+.ft-chips { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ft-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 23px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--ink-2); color: var(--muted); font: 500 11px/1 var(--f-body); white-space: nowrap; cursor: pointer; transition: color .15s, background .15s, box-shadow .15s; }
+.ft-chip span { overflow: hidden; text-overflow: ellipsis; }
+.ft-chip .i { width: 12px; height: 12px; flex: none; }
+.ft-chip:hover { color: var(--fg); }
+.ft-chip[aria-pressed="true"] { background: color-mix(in oklab, var(--accent) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 36%, transparent); color: var(--fg); }
+.ft-chip[aria-pressed="true"] .i { color: var(--accent); }
+
+/* ---------- not in a call: an open fireteam ---------- */
+.ft-empty { position: relative; height: 120px; }
+.ft-slots { margin: 0; padding: 0; list-style: none; height: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ft-slots li { border-radius: 12px; border: 1.5px dashed rgba(var(--glow), .12); }
+.ft-callout { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 16px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 14px 16px 14px 20px; border-radius: 16px; background: var(--ink-solid); box-shadow: 0 0 0 1px rgba(var(--glow), .1), 0 0 34px -10px rgba(var(--glow), .3); white-space: nowrap; }
+.ft-callout > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ft-callout b { font: 600 14px/1.1 var(--f-display); }
+.ft-callout span { font-size: 11.5px; line-height: 1.1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.ft-callout .btn.primary, .ft-gate .btn.primary { flex: none; box-shadow: 0 0 20px -4px color-mix(in oklab, var(--accent) 75%, transparent); }
+.ft-ping { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--ink-2); color: var(--fg); text-align: left; cursor: pointer; }
+.ft-ping.new { background: color-mix(in oklab, var(--accent) 6%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.ft-ping:hover { background: rgba(var(--glow), .07); }
+.ft-tag { flex: none; font: 500 9.5px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text, var(--accent)); }
+.ft-ping img { width: 22px; height: 22px; flex: none; border-radius: 50%; object-fit: cover; background: var(--ink-3); }
+.ft-pt { flex: 1; min-width: 0; font-size: 12px; color: color-mix(in oklab, var(--fg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-pt b { font-weight: 600; color: var(--fg); }
+.ft-pt i { font: normal 400 10.5px var(--f-mono); color: var(--muted); }
+.ft-ping small { flex: none; font-size: 10.5px; color: var(--muted); }
+
+/* ---------- one clear card: Discord isn't open, authorize ---------- */
+.ft-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 236px; text-align: center; }
+.ft-gate > div { display: flex; flex-direction: column; gap: 8px; }
+.ft-gate b { font: 600 15px/1.1 var(--f-display); letter-spacing: .14em; text-transform: uppercase; }
+.ft-gate span { max-width: 380px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.ft-gate .btn.primary { height: 38px; padding: 0 18px; }
+
+/* ---------- connecting Discord: the steps as objectives ---------- */
+.ft-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ft-steps li { position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 6px 12px; border-radius: 12px; }
+.ft-steps li.now { min-height: 52px; background: color-mix(in oklab, var(--accent) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent); }
+.ft-steps li.now::before { content: ""; position: absolute; inset: 5px; color: var(--accent); background: var(--brackets); pointer-events: none; opacity: .9; }
+.ft-obj { width: 13px; height: 13px; flex: none; box-sizing: border-box; border-radius: 2px; transform: rotate(45deg); border: 1.5px solid rgba(var(--glow), .3); }
+.ft-steps li.done .ft-obj { border: 0; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.ft-steps li.now .ft-obj { border-color: var(--accent); box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 70%, transparent); }
+.ft-sx { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.35; color: color-mix(in oklab, var(--fg) 82%, transparent); }
+.ft-steps li.now .ft-sx { color: var(--fg); }
+.ft-steps li.done .ft-sx { color: var(--muted); }
+.ft-sx b { font-weight: 600; }
+.ft-steps code { height: 28px; flex: none; display: flex; align-items: center; padding: 0 10px; border-radius: 9px; background: rgba(var(--glow), .07); font: 400 11.5px/1 var(--f-mono); color: var(--accent-text, var(--accent)); user-select: text; }
+.ft-sb { display: inline-flex; align-items: center; gap: 6px; height: 28px; flex: none; padding: 0 10px; border: 0; border-radius: 9px; background: rgba(var(--glow), .09); color: var(--fg); font: 600 11.5px/1 var(--f-body); cursor: pointer; }
+.ft-steps li.done .ft-sb { background: rgba(var(--glow), .06); color: var(--muted); font-weight: 500; }
+.ft-sb .i { width: 12px; height: 12px; }
+.ft-form { display: flex; gap: 8px; margin: 0; padding-left: 37px; }
+.ft-form .field { height: 36px; background: rgba(var(--glow), .06); }
+.ft-form .btn { height: 36px; }
+.ft-fine { padding-left: 37px; }
+
+/* ---------- the menu on someone (right-click) ---------- */
+.ft-menu:focus { outline: none; }
+.ft-menu { position: absolute; z-index: 20; width: 236px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 16px; background: var(--ink-solid); box-shadow: 0 18px 44px -12px rgba(0, 0, 0, .85), 0 0 0 1px rgba(var(--glow), .14), 0 0 30px -14px rgba(var(--glow), .5); color: var(--fg); animation: ft-pop .16s ease-out; }
+@keyframes ft-pop { from { opacity: 0; transform: scale(.97); } }
+.ft-mh { display: flex; align-items: center; gap: 10px; padding: 6px 8px 10px; }
+.ft-mh .ft-av { width: 30px; height: 30px; filter: none; }
+.ft-mh > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ft-mh b { font: 600 13px/1.1 var(--f-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-mh small { font: 400 9.5px/1.2 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ft-mvol { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 8px; border-radius: 10px; background: rgba(var(--glow), .04); font: 400 10px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-text, var(--accent)); }
+.ft-mvol > span { display: flex; justify-content: space-between; }
+.ft-mi { display: flex; align-items: center; gap: 10px; height: 36px; flex: none; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--fg); font: 400 12.5px/1 var(--f-body); text-align: left; cursor: pointer; }
+.ft-mi > span:first-child { flex: 1; }
+.ft-mi:hover, .ft-mi:focus-visible { outline: none; background: rgba(var(--glow), .06); box-shadow: inset 2px 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
+.ft-mi .i { width: 14px; height: 14px; color: var(--muted); }

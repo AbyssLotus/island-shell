@@ -11,7 +11,7 @@ The first-party modules in [`modules/`](../modules) are the best examples:
 | `voicemeeter` | A view of the Audio tab, a bar chip, a backend that runs while another app does and streams live data |
 | `destiny`, `canvas` | A tab, a cube with a docked website and its skin, a calendar source, settings-templated hosts, notifications |
 | `games` | A tab, a full Command Center sheet of its own, search results, a Win + letter hotkey |
-| `discord` | A `call` activity (faces on the pill), a split docked site, topics it follows, an always-there UI |
+| `discord` | A `call` activity (faces on the pill), a tab and a Command Center sheet sharing one state, backend events beyond `status`, topics it follows, an always-there UI |
 | `music` | A `media` activity the island draws, island services (app volume, bringing an app forward), a topic it publishes |
 | `gaze` | A backend-only feature: a DLL loaded in its own process, topics in and out, a Controls tile |
 | `focus` | A UI-only module (no backend), a section in place of a base card, a `timer` activity, holding notifications, presence from the eye tracker |

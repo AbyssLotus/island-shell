@@ -346,7 +346,7 @@ fn cc_web(query: String) -> Result<(), String> {
     util::open_web(&format!("https://www.google.com/search?q={}", util::url_encode(query.trim())))
 }
 
-/// Docks a module's website (`<module>/<site>`, such as discord/app or canvas/web) over the given CSS-pixel
+/// Docks a module's website (`<module>/<site>`, such as canvas/web or destiny/dim) over the given CSS-pixel
 /// rectangle of the Command Center. `skin` (default on) dresses it in the island skin.
 #[tauri::command]
 async fn cc_embed(site: String, x: f64, y: f64, w: f64, h: f64, skin: Option<bool>, app: AppHandle, shared: Shr<'_>) -> Result<(), String> {

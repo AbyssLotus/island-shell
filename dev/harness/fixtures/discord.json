@@ -14,12 +14,16 @@
    "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
    "mute": false,
    "deaf": false,
-   "speaking": false
+   "speaking": false,
+   "volume": 100,
+   "muted": false
   },
   "voice": {
    "channel_id": "900",
    "name": "Study hall",
    "guild": "Signals class",
+   "guild_id": "500",
+   "since": "now-5047s",
    "members": [
     {
      "id": "100",
@@ -27,7 +31,9 @@
      "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
      "mute": false,
      "deaf": false,
-     "speaking": false
+     "speaking": false,
+     "volume": 100,
+     "muted": false
     },
     {
      "id": "101",
@@ -35,7 +41,9 @@
      "avatar": "https://cdn.discordapp.com/embed/avatars/1.png",
      "mute": false,
      "deaf": false,
-     "speaking": true
+     "speaking": true,
+     "volume": 100,
+     "muted": false
     },
     {
      "id": "102",
@@ -43,7 +51,9 @@
      "avatar": "https://cdn.discordapp.com/embed/avatars/2.png",
      "mute": true,
      "deaf": false,
-     "speaking": false
+     "speaking": false,
+     "volume": 100,
+     "muted": false
     },
     {
      "id": "103",
@@ -51,7 +61,9 @@
      "avatar": "https://cdn.discordapp.com/embed/avatars/3.png",
      "mute": false,
      "deaf": false,
-     "speaking": false
+     "speaking": false,
+     "volume": 80,
+     "muted": false
     },
     {
      "id": "104",
@@ -59,7 +71,9 @@
      "avatar": "https://cdn.discordapp.com/embed/avatars/4.png",
      "mute": false,
      "deaf": true,
-     "speaking": false
+     "speaking": false,
+     "volume": 100,
+     "muted": false
     }
    ]
   },
@@ -67,9 +81,284 @@
   "deaf": false,
   "presence": true,
   "notify": true,
-  "presence_now": "Night Drive \u00b7 The Example Band",
+  "presence_now": "Night Drive · The Example Band",
+  "playing": {
+   "title": "Night Drive",
+   "artist": "The Example Band",
+   "album": "Example Album",
+   "art": "",
+   "start": "now-134s",
+   "end": "now+94s"
+  },
+  "devices": {
+   "inputs": [
+    {
+     "id": "default",
+     "name": "Default"
+    },
+    {
+     "id": "{mic}",
+     "name": "Microphone (USB Audio)"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "default",
+     "name": "Default"
+    },
+    {
+     "id": "{hp}",
+     "name": "Headphones"
+    }
+   ],
+   "input": "{mic}",
+   "output": "{hp}",
+   "input_volume": 70,
+   "output_volume": 85,
+   "ptt": false
+  },
+  "last": null,
+  "last_people": [],
+  "pings": [
+   {
+    "id": "9001",
+    "channel_id": "700",
+    "guild_id": "500",
+    "channel": "#homework",
+    "author": "Kiwi",
+    "avatar": "https://cdn.discordapp.com/embed/avatars/1.png",
+    "text": "@You can you send the lab notes before 9? I only have the first half.",
+    "at": "now-40s",
+    "new": true
+   },
+   {
+    "id": "9002",
+    "channel_id": "701",
+    "guild_id": "500",
+    "channel": "#general",
+    "author": "Owl",
+    "avatar": "https://cdn.discordapp.com/embed/avatars/2.png",
+    "text": "replying to you: the quiz moved to Thursday",
+    "at": "now-720s",
+    "new": true
+   },
+   {
+    "id": "9003",
+    "channel_id": "710",
+    "guild_id": "502",
+    "channel": "#raids",
+    "author": "Fern",
+    "avatar": "https://cdn.discordapp.com/embed/avatars/3.png",
+    "text": "raid tonight at 8? @You",
+    "at": "now-7300s",
+    "new": false
+   }
+  ],
   "error": ""
  },
+ "mod:discord.browse": {
+  "guilds": [
+   {
+    "id": "500",
+    "name": "Signals class",
+    "icon": ""
+   },
+   {
+    "id": "501",
+    "name": "Night Owls",
+    "icon": ""
+   },
+   {
+    "id": "502",
+    "name": "Raid group",
+    "icon": ""
+   },
+   {
+    "id": "503",
+    "name": "Lab partners",
+    "icon": ""
+   },
+   {
+    "id": "504",
+    "name": "Home server",
+    "icon": ""
+   }
+  ],
+  "channels": {
+   "500": [
+    {
+     "id": "700",
+     "name": "homework",
+     "voice": false,
+     "people": []
+    },
+    {
+     "id": "701",
+     "name": "general",
+     "voice": false,
+     "people": []
+    },
+    {
+     "id": "702",
+     "name": "resources",
+     "voice": false,
+     "people": []
+    },
+    {
+     "id": "900",
+     "name": "Study hall",
+     "voice": true,
+     "people": [
+      {
+       "id": "101",
+       "name": "Kiwi",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/1.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": true,
+       "volume": 100,
+       "muted": false
+      },
+      {
+       "id": "102",
+       "name": "Owl",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/2.png",
+       "mute": true,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      },
+      {
+       "id": "103",
+       "name": "Fern",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/3.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 80,
+       "muted": false
+      },
+      {
+       "id": "104",
+       "name": "Moss",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/4.png",
+       "mute": false,
+       "deaf": true,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      }
+     ]
+    },
+    {
+     "id": "901",
+     "name": "Lab bench",
+     "voice": true,
+     "people": [
+      {
+       "id": "105",
+       "name": "Pip",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/5.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      },
+      {
+       "id": "106",
+       "name": "Wren",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      }
+     ]
+    },
+    {
+     "id": "902",
+     "name": "Quiet room",
+     "voice": true,
+     "people": []
+    },
+    {
+     "id": "903",
+     "name": "Office hours",
+     "voice": true,
+     "people": []
+    }
+   ],
+   "501": [
+    {
+     "id": "711",
+     "name": "chat",
+     "voice": false,
+     "people": []
+    },
+    {
+     "id": "910",
+     "name": "Lounge",
+     "voice": true,
+     "people": [
+      {
+       "id": "107",
+       "name": "Ash",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/1.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      },
+      {
+       "id": "108",
+       "name": "Lark",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/2.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      },
+      {
+       "id": "109",
+       "name": "Sol",
+       "avatar": "https://cdn.discordapp.com/embed/avatars/3.png",
+       "mute": false,
+       "deaf": false,
+       "speaking": false,
+       "volume": 100,
+       "muted": false
+      }
+     ]
+    }
+   ],
+   "502": [
+    {
+     "id": "710",
+     "name": "raids",
+     "voice": false,
+     "people": []
+    },
+    {
+     "id": "920",
+     "name": "Raid 1",
+     "voice": true,
+     "people": []
+    }
+   ]
+  }
+ },
  "mod:discord.action": null,
- "mod:discord.options": null
+ "mod:discord.options": null,
+ "mod:discord.join": null,
+ "mod:discord.user_voice": null,
+ "mod:discord.voice": null,
+ "mod:discord.open": null,
+ "mod:discord.open_app": null,
+ "mod:discord.pings": null,
+ "mod:discord.configure": null
 }
