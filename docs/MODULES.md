@@ -79,6 +79,7 @@ fn main() { island_module::run(Hello); }
 
 - **It talks JSON-RPC over its stdin and stdout.** The island starts it and nothing else can reach it. Its stderr is its log, which the Modules cube shows.
 - **Each UI call runs on its own thread.** `event` (a topic changed) runs in order on one thread, so keep it quick. `tick` is the scheduled wake-up, and `shutdown` comes before it exits.
+- **Windows APIs from any thread.** `island_module::run` keeps COM's multithreaded apartment open for the module's whole life, so WinRT classes (HTTP, media, notifications) work on every call's thread without any setup. Don't call `CoUninitialize` on a thread you didn't initialize yourself.
 - **What it can send the island, from any thread:**
   - `host.emit(name, data)` sends an event to its own UI.
   - `host.notify(..)` shows a notification.

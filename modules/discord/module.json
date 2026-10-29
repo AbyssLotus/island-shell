@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "name": "Discord",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "api": 1,
   "description": "Your Discord call on the island (who's talking, mute, deafen, leave), @mentions as notifications, what you're listening to on your status, and Discord docked in the Command Center.",
   "icon": "ui/icon.svg",

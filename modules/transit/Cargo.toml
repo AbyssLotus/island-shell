@@ -1,6 +1,6 @@
 [package]
 name = "transit-module"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Transit module: live departures from any city's GTFS and GTFS-realtime feeds, with Philadelphia (SEPTA) built in."
