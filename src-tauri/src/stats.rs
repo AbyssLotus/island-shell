@@ -111,7 +111,7 @@ pub(crate) fn array(c: Option<PDH_HCOUNTER>) -> Vec<(String, f64)> {
         .collect()
 }
 
-fn cpu_name() -> String {
+pub fn cpu_name() -> String {
     let mut buf = [0u16; 128];
     let mut size = (buf.len() * 2) as u32;
     let r = unsafe {

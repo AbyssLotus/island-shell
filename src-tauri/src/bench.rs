@@ -7,9 +7,11 @@
 //! - Disk: a 1 GB file written and read straight to and from the drive (no cache), then 4 KB reads
 //!   at random places for a few seconds. The file goes in the temp folder on the Windows drive, or
 //!   a folder at the root of another drive, and is deleted afterwards.
+//! - Graphics: Direct3D 11 on the card the user picks, which needn't be the one drawing the island
+//!   (on a PC with two, that's often the one built into the CPU): a compute shader of multiply-adds
+//!   (GFLOPS), then blended full-screen fills of a 2048 × 2048 picture (Gpixels/s).
 //! - Internet: Cloudflare's public speed test (speed.cloudflare.com): latency, then download and
 //!   upload with four connections each. Nothing else is sent.
-//! The graphics benchmark runs in the page itself (WebGL), on the card that draws the island.
 
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -17,6 +19,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use windows::core::{s, Interface, PCSTR};
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Graphics::Direct3D::Fxc::{D3DCompile, D3DCOMPILE_OPTIMIZATION_LEVEL3};
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::{IDXGIAdapter, IDXGIAdapter1};
 
 #[derive(Serialize, Clone, Default)]
 pub struct Results {
@@ -32,6 +41,10 @@ pub struct Results {
     pub disk_read: f64,
     pub disk_write: f64,
     pub disk_iops: f64,
+    /// GFLOPS and Gpixels/s, and the card they're from.
+    pub gpu_gflops: f64,
+    pub gpu_fill: f64,
+    pub gpu_name: String,
     /// Milliseconds and megabits per second.
     pub net_ping: f64,
     pub net_down: f64,
@@ -41,7 +54,7 @@ pub struct Results {
 #[derive(Serialize, Clone, Default)]
 pub struct Status {
     pub running: bool,
-    /// "cpu", "memory", "disk", "net" (what's running or ran last).
+    /// "cpu", "memory", "disk", "gpu", "net" (what's running or ran last).
     pub kind: String,
     pub stage: String,
     pub progress: f64,
@@ -68,11 +81,12 @@ pub fn cancel() {
     CANCEL.store(true, Ordering::SeqCst);
 }
 
-pub fn start(kind: &str, drive: Option<String>) -> Result<(), String> {
+/// `drive` is the disk test's drive letter, `card` the graphics test's card (a `GpuChoice` id).
+pub fn start(kind: &str, drive: Option<String>, card: Option<String>) -> Result<(), String> {
     if status().running {
         return Err("A benchmark is already running".into());
     }
-    if !["cpu", "memory", "disk", "net"].contains(&kind) {
+    if !["cpu", "memory", "disk", "gpu", "net"].contains(&kind) {
         return Err("Unknown benchmark".into());
     }
     CANCEL.store(false, Ordering::SeqCst);
@@ -90,6 +104,7 @@ pub fn start(kind: &str, drive: Option<String>) -> Result<(), String> {
             "cpu" => cpu(),
             "memory" => memory(),
             "disk" => disk(drive.as_deref().unwrap_or("C:")),
+            "gpu" => gpu(card.as_deref()),
             _ => net(),
         };
         set(|s| {
@@ -403,6 +418,397 @@ fn disk(drive: &str) -> Result<(), String> {
     result
 }
 
+/* ---------- graphics ---------- */
+
+/// A graphics card the test can run on.
+#[derive(Serialize, Clone)]
+pub struct GpuChoice {
+    /// Its LUID, which stays the same until Windows restarts.
+    pub id: String,
+    pub name: String,
+    /// The graphics built into the CPU.
+    pub integrated: bool,
+}
+
+fn gpu_choices() -> Vec<(IDXGIAdapter1, GpuChoice)> {
+    let cpu = crate::stats::cpu_name();
+    crate::sensors::dxgi_adapters()
+        .into_iter()
+        .map(|a| {
+            let id = format!("{:08x}{:08x}", a.luid.HighPart as u32, a.luid.LowPart);
+            let integrated = crate::sensors::on_cpu(&a.name, a.vendor, &cpu);
+            (a.adapter, GpuChoice { id, name: a.name, integrated })
+        })
+        .collect()
+}
+
+/// The cards to choose from, in DXGI's order.
+pub fn gpus() -> Vec<GpuChoice> {
+    gpu_choices().into_iter().map(|(_, c)| c).collect()
+}
+
+fn gpu(id: Option<&str>) -> Result<(), String> {
+    let mut cards = gpu_choices();
+    if cards.is_empty() {
+        return Err("No graphics card to test".into());
+    }
+    // Without a choice, the first card that isn't the CPU's.
+    let i = match id {
+        Some(id) => cards.iter().position(|(_, c)| c.id == id).ok_or("That graphics card isn't there any more")?,
+        None => cards.iter().position(|(_, c)| !c.integrated).unwrap_or(0),
+    };
+    let (adapter, card) = cards.swap_remove(i);
+    set(|s| {
+        s.results.gpu_gflops = 0.0;
+        s.results.gpu_fill = 0.0;
+        s.results.gpu_name = card.name.clone();
+        s.unit = "GFLOPS".into();
+        s.stage = "Shader math".into();
+    });
+    let g = Gpu::new(Some(&adapter))?;
+    let gflops = g.shader_math(1 << 20, 4.0, |rate, done| {
+        set(|s| {
+            s.live = rate;
+            s.progress = done * 0.6;
+        })
+    })?;
+    set(|s| s.results.gpu_gflops = gflops);
+    if CANCEL.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    set(|s| {
+        s.stage = "Fill rate".into();
+        s.unit = "Gpixels/s".into();
+    });
+    let fill = g.fill_rate(3.0, |rate, done| {
+        set(|s| {
+            s.live = rate;
+            s.progress = 0.6 + done * 0.4;
+        })
+    })?;
+    set(|s| s.results.gpu_fill = fill);
+    Ok(())
+}
+
+/// Each round is 16 multiply-adds on all 4 lanes, each needing the one before, so no compiler can
+/// fold them. The numbers soon overflow to infinity, which the card works through at full speed.
+const MATH_CS: &str = "
+RWBuffer<float4> o : register(u0);
+[numthreads(256, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    float4 x = float4(id.x * 1e-7, 0.1, 0.2, 0.3);
+    float4 y = float4(0.4, id.x * 1e-7, 0.5, 0.6);
+    [loop] for (uint i = 0; i < ROUNDS; i++) {
+        x = mad(y, x, y); y = mad(x, y, x); x = mad(y, x, y); y = mad(x, y, x);
+        x = mad(y, x, y); y = mad(x, y, x); x = mad(y, x, y); y = mad(x, y, x);
+        x = mad(y, x, y); y = mad(x, y, x); x = mad(y, x, y); y = mad(x, y, x);
+        x = mad(y, x, y); y = mad(x, y, x); x = mad(y, x, y); y = mad(x, y, x);
+    }
+    o[id.x] = x + y;
+}";
+const MATH_ROUNDS: u32 = 256;
+
+/// One triangle over the whole picture, its corners worked out from the vertex number (no buffer).
+const FILL_VS: &str = "
+float4 main(uint id : SV_VertexID) : SV_Position {
+    float2 p = float2((id << 1) & 2, id & 2);
+    return float4(p * 2.0 - 1.0, 0.0, 1.0);
+}";
+const FILL_PS: &str = "
+float4 main() : SV_Target { return float4(0.9, 0.5, 0.25, 0.1); }";
+
+fn d3d(e: windows::core::Error) -> String {
+    format!("The graphics test failed: {} ({:#010x})", e.message().trim_end(), e.code().0)
+}
+
+fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>, String> {
+    let (mut code, mut errors) = (None, None);
+    let r = unsafe {
+        D3DCompile(
+            src.as_ptr() as *const _,
+            src.len(),
+            PCSTR::null(),
+            None,
+            None,
+            s!("main"),
+            target,
+            D3DCOMPILE_OPTIMIZATION_LEVEL3,
+            0,
+            &mut code,
+            Some(&mut errors),
+        )
+    };
+    let bytes = |b: &ID3DBlob| unsafe { std::slice::from_raw_parts(b.GetBufferPointer() as *const u8, b.GetBufferSize()).to_vec() };
+    match (r, code) {
+        (Ok(()), Some(code)) => Ok(bytes(&code)),
+        (r, _) => {
+            let why = errors.map(|e| String::from_utf8_lossy(&bytes(&e)).trim_end_matches(['\0', '\n']).to_string());
+            Err(format!("Couldn't build the graphics test: {}", why.unwrap_or_else(|| r.err().map(|e| e.message()).unwrap_or_default())))
+        }
+    }
+}
+
+/// A Direct3D 11 device, and a query to wait for it with.
+struct Gpu {
+    dev: ID3D11Device,
+    ctx: ID3D11DeviceContext,
+    done: ID3D11Query,
+}
+
+impl Gpu {
+    /// A device on `adapter`, or on WARP (Windows' software renderer, for the tests) without one.
+    fn new(adapter: Option<&IDXGIAdapter1>) -> Result<Gpu, String> {
+        let (adapter, driver) = match adapter {
+            Some(a) => (Some(a.cast::<IDXGIAdapter>().map_err(d3d)?), D3D_DRIVER_TYPE_UNKNOWN),
+            None => (None, D3D_DRIVER_TYPE_WARP),
+        };
+        let (mut dev, mut ctx, mut done) = (None, None, None);
+        unsafe {
+            D3D11CreateDevice(
+                adapter.as_ref(),
+                driver,
+                HMODULE::default(),
+                D3D11_CREATE_DEVICE_FLAG(0),
+                Some(&[D3D_FEATURE_LEVEL_11_0]),
+                D3D11_SDK_VERSION,
+                Some(&mut dev),
+                None,
+                Some(&mut ctx),
+            )
+        }
+        .map_err(|e| format!("This card can't run the test, which needs Direct3D 11 ({})", e.message().trim_end()))?;
+        let (Some(dev), Some(ctx)) = (dev, ctx) else { return Err("Direct3D 11 didn't start".into()) };
+        unsafe { dev.CreateQuery(&D3D11_QUERY_DESC { Query: D3D11_QUERY_EVENT, MiscFlags: 0 }, Some(&mut done)) }.map_err(d3d)?;
+        Ok(Gpu {
+            dev,
+            ctx,
+            done: done.ok_or("Direct3D 11 didn't start")?,
+        })
+    }
+
+    /// Waits until the card has done everything it's been given.
+    fn finish(&self) -> Result<(), String> {
+        let t0 = Instant::now();
+        unsafe { self.ctx.End(&self.done) };
+        loop {
+            // A BOOL, set once the card gets to the End above.
+            let mut done = 0u32;
+            unsafe { self.ctx.GetData(&self.done, Some(&mut done as *mut u32 as *mut _), 4, 0) }.map_err(d3d)?;
+            if done != 0 {
+                return Ok(());
+            }
+            if t0.elapsed() > Duration::from_secs(10) {
+                return Err("The graphics card stopped answering".into());
+            }
+            std::thread::yield_now();
+        }
+    }
+
+    /// Queues `step` in batches, waiting for each, and returns steps per second over `secs`. That
+    /// starts once the driver has built the shader and the card has had half a second to reach
+    /// full clocks. `report` gets the rate so far and the share of the time gone.
+    fn timed(&self, secs: f64, mut step: impl FnMut(), mut report: impl FnMut(f64, f64)) -> Result<f64, String> {
+        const WARM: f64 = 0.5;
+        let share = |t: f64| (t / (secs + WARM)).min(1.0);
+        let batch = |n: u32, step: &mut dyn FnMut()| {
+            for _ in 0..n {
+                step();
+            }
+            self.finish()
+        };
+        batch(1, &mut step)?;
+        // Batches of 25 to 50 ms: long enough that the wait between them costs nothing, short
+        // enough for the dial to move and Stop to answer.
+        let mut n = 1u32;
+        while n < 1 << 14 {
+            let t = Instant::now();
+            batch(n, &mut step)?;
+            if t.elapsed() >= Duration::from_millis(25) {
+                break;
+            }
+            n *= 2;
+        }
+        let warm = Instant::now();
+        while warm.elapsed().as_secs_f64() < WARM && !CANCEL.load(Ordering::Relaxed) {
+            batch(n, &mut step)?;
+            report(0.0, share(warm.elapsed().as_secs_f64()));
+        }
+        let t0 = Instant::now();
+        let mut steps = 0u64;
+        while t0.elapsed().as_secs_f64() < secs && !CANCEL.load(Ordering::Relaxed) {
+            batch(n, &mut step)?;
+            steps += n as u64;
+            let t = t0.elapsed().as_secs_f64();
+            report(steps as f64 / t, share(WARM + t));
+        }
+        Ok(steps as f64 / t0.elapsed().as_secs_f64())
+    }
+
+    /// The first `len` bytes of `src` (a buffer, or a texture's top-left pixel), through
+    /// `staging`: a small one of the same kind that the CPU can read.
+    fn peek(&self, staging: &ID3D11Resource, src: &ID3D11Resource, region: D3D11_BOX, len: usize) -> Result<Vec<u8>, String> {
+        unsafe {
+            self.ctx.CopySubresourceRegion(staging, 0, 0, 0, 0, src, 0, Some(&region));
+            let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+            self.ctx.Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut m)).map_err(d3d)?;
+            let out = std::slice::from_raw_parts(m.pData as *const u8, len).to_vec();
+            self.ctx.Unmap(staging, 0);
+            Ok(out)
+        }
+    }
+
+    fn buffer(&self, len: u32, usage: D3D11_USAGE, bind: D3D11_BIND_FLAG, cpu: D3D11_CPU_ACCESS_FLAG) -> Result<ID3D11Buffer, String> {
+        let desc = D3D11_BUFFER_DESC {
+            ByteWidth: len,
+            Usage: usage,
+            BindFlags: bind.0 as u32,
+            CPUAccessFlags: cpu.0 as u32,
+            MiscFlags: 0,
+            StructureByteStride: 0,
+        };
+        let mut b = None;
+        unsafe { self.dev.CreateBuffer(&desc, None, Some(&mut b)) }.map_err(d3d)?;
+        b.ok_or_else(|| "Couldn't make a buffer for the graphics test".into())
+    }
+
+    fn texture(&self, size: u32, usage: D3D11_USAGE, bind: D3D11_BIND_FLAG, cpu: D3D11_CPU_ACCESS_FLAG) -> Result<ID3D11Texture2D, String> {
+        let desc = D3D11_TEXTURE2D_DESC {
+            Width: size,
+            Height: size,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: usage,
+            BindFlags: bind.0 as u32,
+            CPUAccessFlags: cpu.0 as u32,
+            MiscFlags: 0,
+        };
+        let mut t = None;
+        unsafe { self.dev.CreateTexture2D(&desc, None, Some(&mut t)) }.map_err(d3d)?;
+        t.ok_or_else(|| "Couldn't make a picture for the graphics test".into())
+    }
+
+    /// `MATH_CS` over `threads` threads (a multiple of 256); GFLOPS.
+    fn shader_math(&self, threads: u32, secs: f64, mut report: impl FnMut(f64, f64)) -> Result<f64, String> {
+        let code = compile(&MATH_CS.replace("ROUNDS", &MATH_ROUNDS.to_string()), s!("cs_5_0"))?;
+        let out = self.buffer(threads * 16, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS, D3D11_CPU_ACCESS_FLAG(0))?;
+        let staging = self.buffer(16, D3D11_USAGE_STAGING, D3D11_BIND_FLAG(0), D3D11_CPU_ACCESS_READ)?;
+        let view = D3D11_UNORDERED_ACCESS_VIEW_DESC {
+            Format: DXGI_FORMAT_R32G32B32A32_FLOAT,
+            ViewDimension: D3D11_UAV_DIMENSION_BUFFER,
+            Anonymous: D3D11_UNORDERED_ACCESS_VIEW_DESC_0 {
+                Buffer: D3D11_BUFFER_UAV {
+                    FirstElement: 0,
+                    NumElements: threads,
+                    Flags: 0,
+                },
+            },
+        };
+        let (mut cs, mut uav) = (None, None);
+        unsafe {
+            self.dev.CreateComputeShader(&code, None, Some(&mut cs)).map_err(d3d)?;
+            self.dev.CreateUnorderedAccessView(&out, Some(&view), Some(&mut uav)).map_err(d3d)?;
+            self.ctx.CSSetShader(cs.as_ref(), None);
+            self.ctx.CSSetUnorderedAccessViews(0, 1, Some(&uav), None);
+        }
+        // Per thread: rounds × 16 multiply-adds × 4 lanes × 2 operations.
+        let flops = threads as f64 * MATH_ROUNDS as f64 * 128.0;
+        let rate = self.timed(secs, || unsafe { self.ctx.Dispatch(threads / 256, 1, 1) }, |r, done| report(r * flops / 1e9, done))?;
+        // It ran: the first thread's answer is in the buffer, which started at zero.
+        let first = self.peek(
+            &staging.cast().map_err(d3d)?,
+            &out.cast().map_err(d3d)?,
+            D3D11_BOX {
+                left: 0,
+                top: 0,
+                front: 0,
+                right: 16,
+                bottom: 1,
+                back: 1,
+            },
+            16,
+        )?;
+        if first.iter().all(|&b| b == 0) {
+            return Err("The graphics card didn't run the test".into());
+        }
+        Ok(rate * flops / 1e9)
+    }
+
+    /// Blended full-screen fills of a 2048 × 2048 picture; Gpixels/s.
+    fn fill_rate(&self, secs: f64, mut report: impl FnMut(f64, f64)) -> Result<f64, String> {
+        const SIZE: u32 = 2048;
+        let (vs, ps) = (compile(FILL_VS, s!("vs_5_0"))?, compile(FILL_PS, s!("ps_5_0"))?);
+        let pic = self.texture(SIZE, D3D11_USAGE_DEFAULT, D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_FLAG(0))?;
+        let staging = self.texture(1, D3D11_USAGE_STAGING, D3D11_BIND_FLAG(0), D3D11_CPU_ACCESS_READ)?;
+        // Blending, so every fill reads the picture as well as writing it.
+        let mut blend = D3D11_BLEND_DESC::default();
+        blend.RenderTarget[0] = D3D11_RENDER_TARGET_BLEND_DESC {
+            BlendEnable: true.into(),
+            SrcBlend: D3D11_BLEND_SRC_ALPHA,
+            DestBlend: D3D11_BLEND_INV_SRC_ALPHA,
+            BlendOp: D3D11_BLEND_OP_ADD,
+            SrcBlendAlpha: D3D11_BLEND_ONE,
+            DestBlendAlpha: D3D11_BLEND_INV_SRC_ALPHA,
+            BlendOpAlpha: D3D11_BLEND_OP_ADD,
+            RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as u8,
+        };
+        // The triangle winds counter-clockwise, which the default state would cull.
+        let raster = D3D11_RASTERIZER_DESC {
+            FillMode: D3D11_FILL_SOLID,
+            CullMode: D3D11_CULL_NONE,
+            DepthClipEnable: true.into(),
+            ..Default::default()
+        };
+        let (mut v, mut p, mut rtv, mut b, mut r) = (None, None, None, None, None);
+        unsafe {
+            self.dev.CreateVertexShader(&vs, None, Some(&mut v)).map_err(d3d)?;
+            self.dev.CreatePixelShader(&ps, None, Some(&mut p)).map_err(d3d)?;
+            self.dev.CreateRenderTargetView(&pic, None, Some(&mut rtv)).map_err(d3d)?;
+            self.dev.CreateBlendState(&blend, Some(&mut b)).map_err(d3d)?;
+            self.dev.CreateRasterizerState(&raster, Some(&mut r)).map_err(d3d)?;
+            let c = &self.ctx;
+            c.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            c.VSSetShader(v.as_ref(), None);
+            c.PSSetShader(p.as_ref(), None);
+            c.RSSetState(r.as_ref());
+            c.RSSetViewports(Some(&[D3D11_VIEWPORT {
+                TopLeftX: 0.0,
+                TopLeftY: 0.0,
+                Width: SIZE as f32,
+                Height: SIZE as f32,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            }]));
+            c.OMSetRenderTargets(Some(&[rtv.clone()]), None);
+            c.OMSetBlendState(b.as_ref(), None, u32::MAX);
+            if let Some(rtv) = &rtv {
+                c.ClearRenderTargetView(rtv, &[0.0; 4]);
+            }
+        }
+        let pixels = (SIZE * SIZE) as f64;
+        let rate = self.timed(secs, || unsafe { self.ctx.Draw(3, 0) }, |r, done| report(r * pixels / 1e9, done))?;
+        // It drew: the top-left pixel isn't the clear color any more.
+        let px = self.peek(
+            &staging.cast().map_err(d3d)?,
+            &pic.cast().map_err(d3d)?,
+            D3D11_BOX {
+                left: 0,
+                top: 0,
+                front: 0,
+                right: 1,
+                bottom: 1,
+                back: 1,
+            },
+            4,
+        )?;
+        if px == [0, 0, 0, 0] {
+            return Err("The graphics card didn't draw the test".into());
+        }
+        Ok(rate * pixels / 1e9)
+    }
+}
+
 /* ---------- internet ---------- */
 
 fn net() -> Result<(), String> {
@@ -583,16 +989,27 @@ mod tests {
         status()
     }
 
-    /// `BENCH=cpu,memory,disk,net cargo test --release bench::tests::live -- --ignored --nocapture`
+    /// `BENCH=cpu,memory,disk,gpu,net cargo test --release bench::tests::live -- --ignored --nocapture`
     #[test]
-    #[ignore = "needs a real PC: runs the benchmarks (BENCH=cpu,memory,disk,net)"]
+    #[ignore = "needs a real PC: runs the benchmarks (BENCH=cpu,memory,disk,gpu,net)"]
     fn live() {
         let kinds = std::env::var("BENCH").unwrap_or_else(|_| "cpu,memory".into());
         for k in kinds.split(',') {
-            start(k, Some("G:".into())).unwrap();
+            start(k, Some("G:".into()), None).unwrap();
             let s = wait();
             println!("{k}: {}", serde_json::to_string(&s.results).unwrap());
             assert!(s.error.is_empty(), "{}", s.error);
         }
+    }
+
+    /// The graphics test end to end, briefly, on Windows' software renderer: the shaders build,
+    /// and the checks that the card really ran and drew them pass.
+    #[test]
+    fn gpu_on_warp() {
+        let g = Gpu::new(None).unwrap();
+        let gflops = g.shader_math(1 << 14, 0.2, |_, _| {}).unwrap();
+        let fill = g.fill_rate(0.2, |_, _| {}).unwrap();
+        println!("WARP: {gflops:.1} GFLOPS, {fill:.2} Gpixels/s");
+        assert!(gflops > 0.0 && fill > 0.0);
     }
 }

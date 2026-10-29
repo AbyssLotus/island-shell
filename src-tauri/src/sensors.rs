@@ -19,7 +19,7 @@ use serde::Serialize;
 use windows::core::HSTRING;
 use windows::Wdk::Graphics::Direct3D::*;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
-use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
+use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, GetDriveTypeW, GetLogicalDrives, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, OPEN_EXISTING,
 };
@@ -91,9 +91,17 @@ unsafe fn query<T>(h: u32, ty: KMTQUERYADAPTERINFOTYPE, mut v: T) -> Option<T> {
     (D3DKMTQueryAdapterInfo(&mut q).0 >= 0).then_some(v)
 }
 
-/// DXGI names (and vendor ids) by adapter LUID; software adapters left out.
-fn dxgi_names() -> HashMap<(u32, i32), (String, u32)> {
-    let mut out = HashMap::new();
+/// A hardware graphics adapter as DXGI lists it.
+pub struct DxgiAdapter {
+    pub adapter: IDXGIAdapter1,
+    pub luid: LUID,
+    pub name: String,
+    pub vendor: u32,
+}
+
+/// Every graphics adapter, in DXGI's order; software adapters left out.
+pub fn dxgi_adapters() -> Vec<DxgiAdapter> {
+    let mut out = vec![];
     let Ok(f) = (unsafe { CreateDXGIFactory1::<IDXGIFactory1>() }) else { return out };
     let mut i = 0;
     while let Ok(a) = unsafe { f.EnumAdapters1(i) } {
@@ -104,14 +112,19 @@ fn dxgi_names() -> HashMap<(u32, i32), (String, u32)> {
         }
         let end = d.Description.iter().position(|&c| c == 0).unwrap_or(d.Description.len());
         let name = String::from_utf16_lossy(&d.Description[..end]).replace("(R)", "").replace("(TM)", "").trim().to_string();
-        out.insert((d.AdapterLuid.LowPart, d.AdapterLuid.HighPart), (name, d.VendorId));
+        out.push(DxgiAdapter { adapter: a, luid: d.AdapterLuid, name, vendor: d.VendorId });
     }
     out
 }
 
+/// DXGI names (and vendor ids) by adapter LUID.
+fn dxgi_names() -> HashMap<(u32, i32), (String, u32)> {
+    dxgi_adapters().into_iter().map(|a| ((a.luid.LowPart, a.luid.HighPart), (a.name, a.vendor))).collect()
+}
+
 /// Whether a GPU is the one built into this CPU: AMD lists it in the CPU's name ("… w/ Radeon 780M
 /// Graphics", "… with Radeon Graphics"); Intel's integrated graphics are any Intel GPU but Arc.
-fn on_cpu(gpu: &str, vendor: u32, cpu: &str) -> bool {
+pub fn on_cpu(gpu: &str, vendor: u32, cpu: &str) -> bool {
     let core = gpu.replace("AMD ", "").replace("Intel ", "");
     let core = core.trim();
     let amd_igpu = cpu.contains("AMD") && (cpu.contains(core) || core == "Radeon Graphics");

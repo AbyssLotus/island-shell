@@ -180,11 +180,16 @@ export function createTools(ctx) {
   const KINDS = [
     ['cpu', 'CPU', 'cpu'], ['memory', 'Memory', 'mem'], ['disk', 'Disk', 'disk'], ['gpu', 'Graphics', 'monitor'], ['net', 'Internet', 'net'], ['score', 'Island score', 'trophy']
   ];
-  // Reference values (score 1000 each): roughly a 2024 mid-range desktop.
-  const REF = { cpu_single: 400, cpu_multi: 5000, mem_copy: 25, mem_latency: 100, disk_read: 3500, disk_write: 3000, disk_iops: 15000, gpu_gflops: 4000, gpu_fill: 20, net_down: 200, net_up: 50 };
+  // Reference values (score 1000 each): roughly a 2024 mid-range desktop. Graphics is about an
+  // RTX 4060 (rated 15 TFLOPS and 118 Gpixels/s), estimated rather than measured on one.
+  const REF = { cpu_single: 400, cpu_multi: 5000, mem_copy: 25, mem_latency: 100, disk_read: 3500, disk_write: 3000, disk_iops: 15000, gpu_gflops: 15000, gpu_fill: 100, net_down: 200, net_up: 50 };
   const LOWER_BETTER = new Set(['mem_latency']);
-  let bKind = store.get('tmBenchKind', 'cpu'), bStatus = null, bT = 0, bDrive = store.get('tmBenchDrive', 'C:'), runAll = null, gpuRun = null;
+  let bKind = store.get('tmBenchKind', 'cpu'), bStatus = null, bT = 0, bDrive = store.get('tmBenchDrive', 'C:'), runAll = null;
+  // The graphics test's card: its id this boot, and the cards to pick from (bench_gpus).
+  let bGpu = null, gpus = null;
   let best = store.get('tmBench', {}); // the latest result of each measure, with when
+  // Graphics results from before 0.3.4 came from a WebGL test in the window, on another scale.
+  if (!store.get('tmBenchGpuD3d', false)) { delete best.gpu_gflops; delete best.gpu_fill; store.set('tmBench', best); store.set('tmBenchGpuD3d', true); }
   let log = store.get('tmBenchLog', []); // past runs
   function remember(kind, r) {
     const at = Date.now();
@@ -209,15 +214,14 @@ export function createTools(ctx) {
     }
   }
   async function start(kind) {
-    if (kind === 'gpu') return runGpu();
-    try { await invoke('bench_start', { kind, drive: kind === 'disk' ? bDrive : null }); } catch (e) { flash(String(e)); return false; }
+    try { await invoke('bench_start', { kind, drive: kind === 'disk' ? bDrive : null, gpu: kind === 'gpu' ? bGpu : null }); } catch (e) { flash(String(e)); return false; }
     // Wait for it to finish, then keep its results.
     await new Promise(res => {
       const wait = async () => {
         try { bStatus = await invoke('bench_status'); } catch (e) { res(); return; }
         const main = mainEl(); if (main && main.querySelector('.tm-bench')) drawBench(main);
         if (bStatus.running) setTimeout(wait, 250);
-        else { if (bStatus.error) flash(bStatus.error); else if (bStatus.stage === 'Done') { const r = {}; for (const k of GROUPS[kind]) r[k] = bStatus.results[k]; if (kind === 'cpu') r.threads = bStatus.results.threads; if (kind === 'disk') r.drive = bStatus.results.disk_drive; if (kind === 'net') r.ping = bStatus.results.net_ping; remember(kind, r); } res(); }
+        else { if (bStatus.error) flash(bStatus.error); else if (bStatus.stage === 'Done') { const r = {}; for (const k of GROUPS[kind]) r[k] = bStatus.results[k]; if (kind === 'cpu') r.threads = bStatus.results.threads; if (kind === 'disk') r.drive = bStatus.results.disk_drive; if (kind === 'gpu') r.gpu = bStatus.results.gpu_name; if (kind === 'net') r.ping = bStatus.results.net_ping; remember(kind, r); } res(); }
       };
       setTimeout(wait, 150);
     });
@@ -236,57 +240,14 @@ export function createTools(ctx) {
     runAll = null; bKind = 'score'; const m = mainEl(); if (m) drawBench(m, true);
   }
 
-  /** The graphics test, in the page: WebGL2 on the card that draws the island. */
-  async function runGpu() {
-    if (gpuRun) return;
-    gpuRun = { stage: 'Starting', progress: 0, live: 0, unit: 'GFLOPS' };
-    const draw = () => { const m = mainEl(); if (m && m.querySelector('.tm-bench')) drawBench(m); };
-    let gl, lose;
-    try {
-      const cv = document.createElement('canvas'); cv.width = cv.height = 8;
-      gl = cv.getContext('webgl2', { antialias: false, depth: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
-      if (!gl) throw new Error('WebGL 2 isn’t available here');
-      lose = gl.getExtension('WEBGL_lose_context');
-      const S = 2048;
-      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, S, S);
-      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-      gl.viewport(0, 0, S, S);
-      const prog = (fs) => {
-        const vs = `#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
-        const p = gl.createProgram();
-        for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); gl.attachShader(p, s); }
-        gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-        return p;
-      };
-      const ITER = 256;
-      // 4 lanes × (multiply + add) × 2 statements per round.
-      const alu = prog(`#version 300 es\nprecision highp float;uniform float k;out vec4 o;void main(){vec4 v=vec4(gl_FragCoord.xy*1e-4,k,1.0);vec4 a=vec4(1.0001,0.9999,1.0002,0.9998);vec4 b=vec4(1e-4,2e-4,3e-4,4e-4);for(int i=0;i<${ITER};i++){v=v*a+b;v=v*a-b;}o=v;}`);
-      const fill = prog(`#version 300 es\nprecision mediump float;uniform float k;out vec4 o;void main(){o=vec4(k,0.5,0.25,0.1);}`);
-      const pix = new Uint8Array(4);
-      const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pix);
-      const measure = async (p, perFrame, secs, stage, unit, toValue, p0, p1) => {
-        gpuRun.stage = stage; gpuRun.unit = unit;
-        gl.useProgram(p); const ku = gl.getUniformLocation(p, 'k');
-        for (let i = 0; i < 3; i++) { gl.uniform1f(ku, i * .01); gl.drawArrays(gl.TRIANGLES, 0, 3); } sync(); // warm up
-        const t0 = performance.now(); let frames = 0;
-        while (performance.now() - t0 < secs * 1000) {
-          for (let i = 0; i < perFrame; i++) { gl.uniform1f(ku, (frames + i) * 1e-3); gl.drawArrays(gl.TRIANGLES, 0, 3); }
-          sync(); frames += perFrame;
-          const dt = (performance.now() - t0) / 1000;
-          gpuRun.live = toValue(frames, dt); gpuRun.progress = p0 + (p1 - p0) * Math.min(1, dt / secs);
-          draw();
-          await new Promise(r => setTimeout(r, 0));
-          if (gpuRun.cancel) return gpuRun.live;
-        }
-        return toValue(frames, (performance.now() - t0) / 1000);
-      };
-      const gflops = await measure(alu, 2, 4, 'Shader math', 'GFLOPS', (f, dt) => f * S * S * ITER * 16 / dt / 1e9, 0, .6);
-      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      const gpix = gpuRun.cancel ? 0 : await measure(fill, 24, 3, 'Fill rate', 'Gpixels/s', (f, dt) => f * S * S / dt / 1e9, .6, 1);
-      if (!gpuRun.cancel) remember('gpu', { gpu_gflops: gflops, gpu_fill: gpix });
-    } catch (e) { flash(`Graphics test: ${e.message || e}`); }
-    if (lose) lose.loseContext();
-    gpuRun = null; draw();
+  /** The cards for the graphics test, once; the remembered one (by name: ids change at restart) or the first not built into the CPU. */
+  async function loadGpus() {
+    if (gpus) return;
+    try { gpus = (await invoke('bench_gpus')) || []; } catch (e) { gpus = []; }
+    const want = store.get('tmBenchGpu', '');
+    const g = gpus.find(x => x.name === want) || gpus.find(x => !x.integrated) || gpus[0];
+    bGpu = g ? g.id : null;
+    const m = mainEl(); if (m && m.querySelector('.tm-bench') && bKind === 'gpu') drawBench(m);
   }
 
   function drawBench(main, rebuild) {
@@ -294,8 +255,8 @@ export function createTools(ctx) {
     if (rebuild || !nav.innerHTML) nav.innerHTML = KINDS.map(([k, n, icn]) => `<button type="button" data-bk="${k}" aria-selected="${k === bKind}">${ic(icn)}<span>${n}</span><small>${k === 'score' ? (scoreOf(Object.keys(REF)) || '—') : scoreOf(GROUPS[k]) || ''}</small></button>`).join('');
     else nav.querySelectorAll('[data-bk]').forEach(b => { b.setAttribute('aria-selected', b.dataset.bk === bKind); const k = b.dataset.bk; b.querySelector('small').textContent = k === 'score' ? (scoreOf(Object.keys(REF)) || '—') : scoreOf(GROUPS[k]) || ''; });
     const body = main.querySelector('.tm-bbody');
-    const S = bStatus || {}, live = S.running && S.kind === bKind ? S : gpuRun && bKind === 'gpu' ? gpuRun : null;
-    const running = (S.running) || !!gpuRun;
+    const S = bStatus || {}, live = S.running && S.kind === bKind ? S : null;
+    const running = !!S.running;
     // A reading from this run (finished stages) before the last kept one.
     const val = k => (live && S.results && S.results[k] > 0 && S.kind === bKind ? S.results[k] : best[k] ? best[k].v : 0);
     const startBtn = `<button class="cc-btn primary big" type="button" data-tm="bench-${running ? 'stop' : 'start'}"${running && !live && !runAll ? ' disabled' : ''}>${running ? ic('stop') + 'Stop' : ic('play') + 'Start'}</button>`;
@@ -319,10 +280,11 @@ export function createTools(ctx) {
         ${progress}<div class="tm-brow">${startBtn}<label class="tm-sel">Drive<select class="tm-bdrive">${(vols.length ? vols : [{ letter: bDrive, label: '' }]).map(v => `<option value="${esc(v.letter)}"${v.letter === bDrive ? ' selected' : ''}>${esc(v.letter)} ${esc(v.label || '')}</option>`).join('')}</select></label>
         <p>Writes a 1 GB test file straight to the drive and reads it back (no cache), then 4 KB reads at random places for 4 seconds. The file is deleted afterwards; the drive needs 2 GB free.</p></div>`;
     } else if (bKind === 'gpu') {
-      const g = gpuRun;
-      const fv = g && g.stage === 'Shader math' ? g.live : val('gpu_gflops'), pv = g && g.stage === 'Fill rate' ? g.live : val('gpu_fill');
-      html = `<h5>Graphics benchmark<small>${when(GROUPS.gpu)}</small></h5><div class="tm-dials">${dial(fv, 20000, { label: 'Shader math', unit: 'GFLOPS' })}${dial(pv, 100, { label: 'Fill rate', unit: 'Gpixels/s', digits: 1 })}</div>
-        ${progress}<div class="tm-brow">${startBtn}<p>Runs in this window through WebGL, on the card that draws it: a heavy math shader over 4 million pixels, then blended fills. Browser graphics run below what games get, so compare it with itself.</p></div>`;
+      const fv = live && S.stage === 'Shader math' ? S.live : val('gpu_gflops'), pv = live && S.stage === 'Fill rate' ? S.live : val('gpu_fill');
+      const cards = gpus && gpus.length ? gpus.map(g => `<option value="${esc(g.id)}"${g.id === bGpu ? ' selected' : ''}>${esc(g.name)}${g.integrated ? ' (built into the CPU)' : ''}</option>`).join('') : `<option value="">${gpus ? 'No graphics card found' : 'Looking for graphics cards…'}</option>`;
+      html = `<h5>Graphics benchmark<small>${when(GROUPS.gpu)}</small></h5><div class="tm-dials">${dial(fv, Math.max(20000, Math.ceil(fv / 10000) * 10000), { label: 'Shader math', unit: 'GFLOPS' })}${dial(pv, Math.max(150, Math.ceil(pv / 50) * 50), { label: 'Fill rate', unit: 'Gpixels/s', digits: 1 })}</div>
+        ${progress}<div class="tm-brow">${startBtn}<label class="tm-sel">Card<select class="tm-bgpu"${running || !(gpus && gpus.length) ? ' disabled' : ''}>${cards}</select></label>
+        <p>Runs straight on the card you pick, through Direct3D: a heavy math shader over a million threads for 4 seconds, then blended fills of a 2048 × 2048 picture for 3. The card gets half a second first to reach full speed.</p></div>`;
     } else if (bKind === 'net') {
       const dv = live && S.stage === 'Download' ? S.live : val('net_down'), uv = live && S.stage === 'Upload' ? S.live : val('net_up');
       const ping = live && S.stage === 'Latency' ? S.live : (S.results && S.results.net_ping) || (log.find(x => x.kind === 'net') || { r: {} }).r.ping || 0;
@@ -345,7 +307,7 @@ export function createTools(ctx) {
       case 'cpu': return `${Math.round(r.cpu_single)} / ${Math.round(r.cpu_multi).toLocaleString()} Mrounds/s (${r.threads} threads)`;
       case 'memory': return `${r.mem_copy.toFixed(1)} GB/s copy · ${r.mem_latency.toFixed(0)} ns`;
       case 'disk': return `${r.drive} read ${Math.round(r.disk_read).toLocaleString()} · write ${Math.round(r.disk_write).toLocaleString()} MB/s · ${Math.round(r.disk_iops).toLocaleString()} IOPS`;
-      case 'gpu': return `${Math.round(r.gpu_gflops).toLocaleString()} GFLOPS · ${r.gpu_fill.toFixed(1)} Gpix/s`;
+      case 'gpu': return `${Math.round(r.gpu_gflops).toLocaleString()} GFLOPS · ${r.gpu_fill.toFixed(1)} Gpix/s · ${r.gpu ? r.gpu.replace(/^(AMD|NVIDIA|Intel) /, '').replace(/^GeForce /, '') : 'old WebGL test'}`;
       case 'net': return `↓ ${r.net_down.toFixed(0)} · ↑ ${r.net_up.toFixed(0)} Mbps · ${r.ping ? r.ping.toFixed(0) + ' ms' : ''}`;
       default: return '';
     }
@@ -357,21 +319,23 @@ export function createTools(ctx) {
       if (!ctx.sysInfo) ctx.system().then(() => { const m = mainEl(); if (m && m.querySelector('.tm-bench') && bKind === 'disk') drawBench(m); }).catch(() => {});
       drawBench(main, true);
       pollBench();
+      loadGpus();
     },
     click(e, b) {
       const main = mainEl();
       const k = e.target.closest('[data-bk]'); if (k) { bKind = k.dataset.bk; store.set('tmBenchKind', bKind); drawBench(main); return; }
       if (!b) return;
       if (b.dataset.tm === 'bench-start') { if (bKind !== 'score') start(bKind); setTimeout(() => drawBench(main), 60); }
-      else if (b.dataset.tm === 'bench-stop') { runAll = null; if (gpuRun) gpuRun.cancel = true; invoke('bench_cancel').catch(() => {}); }
+      else if (b.dataset.tm === 'bench-stop') { runAll = null; invoke('bench_cancel').catch(() => {}); }
       else if (b.dataset.tm === 'bench-all') runAllKinds();
     },
     change(e) {
       if (e.target.closest('.tm-bdrive')) { bDrive = e.target.value; store.set('tmBenchDrive', bDrive); }
+      if (e.target.closest('.tm-bgpu')) { bGpu = e.target.value; const g = (gpus || []).find(x => x.id === bGpu); store.set('tmBenchGpu', g ? g.name : ''); }
       if (e.target.closest('.tm-bnet')) store.set('tmBenchNet', e.target.checked);
     },
     leave() { clearTimeout(bT); },
-    closed() { runAll = null; if (gpuRun) gpuRun.cancel = true; invoke('bench_cancel').catch(() => {}); }
+    closed() { runAll = null; invoke('bench_cancel').catch(() => {}); }
   };
 
   return { disk, bench };

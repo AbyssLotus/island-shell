@@ -105,7 +105,7 @@ The Stats cube, the **Task Manager** command in search, or **Task Manager** in t
 - **Connections**: every TCP and UDP endpoint with the program that owns it, filtered by connected, listening, public, UDP or this PC, with remote host names (reverse DNS) and a map of where they go.
 - **Installed Apps**: everything Settings > Apps lists, programs and Store apps, with publisher, version, date, size (measured in the background when the installer didn't say) and scope; uninstall (asks first), modify, open location, web page.
 - **Disk Space**: scans a drive (all of C: takes about ten seconds) into a bubble map: each folder's size, colored by what's mostly in it, its biggest folders drawn inside it; double-click to go in. Beside it: the drive's space, the kinds of file, the weightiest folders and the largest files.
-- **Benchmarks**: CPU (one thread and all of them), memory (copy speed, latency), disk (a 1 GB file written and read uncached, then random 4 KB reads; deleted afterwards), graphics (WebGL in the window) and internet (Cloudflare's speed test), on dials, with an overall Island score and a history. Nothing runs until you press Start.
+- **Benchmarks**: CPU (one thread and all of them), memory (copy speed, latency), disk (a 1 GB file written and read uncached, then random 4 KB reads; deleted afterwards), graphics (Direct3D, on the graphics card you pick: shader math and blended fill rate) and internet (Cloudflare's speed test), on dials, with an overall Island score and a history. Nothing runs until you press Start.
 
 ### Calendar (the Today sheet)
 

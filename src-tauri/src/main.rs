@@ -547,8 +547,13 @@ fn disk_scan_stop(clear: Option<bool>) {
 }
 
 #[tauri::command]
-fn bench_start(kind: String, drive: Option<String>) -> Result<(), String> {
-    bench::start(&kind, drive)
+fn bench_start(kind: String, drive: Option<String>, gpu: Option<String>) -> Result<(), String> {
+    bench::start(&kind, drive, gpu)
+}
+
+#[tauri::command]
+async fn bench_gpus() -> Result<Vec<bench::GpuChoice>, String> {
+    blocking(bench::gpus).await
 }
 
 #[tauri::command]
@@ -1141,6 +1146,7 @@ fn main() {
             disk_scan_view,
             disk_scan_stop,
             bench_start,
+            bench_gpus,
             bench_status,
             bench_cancel,
             tm_startup_set,

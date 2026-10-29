@@ -567,5 +567,43 @@
    }
   ]
  },
- "wifi_scan": null
+ "wifi_scan": null,
+ "bench_gpus": [
+  {
+   "id": "0000000000014b2e",
+   "name": "AMD Radeon RX 7800 XT",
+   "integrated": false
+  },
+  {
+   "id": "0000000000014d07",
+   "name": "AMD Radeon 780M Graphics",
+   "integrated": true
+  }
+ ],
+ "bench_status": {
+  "running": false,
+  "kind": "",
+  "stage": "",
+  "progress": 0,
+  "live": 0,
+  "unit": "",
+  "results": {
+   "cpu_single": 0,
+   "cpu_multi": 0,
+   "threads": 0,
+   "mem_copy": 0,
+   "mem_latency": 0,
+   "disk_drive": "",
+   "disk_read": 0,
+   "disk_write": 0,
+   "disk_iops": 0,
+   "gpu_gflops": 0,
+   "gpu_fill": 0,
+   "gpu_name": "",
+   "net_ping": 0,
+   "net_down": 0,
+   "net_up": 0
+  },
+  "error": ""
+ }
 }
