@@ -384,7 +384,7 @@ function toast(title, sub, ic, opts = {}) {
   S.urgent = !!opts.urgent; S.toastTop = !!(opts.urgent || opts.top); S.toastTab = opts.tab || '';
   island.classList.toggle('fs-hidden', !!S.fullscreen && !S.urgent);
   const t = $('#tIco');
-  t.className = 't-ico' + (opts.img || opts.glyph ? ' app' : '') + (opts.round ? ' av' : '');
+  t.className = 't-ico' + (opts.img || opts.glyph ? ' t-app' : '') + (opts.round ? ' av' : '');
   t.style.background = opts.bg || '';
   t.innerHTML = opts.img ? `<img src="${esc(opts.img)}" alt="">` : opts.glyph ? esc(opts.glyph) : icon(ic || 'check');
   $('#tTitle').textContent = title; $('#tBody').textContent = sub || '';
