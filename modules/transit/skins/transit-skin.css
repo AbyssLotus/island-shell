@@ -1,0 +1,22 @@
+/* Island skin for the docked Transit trip planner (embed.rs). The site has a dark mode of its own (its
+   colours are light-dark() pairs), so this turns it on, retints Transit's green to the island's ice
+   blue and darkens the map. Line colours, route badges and service alerts keep their meaning. */
+html:not(#_){color-scheme:dark}
+:is(:root,body,.theme-transit,.theme-neutral):not(#_){
+  --color-background:#07080c;--color-foreground:#eef6ff;
+  --color-original:#7fb2ff;--color-text:#c9e9ff;
+  --color-neon-bg:#0d1424;--color-neon-route:#7fb2ff;--color-neon-high:#c9e9ff;--color-neon-secondary:#9cc8ff;--color-neon-primary:#eef6ff;
+}
+/* The map, inverted and turned back round the colour wheel: dark, with water, parks and every route
+   line keeping its hue. Pins and labels drawn over it are page elements and stay as they are. */
+.mapboxgl-canvas{filter:invert(.92) hue-rotate(180deg) saturate(.8) brightness(.95)}
+/* Where the site assumes a white card (the selected trip, search suggestions, the time fields): ice
+   glass with light text. */
+.bg-snow-white:not(#_){background-color:rgb(190 230 255/.1);color:#eef6ff}
+:is(.bg-snow-white,[role=listbox]) :is(.text-space-grey,.text-black,.text-black-pearl):not(#_),.bg-snow-white:is(.text-space-grey,.text-black):not(#_){color:#eef6ff}
+.text-black-pearl:not(.bg-white *):not(#_){color:#eef6ff}
+::selection{background:rgb(160 215 255/.3)}
+html{scrollbar-color:rgb(190 230 255/.18) transparent}
+/* the CC's glass edge, as on the other docked sites */
+html::after{content:"";position:fixed;inset:0;z-index:2147483647;border-radius:8px;pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgb(190 230 255/.14),inset 0 1px 0 rgb(190 230 255/.3)}
