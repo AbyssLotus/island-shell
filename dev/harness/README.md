@@ -22,6 +22,7 @@ logged an error. It also lists commands that had no fixture.
 | `?style=bar` | The top bar instead of the island. |
 | `?scenario=update` | Layers `fixtures/update.json` over `fixtures/default.json` (several: `update,playing`). |
 | `?cc=1&scenario=manycubes` | The Command Center with 30 made-up modules' cubes, for its layout (more than fit on a small screen go in "+N more"). |
+| `?tab=network&scenario=wifi-off` | Wi-Fi switched off; `wifi-location` is Windows refusing the list without location access. Joining works in the default fixtures: any password of 8+ characters connects, `wrongpass` doesn't. |
 | `?fresh=1` | An empty profile, so the setup guide opens. |
 
 In the browser console, `harness.emit('update:status', {...})` sends a backend event,

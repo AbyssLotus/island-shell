@@ -1,6 +1,6 @@
 [package]
 name = "voicemeeter-module"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Island Shell's Voicemeeter module: the mixer in the Audio tab and a mic switch on the top bar, through VoiceDeck's engine."

@@ -275,7 +275,7 @@ function setTab(t) {
 function onTabShown(t) {
   if (t === 'controls') mediaTick();
   if (t === 'stats') statsLoop();
-  if (t === 'network') { renderNetNow(); layout(); }
+  if (t === 'network') { renderNetNow(); wifiLoop(); layout(); }
   if (t === 'wallpaper') showWallpapers();
   if (t === 'audio') { renderAudioHead(); if (audioShowing()) { audioDevLoop(); audioAppsLoop(); } }
   if (t === 'clipboard') renderClip();
@@ -384,7 +384,7 @@ function toast(title, sub, ic, opts = {}) {
   S.urgent = !!opts.urgent; S.toastTop = !!(opts.urgent || opts.top); S.toastTab = opts.tab || '';
   island.classList.toggle('fs-hidden', !!S.fullscreen && !S.urgent);
   const t = $('#tIco');
-  t.className = 't-ico' + (opts.img || opts.glyph ? ' app' : '') + (opts.round ? ' av' : '');
+  t.className = 't-ico' + (opts.img || opts.glyph ? ' t-app' : '') + (opts.round ? ' av' : '');
   t.style.background = opts.bg || '';
   t.innerHTML = opts.img ? `<img src="${esc(opts.img)}" alt="">` : opts.glyph ? esc(opts.glyph) : icon(ic || 'check');
   $('#tTitle').textContent = title; $('#tBody').textContent = sub || '';
@@ -409,7 +409,7 @@ function applyStatus(st) {
   S.status = st;
   if (st.audio && performance.now() - S.volSetAt > 1500) S.audio = st.audio;
   renderMediaSource(); renderControls(); renderBar();
-  if (S.mode === 'panel' && S.tab === 'network') renderNetNow();
+  if (S.mode === 'panel' && S.tab === 'network') { renderNetNow(); renderWifi(); }
 }
 
 /* ---------- now playing (a module's `media` activity: the Music module's) ----------
@@ -777,6 +777,128 @@ function renderNetNow() {
   setHtml($('#netNow'), n.kind === 'none' || !n.kind ? `${icon('wifioff')}<span>Offline</span>`
     : `${icon(n.kind === 'ethernet' ? 'ethernet' : 'wifi')}<span><b>${esc(n.name || (n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'))}</b> · ${n.kind === 'ethernet' ? 'Ethernet' : 'Wi-Fi'}${n.bars != null && n.kind === 'wifi' ? ` · ${n.bars * 20}% signal` : ''}</span>`);
 }
+
+/* ---------- Wi-Fi: the networks around, joining and leaving them (wifi.rs) ----------
+   Read when the Network tab shows (or its Command Center sheet), and looked for again every 20 s
+   while it does. A network Windows knows connects with a click; a new one asks for its password
+   (none when it's open); one that signs in with an account is left to Windows' own list. */
+S.wf = { data: null, err: '', open: '', busy: '', note: '', ok: false, sure: '', pw: '', auto: true, peek: false, t: 0 };
+const wfShowing = () => S.mode === 'panel' && S.tab === 'network';
+const WF_SEC = { open: 'Open', wpa: 'Secured (WPA)', wpa2: 'Secured', wpa3: 'Secured (WPA3)', enterprise: 'Signs in with an account', wep: 'Secured (WEP)', owe: 'Enhanced Open' };
+/** Networks the island can't join itself the first time (Windows' own list can). */
+const wfByWindows = n => !n.saved && ['enterprise', 'wep', 'owe'].includes(n.security);
+async function wifiRead() {
+  try { S.wf.data = await invoke('wifi_list'); S.wf.err = ''; } catch (e) { S.wf.err = String(e); }
+  renderWifi();
+}
+function wifiLoop() {
+  clearTimeout(S.wf.t);
+  if (!wfShowing()) return;
+  wifiRead();
+  quiet(invoke('wifi_scan'));
+  S.wf.t = setTimeout(() => { if (!wfShowing()) return; wifiRead(); S.wf.t = setTimeout(wifiLoop, 16000); }, 4000);
+}
+const wfBars = b => `<span class="wf-sig" role="img" aria-label="Signal ${b} of 4">${[1, 2, 3, 4].map(i => `<i${i <= b ? ' class="on"' : ''}></i>`).join('')}</span>`;
+function wfActions(n) {
+  const f = S.wf, busy = f.busy === n.ssid;
+  const connect = `<button class="btn primary" type="button" data-wf="connect"${busy ? ' disabled' : ''}>${busy ? 'Connecting…' : 'Connect'}</button>`;
+  const forget = `<button class="btn" type="button" data-wf="forget"${busy ? ' disabled' : ''}>${f.sure === n.ssid ? 'Click again to forget' : 'Forget'}</button>`;
+  const pwForm = label => `<form class="wf-form" data-wf-form>
+      <input class="field" type="${f.peek ? 'text' : 'password'}" name="pw" placeholder="${label}" autocomplete="off" spellcheck="false" maxlength="64" aria-label="${label} for ${esc(n.ssid)}"${busy ? ' disabled' : ''}>
+      <button class="ib" type="button" data-wf="peek" title="${f.peek ? 'Hide' : 'Show'} the password" aria-label="${f.peek ? 'Hide' : 'Show'} the password">${icon('eye')}</button>
+      <button class="btn primary" type="submit"${busy ? ' disabled' : ''}>${busy ? 'Connecting…' : 'Connect'}</button></form>
+    <label class="switch"><input type="checkbox" data-wf="auto"${f.auto ? ' checked' : ''}><span>Connect automatically</span></label>`;
+  let body;
+  if (n.connected) body = `<div class="wf-btns"><button class="btn" type="button" data-wf="disconnect">Disconnect</button>${forget}</div>`;
+  else if (wfByWindows(n)) body = `<p class="wf-why">${n.security === 'enterprise' ? 'This network signs in with an account (a school or work login), which Windows’ own list asks for.' : 'Windows’ own list joins this kind of network.'}</p><div class="wf-btns"><button class="btn primary" type="button" data-wf="more">Open Windows’ list</button></div>`;
+  else if (n.saved && f.open !== n.ssid + ':pw') body = `<div class="wf-btns">${connect}${forget}${['wpa', 'wpa2', 'wpa3'].includes(n.security) ? '<button class="link-btn" type="button" data-wf="newpw">Change password</button>' : ''}</div>`;
+  else if (n.security === 'open') body = `<p class="wf-why">Anyone nearby can see what you send on an open network.</p><div class="wf-btns">${connect}</div>`;
+  else body = pwForm(n.saved ? 'New password' : 'Password');
+  const note = f.note && (f.open === n.ssid || f.open === n.ssid + ':pw') ? `<p class="wf-note${f.ok ? ' ok' : ''}">${esc(f.note)}</p>` : '';
+  return `<div class="wf-act">${body}${note}</div>`;
+}
+function renderWifi() {
+  const box = $('#wifiCard'); if (!box) return;
+  const st = S.status || {}, radio = st.wifi || {}, w = S.wf.data, f = S.wf;
+  // Keep what's being typed, and where.
+  const a = document.activeElement, typing = !!(a && box.contains(a) && a.name === 'pw'), sel = typing ? [a.selectionStart, a.selectionEnd] : null;
+  if (typing) f.pw = a.value;
+  const nets = (w && w.networks) || [];
+  let body;
+  if (radio.present === false && !(w && w.adapter)) body = '<p class="empty">This PC has no Wi-Fi.</p>';
+  else if (radio.present && !radio.on) body = `<div class="wf-off">${icon('wifioff')}<span>Wi-Fi is off</span><button class="btn primary" type="button" data-wf="on">Turn on</button></div>`;
+  else if (f.err) body = /location/i.test(f.err) ? `<div class="wf-off">${icon('lock')}<span>${esc(f.err)}</span><button class="btn primary" type="button" data-wf="location">Location settings</button></div>` : `<p class="note">${esc(f.err)}</p>`;
+  else if (!w) body = '<p class="empty">Looking for networks…</p>';
+  else if (!nets.length) body = '<p class="empty">No networks in range.</p>';
+  else body = `<div class="wf-list">${nets.map(n => {
+    const open = f.open === n.ssid || f.open === n.ssid + ':pw', busy = f.busy === n.ssid;
+    const sub = n.connected ? 'Connected' : busy ? 'Connecting…' : [n.saved ? 'Saved' : '', WF_SEC[n.security] || ''].filter(Boolean).join(' · ');
+    return `<div class="wf-row${n.connected ? ' on' : ''}${open ? ' open' : ''}" data-ssid="${esc(n.ssid)}"><button class="wf-head" type="button" data-wf="pick" aria-expanded="${open}">${wfBars(n.bars)}<span class="wf-t"><b>${esc(n.ssid)}</b><small>${esc(sub)}</small></span>${n.security === 'open' || n.security === 'owe' ? '' : icon('lock')}</button>${open ? wfActions(n) : ''}</div>`;
+  }).join('')}</div>`;
+  // The password isn't in the markup, so typing doesn't redraw the card; a redraw puts it back.
+  if (!setHtml(box, `<header><b>Wi-Fi</b><small>${nets.length ? `${nets.length} network${nets.length === 1 ? '' : 's'}` : ''}</small><span class="grow"></span>
+    <button class="ib sm" type="button" data-wf="scan" title="Look again" aria-label="Look for networks again">${icon('restart')}</button>
+    ${radio.present ? `<label class="switch" title="Wi-Fi on or off"><input type="checkbox" data-wf="radio"${radio.on ? ' checked' : ''} aria-label="Wi-Fi"></label>` : ''}</header>
+    ${body}
+    <button class="link-btn wf-more" type="button" data-wf="more">More Wi-Fi settings…</button>`)) return;
+  const i = box.querySelector('input[name="pw"]');
+  if (i) i.value = f.pw;
+  if (i && typing) { i.focus({ preventScroll: true }); try { i.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
+  if (wfShowing()) layout();
+}
+async function wifiConnect(ssid, password) {
+  const f = S.wf;
+  Object.assign(f, { busy: ssid, note: '' }); renderWifi();
+  try {
+    await invoke('wifi_connect', { ssid, password: password || null, auto: f.auto });
+    Object.assign(f, { busy: '', note: `Connected to ${ssid}.`, ok: true, pw: '', peek: false, open: ssid });
+  } catch (e) { Object.assign(f, { busy: '', note: String(e), ok: false }); }
+  await wifiRead(); pollStatusSoon();
+}
+/** The status line and the bar's network chip right away, not at the next second. */
+function pollStatusSoon() { invoke('get_status').then(applyStatus).catch(() => {}); }
+$('#wifiCard').addEventListener('click', e => {
+  const b = e.target.closest('[data-wf]'); if (!b || b.disabled || b.tagName === 'INPUT') return;
+  const f = S.wf, row = b.closest('.wf-row'), ssid = row ? row.dataset.ssid : '', n = ((f.data && f.data.networks) || []).find(x => x.ssid === ssid);
+  const k = b.dataset.wf;
+  if (k === 'pick') {
+    const same = f.open === ssid || f.open === ssid + ':pw';
+    Object.assign(f, { open: same ? '' : ssid, note: '', sure: '', pw: '', peek: false }); renderWifi();
+    const opened = $('#wifiCard .wf-row.open'); if (opened) opened.scrollIntoView({ block: 'nearest' });
+    if (!same && n && !n.saved && !n.connected && n.security !== 'open' && !wfByWindows(n)) { const i = $('#wifiCard input[name="pw"]'); if (i) i.focus({ preventScroll: true }); }
+    return;
+  }
+  if (k === 'scan') { quiet(invoke('wifi_scan')); setTimeout(wifiRead, 3500); return; }
+  if (k === 'on') { quiet(invoke('set_radio', { kind: 'wifi', on: true })); setTimeout(() => { pollStatusSoon(); wifiLoop(); }, 1500); return; }
+  if (k === 'more') { openSettings('ms-availablenetworks:'); return; }
+  if (k === 'location') { openSettings('ms-settings:privacy-location'); return; }
+  if (k === 'peek') { f.peek = !f.peek; renderWifi(); const i = $('#wifiCard input[name="pw"]'); if (i) i.focus(); return; }
+  if (k === 'newpw') { Object.assign(f, { open: ssid + ':pw', note: '', pw: '' }); renderWifi(); const i = $('#wifiCard input[name="pw"]'); if (i) i.focus(); return; }
+  if (k === 'connect' && n) { wifiConnect(ssid, null); return; }
+  if (k === 'disconnect') {
+    invoke('wifi_disconnect').then(() => { Object.assign(f, { note: '', open: '' }); setTimeout(() => { wifiRead(); pollStatusSoon(); }, 1200); })
+      .catch(err => { Object.assign(f, { note: String(err), ok: false }); renderWifi(); });
+    return;
+  }
+  if (k === 'forget') {
+    if (f.sure !== ssid) { f.sure = ssid; renderWifi(); setTimeout(() => { if (f.sure === ssid) { f.sure = ''; renderWifi(); } }, 3000); return; }
+    f.sure = '';
+    invoke('wifi_forget', { ssid }).then(() => { Object.assign(f, { note: '', open: '' }); wifiRead(); pollStatusSoon(); })
+      .catch(err => { Object.assign(f, { note: String(err), ok: false }); renderWifi(); });
+  }
+});
+$('#wifiCard').addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.wf;
+  if (k === 'auto') S.wf.auto = e.target.checked;
+  if (k === 'radio') { quiet(invoke('set_radio', { kind: 'wifi', on: e.target.checked })); setTimeout(() => { pollStatusSoon(); wifiLoop(); }, 1500); }
+});
+$('#wifiCard').addEventListener('input', e => { if (e.target.name === 'pw') S.wf.pw = e.target.value; });
+$('#wifiCard').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = S.wf, ssid = f.open.replace(/:pw$/, ''), pw = (e.target.querySelector('input[name="pw"]') || {}).value || '';
+  if (pw.length < 8) { Object.assign(f, { note: 'A Wi-Fi password is at least 8 characters.', ok: false }); renderWifi(); return; }
+  wifiConnect(ssid, pw);
+});
 
 /* ---------- controls ---------- */
 /** A line of text at most n characters long (for notifications and the like). */

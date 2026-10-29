@@ -1,0 +1,43 @@
+{
+ "get_status": {
+  "audio": {
+   "level": 0.42,
+   "muted": false,
+   "device": "Speakers",
+   "detail": "Realtek Audio"
+  },
+  "wifi": {
+   "present": true,
+   "on": false
+  },
+  "bluetooth": {
+   "present": true,
+   "on": true
+  },
+  "net": {
+   "kind": "wifi",
+   "name": "Harbor-5G",
+   "bars": 4
+  },
+  "taskbar_hidden": true,
+  "battery": {
+   "present": false,
+   "percent": 0,
+   "charging": false
+  },
+  "desktops": {
+   "count": 2,
+   "current": 0,
+   "names": [
+    "Desktop 1",
+    "Desktop 2"
+   ]
+  },
+  "cpu": 12.5,
+  "cpu_temp": 48.0
+ },
+ "wifi_list": {
+  "adapter": true,
+  "networks": []
+ }
+}

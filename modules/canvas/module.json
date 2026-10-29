@@ -1,7 +1,7 @@
 {
   "id": "canvas",
   "name": "Canvas",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": 1,
   "description": "Due dates, grades and announcements from your school's Canvas, with reminders before things are due and Canvas itself docked in the Command Center. Sign in there once and no access token is needed.",
   "icon": "ui/icon.svg",

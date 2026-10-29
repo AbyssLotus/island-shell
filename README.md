@@ -29,7 +29,7 @@ Island Shell is the island, the Command Center, the Task Manager and your calend
 | 📊 | **Integrated Task Manager** | Summary, Performance (every logical processor), Processes, System Info, App history, Startup apps, Users, Services, Power & Freq (sensors and SSD health), Connections, Installed Apps, Disk Space and Benchmarks. |
 | 📅 | **Calendar & weather** | A full calendar with your iCal feeds (Google, Outlook, iCloud) and what modules add (Canvas due dates, Destiny's reset); weather and to-dos in Today. |
 | 🗂️ | **Apps** | Every Start menu app: pinned, opened lately, folders, A to Z, run as administrator, open file location, uninstall. Plus open windows and the tray. |
-| 🔊 | **Audio & network** | Output and input devices, per-app volume and levels; Wi-Fi and Bluetooth. |
+| 🔊 | **Audio & network** | Output and input devices, per-app volume and levels; browse and join Wi-Fi networks; Bluetooth. |
 | 📋 | **Clipboard** | Everything you copy, images included, kept across restarts, with pins. |
 | 🖼️ | **Wallpaper** | Procedural wallpapers that set the accent color. |
 | ⌨️ | **Windows key** | Win opens the island; Win + A / V / N open Audio, Clipboard and Today (modules add more, like Win + G); every other Win shortcut still works. |

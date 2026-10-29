@@ -1,7 +1,7 @@
 {
   "id": "vpn",
   "name": "VPN",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "api": 1,
   "description": "Tailscale and Radmin VPN at a glance: who's online, your addresses, exit nodes, and a switch in Controls.",
   "icon": "ui/icon.svg",

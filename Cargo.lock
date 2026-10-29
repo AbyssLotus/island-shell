@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "canvas-module"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "island-module",
  "serde",
@@ -837,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "destiny-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "island-module",
  "serde",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "games-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "island-module",
  "island-win",
@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "gaze-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "island-module",
  "serde",
@@ -2031,7 +2031,7 @@ dependencies = [
 
 [[package]]
 name = "island-shell"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2451,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "music-module"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "island-module",
  "island-win",
@@ -2510,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "notion-module"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "island-module",
  "serde",
@@ -4514,7 +4514,7 @@ dependencies = [
 
 [[package]]
 name = "transit-module"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4658,7 +4658,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voicemeeter-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "island-module",
  "island-win",
@@ -4668,7 +4668,7 @@ dependencies = [
 
 [[package]]
 name = "vpn-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "island-module",
  "island-win",
@@ -4709,7 +4709,7 @@ dependencies = [
 
 [[package]]
 name = "wallpaper-engine-module"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "base64 0.22.1",
  "island-module",

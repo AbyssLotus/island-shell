@@ -28,6 +28,7 @@ mod tray;
 mod updater;
 mod util;
 mod wallpaper;
+mod wifi;
 mod winkey;
 
 use std::path::PathBuf;
@@ -610,6 +611,33 @@ async fn set_radio(kind: String, on: bool) -> Result<(), String> {
     blocking(move || radios::set_radio(&kind, on)).await?
 }
 
+/// The Wi-Fi networks around (wifi.rs), from Windows' last scan.
+#[tauri::command]
+async fn wifi_list() -> Result<wifi::Wifi, String> {
+    blocking(wifi::list).await?
+}
+
+#[tauri::command]
+async fn wifi_scan() -> Result<(), String> {
+    blocking(wifi::scan).await?
+}
+
+/// Joins a network: its saved profile, or a new one with `password` (none for an open network).
+#[tauri::command]
+async fn wifi_connect(ssid: String, password: Option<String>, auto: Option<bool>) -> Result<(), String> {
+    blocking(move || wifi::connect(&ssid, password.as_deref().filter(|p| !p.is_empty()), auto.unwrap_or(true))).await?
+}
+
+#[tauri::command]
+async fn wifi_disconnect() -> Result<(), String> {
+    blocking(wifi::disconnect).await?
+}
+
+#[tauri::command]
+async fn wifi_forget(ssid: String) -> Result<(), String> {
+    blocking(move || wifi::forget(&ssid)).await?
+}
+
 #[tauri::command]
 fn get_stats(shared: Shr) -> stats::Stats {
     shared.stats_wanted.store(util::now_ms(), Ordering::Relaxed);
@@ -1124,6 +1152,11 @@ fn main() {
             set_volume,
             set_mute,
             set_radio,
+            wifi_list,
+            wifi_scan,
+            wifi_connect,
+            wifi_disconnect,
+            wifi_forget,
             get_stats,
             clip_list,
             clip_copy,
